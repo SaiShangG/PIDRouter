@@ -1,0 +1,36 @@
+{
+  "name": "@mlightcad/cad-simple-viewer-example",
+  "private": true,
+  "version": "1.5.7",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mlightcad/cad-viewer.git"
+  },
+  "scripts": {
+    "build": "tsc && vite build",
+    "clean": "rimraf dist lib tsconfig.tsbuildinfo",
+    "dev": "vite",
+    "lint": "eslint src/",
+    "lint:fix": "eslint --fix --quiet src/",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mlightcad/cad-agent-plugin": "workspace:*",
+    "@mlightcad/cad-html-plugin": "workspace:*",
+    "@mlightcad/cad-pdf-plugin": "workspace:*",
+    "@mlightcad/cad-simple-ui-plugin": "workspace:*",
+    "@mlightcad/cad-simple-viewer": "workspace:*",
+    "@mlightcad/cad-svg-plugin": "workspace:*",
+    "@mlightcad/data-model": "^1.10.3",
+    "jszip": "^3.10.1",
+    "lodash-es": "4.17.21",
+    "lucide": "^0.468.0",
+    "three": "^0.172.0",
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "@types/three": "0.172.0",
+    "@vitejs/plugin-vue": "^5.1.3"
+  }
+}

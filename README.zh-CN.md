@@ -1,0 +1,413 @@
+# CAD-Viewer（中文）
+
+[English](./README.md)
+
+CAD-Viewer 是`全球首个完全运行在浏览器端、无需依赖任何后端服务的 Web 版 DXF/DWG 查看与编辑器`。
+通过在浏览器中直接完成 DWG/DXF 解析、几何处理和渲染，CAD-Viewer 实现了真正的无服务器（serverless）CAD 查看与编辑，非常适合云应用、离线使用以及对隐私敏感的工作场景。
+
+此外，它还提供市面上 CAD 看图软件中极为少见的能力——**一键导出为单个自包含 HTML 文件**。下载的 `.html` 内嵌图纸快照与轻量查看器运行时，接收方只需用任意现代浏览器即可离线打开、平移缩放、切换图层并测量距离，**无需安装 CAD 软件、无需服务器、无需再打开 CAD-Viewer**。多数桌面或 Web CAD 看图工具只能在自家产品内查看；CAD-Viewer 则把当前图纸变成可邮件发送、可归档、可放到静态站点上的便携文件，非常适合对外分享、合规留档与内网隔离环境。离线查看器的内存占用也远低于传统桌面 CAD 看图软件（见下文[内存对比](#自包含-html-内存占用)）。
+
+- [**🌐 在线演示**](https://mlightcad.github.io/cad-viewer/)
+- [**🌐 API 文档**](https://mlightcad.github.io/cad-viewer/docs/)
+- [**🌐 项目 Wiki**](https://github.com/mlightcad/cad-viewer/wiki)
+- X (Twitter): [@mlightcad](https://x.com/mlightcad)
+- YouTube: [@mlightcad](https://www.youtube.com/@mlightcad)
+- Medium: [@mlightcad](https://medium.com/@mlightcad)
+- 稀土掘金: [@mlightcad](https://juejin.cn/column/7501992214283501579)
+
+![CAD-Viewer Quick Demo](./assets/cad-viewer.gif)
+
+## 功能特性
+
+- **高性能**：大体量 DWG/DXF 文件也能以流畅的 60+ FPS 渲染
+- **无需后端**：文件在浏览器本地解析与处理
+- **数据更安全**：文件不离开本地设备，保护隐私
+- **易于集成**：无需服务器或后端基础设施
+- 模块化架构，便于第三方系统集成
+- **导出为离线 HTML**：将当前图纸导出为单个自包含 `.html` 文件，内嵌查看器（平移缩放、范围缩放、图层、距离测量、中英文界面），可在任意浏览器中离线打开，无需 CAD-Viewer 实例或后端。
+- 支持离线与在线编辑流程
+- 基于 THREE.js 的 3D 渲染引擎，包含多项性能优化
+- 面向可扩展与二次开发，适配 CMS、Notion、微信等平台
+
+## 快速开始
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) >= 24
+- [pnpm](https://pnpm.io/) >= 10
+
+### 安装
+
+```bash
+git clone https://github.com/mlightcad/cad-viewer.git
+cd cad-viewer
+pnpm install
+```
+
+### 开发
+
+```bash
+# 启动完整版查看器（cad-viewer）
+pnpm dev
+
+# 或启动简易版查看器
+pnpm dev:simple
+```
+
+### 构建
+
+```bash
+pnpm build
+```
+
+### 预览
+
+```bash
+# 预览完整版查看器
+pnpm preview
+
+# 预览简易版查看器
+pnpm preview:simple
+```
+
+## 使用说明
+
+### 桌面浏览器操作
+- **选择**：鼠标左键单击实体
+- **缩放**：滚动鼠标滚轮上/下
+- **平移**：按住鼠标中键拖拽
+- **删除**：选中实体后按 `Del` 键
+
+### 平板/手机浏览器操作
+- **选择**：轻触实体
+- **缩放**：双指捏合放大/缩小
+- **平移**：双指拖动移动视图
+
+## 插件系统（Plugin System）
+
+CAD-Viewer 在 [`@mlightcad/cad-simple-viewer`](packages/cad-simple-viewer) 中提供可扩展的**插件系统**。插件实现 `AcApPlugin` 接口，通过 `onLoad` / `onUnload` 接入查看器生命周期，常见用途包括注册命令、挂载 UI、或接入导出/导入流程。
+
+通过 `AcApDocManager.instance.pluginManager` 加载插件（`loadPlugin`、`registerLazyPlugin`，或在创建文档管理器时使用 `plugins.fromConfig`）。面向导出的插件支持**懒加载**：应用启动时只注册轻量 stub，用户首次执行相关命令（例如 `-chtml`，或在 `cad-viewer` 中通过 `chtml` 对话框确认导出）时才下载完整 bundle。
+
+本 monorepo 内置多个官方插件，各司其职，可按需组合。**各插件的安装、注册方式与 API 说明请直接阅读对应包的 README**（见下方链接）。
+
+### 官方插件一览
+
+| 包名 | 作用 | 命令 / 能力 |
+|------|------|-------------|
+| [`@mlightcad/cad-simple-ui-plugin`](packages/cad-simple-ui-plugin) | 为 `cad-simple-viewer` 提供**工具栏与图层管理器 UI**（纯 DOM，不依赖 Vue/React） | `layer`、默认工具栏（视图、测量、导出、审阅、主题、语言） |
+| [`@mlightcad/cad-agent-plugin`](packages/cad-agent-plugin) | **自然语言 CAD 智能体**（AI 对话面板 + 绘图工具调用） | `agent` |
+| [`@mlightcad/cad-html-plugin`](packages/cad-html-plugin) | 导出为**自包含离线 HTML** | `chtml`（`cad-viewer` 对话框）、`-chtml`（命令行） |
+| [`@mlightcad/cad-pdf-plugin`](packages/cad-pdf-plugin) | **PDF 导出与导入**（矢量管线） | `cpdf`、`ipdf` |
+| [`@mlightcad/cad-svg-plugin`](packages/cad-svg-plugin) | **SVG 导出**及共享矢量渲染器（PDF 导出也会用到） | `csvg` |
+
+### `@mlightcad/cad-simple-ui-plugin` — 简易查看器的 UI 层
+
+[`cad-simple-viewer`](packages/cad-simple-viewer) 有意只提供 **CAD 核心与画布**，不包含应用级界面。若你在自有 Web 应用中嵌入简易查看器，又不想引入完整 Vue 版 [`cad-viewer`](packages/cad-viewer) 外壳，**`cad-simple-ui-plugin` 即推荐的 UI 插件**。
+
+主要能力：
+
+- **可配置工具栏**（四边任意放置、内置 CAD 命令、嵌套菜单、自定义按钮）
+- **浮动图层管理器**（图层开关、ACI 颜色选择、双击缩放至图层）
+- **主题同步**：跟随 `COLORTHEME` 系统变量及 host 上的 `--ml-ui-*` CSS 变量
+- **语言同步**：跟随 `AcApI18n`（中/英）
+
+全部 UI 为框架无关的纯 DOM 实现。完整 Vue 版 [`cad-viewer`](packages/cad-viewer) 自带 Element Plus 界面，**不需要**此插件；仅在直接基于 `cad-simple-viewer` 集成时使用 `cad-simple-ui-plugin`。
+
+→ **快速开始、工具栏定制与配置项：** [packages/cad-simple-ui-plugin/README.md](packages/cad-simple-ui-plugin/README.md)
+
+### `@mlightcad/cad-agent-plugin` — AI 绘图助手
+
+[`cad-agent-plugin`](packages/cad-agent-plugin) 为基于 `cad-simple-viewer` 的应用提供**自然语言 CAD 智能体**。用户用自然语言描述需求，智能体通过 CAD 工具读取图纸上下文并创建或修改几何图形。
+
+主要能力：
+
+- **懒加载** `AcApPlugin`（触发命令：`agent`），避免 AI 相关 bundle 影响首屏加载
+- **Vue 对话面板**（`AgentChatPanel`），基于 Vercel AI SDK（`Experimental_Agent` + `@ai-sdk/vue`）
+- **浏览器端 LLM 配置** — 支持 OpenAI、Anthropic 及 OpenAI 兼容接口，API Key 保存在客户端（`localStorage` 加密存储）
+- **一期 CAD 工具** — `get_drawing_context`；`draw_line`、`draw_circle`、`draw_arc`、`draw_rectangle`、`draw_polyline`、`draw_text`；`set_current_layer`、`create_layer`、`zoom_extents`
+- **中/英** 界面文案，通过插件 i18n 层提供
+
+完整 Vue 版 [`cad-viewer`](packages/cad-viewer) 在安装该包后会自动注册智能体（调色板标签页）。[`cad-simple-viewer-example`](packages/cad-simple-viewer-example) 通过 `cad-simple-ui-plugin` 将其接入停靠面板。宿主应用可调用 `registerLazyAgentPlugin` 与 `setAgentPaletteOpener`，自行决定面板挂载位置。
+
+→ **安装、注册方式与工具列表：** [packages/cad-agent-plugin/README.md](packages/cad-agent-plugin/README.md)
+
+### 导出类插件（HTML / PDF / SVG）
+
+以下插件向同一插件管理器注册导出（及 PDF 导入）命令，并采用**懒加载**以控制首屏体积。[`cad-simple-viewer-example`](packages/cad-simple-viewer-example) 示例会注册全部三个导出插件、`cad-simple-ui-plugin` 以及 `cad-agent-plugin`；完整 [`cad-viewer`](packages/cad-viewer) 应用在启动时注册导出类插件，并在安装时注册智能体插件。
+
+- **HTML** — 单文件离线查看器，便于分享与归档：[packages/cad-html-plugin/README.md](packages/cad-html-plugin/README.md)  
+  （相同管线的无头 CLI：[packages/cad-html-exporter-cli/README.md](packages/cad-html-exporter-cli/README.md))
+- **PDF** — 矢量 PDF 导出与 PDF 导入 CAD：[packages/cad-pdf-plugin/README.md](packages/cad-pdf-plugin/README.md)
+- **SVG** — 矢量 SVG 导出：[packages/cad-svg-plugin/README.md](packages/cad-svg-plugin/README.md)
+
+#### 自包含 HTML 内存占用
+
+打开样例图纸 [`canteen.dwg`](https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/data/canteen.dwg) 时，内存占用大致如下：
+
+| 查看器 | 内存占用 |
+|--------|----------|
+| AutoCAD 2020 | 320 MB |
+| 浩辰看图王 | 246 MB |
+| 自包含 HTML（测量模式） | 56 MB |
+| 自包含 HTML（查看模式） | 33 MB |
+
+在查看模式下，离线 HTML 查看器比 AutoCAD 2020 约低 **83%**、比浩辰看图王约低 **77%**，同时仍支持平移缩放、图层切换与距离测量（测量模式）。
+
+## 性能优化
+
+CAD-Viewer 针对复杂图纸渲染进行了多项优化，可在保持高帧率的同时处理大规模 DXF/DWG 文件：
+
+- **自定义着色器材质**：在 GPU 侧高效绘制复杂线型与剖面填充
+- **几何体合批**：对相同材质的点/线/面进行合并，显著减少 draw call
+- **实例化渲染**：针对重复几何体进行实例化优化
+- **缓冲几何优化**：高效的内存管理与几何合并，降低 GPU 开销
+- **材质缓存**：复用相似实体的材质以减少状态切换
+- **WebGL 优化**：充分利用现代 WebGL 的硬件加速能力
+
+这些优化使得 CAD-Viewer 能够在渲染大量复杂实体的同时保持交互顺畅。
+
+## 已知问题
+
+- **不支持的实体**：
+  - **外部参照（XRef）**：当前暂不支持显示。这主要是因为 Web 端访问文件的方式与桌面端 CAD 应用不一致，后续版本将提供支持。
+- **DWG 兼容性**：
+  - 部分 DWG 图纸可能因 [LibreDWG](https://github.com/LibreDWG/libredwg) 的问题无法打开。若遇到此类问题，欢迎在 [CAD-Viewer 问题页](https://github.com/mlightcad/cad-viewer/issues) 或 [LibreDWG 问题页](https://github.com/LibreDWG/libredwg/issues) 反馈。
+  - 包含第三方自定义图元的图纸（例如天正软件绘制的图纸）可能无法正确显示。保存此类图纸时，请确保系统变量 `PROXYGRAPHICS` 已开启（设为 `1`）。若图纸中已保存了 proxy graphic，则 CAD-Viewer 也可以正常显示。
+
+  DWG 保存时是否写入 Proxy Graphics 由系统变量 `PROXYGRAPHICS` 控制：
+
+  | 取值 | 含义 |
+  |------|------|
+  | 0 | 不保存 Proxy Graphics |
+  | 1 | 保存 Proxy Graphics |
+- **DWG 文件大小限制**：
+  - 使用 LibreDWG 解析 DWG 文件时内存开销较大，很容易占用超过 2 GB 内存。因此 `libredwg-web` 对 WASM 堆内存做了限制，过大的 DWG 文件可能无法解析。
+  - 我们提供 [**专有 DWG/DXF 解析器**](./PROPRIETARY-PARSER.zh-CN.md)，具有更低的内存开销，支持更大的文件，且解析结果更加准确。它与开源 converter 一样接入 `@mlightcad/data-model`，并可在闭源商业产品中替换基于 GPL 的 `dxf-json-converter` 与 `libredwg-converter`。详见 [商业授权说明](./PROPRIETARY-PARSER.zh-CN.md)（支持范围、价格、GPL 合规、支持维护等）。
+
+## 路线图（Roadmap）
+
+本项目的目标是打造一个**运行在浏览器中的、功能完整的二维 AutoCAD 系统**（查看器 + 编辑器），具备模块化架构，并且可与各类前端框架无关地进行集成。
+
+图例说明：
+
+-   [x] 已完成
+-   [ ] 计划中
+-   [ ] ⏳ 进行中
+
+### 核心文件与数据层
+
+#### 文件支持
+
+-   [x] DXF 加载
+-   [x] DWG 加载
+-   [x] 导出为自包含离线 HTML（内嵌查看器）
+-   [x] 大文件流式加载 / 增量加载
+-   [ ] ⏳ 文件版本兼容（R12–最新版本）
+
+#### 数据模型
+
+-   [x] 统一的实体数据模型
+-   [x] 图层表支持
+-   [x] 块（Block）/ 插入（Insert）结构
+-   [ ] ⏳ Handle 与对象 ID 管理：当前 objectId 与 handle 相同，并且以字符串表示，而不是 bigint（int64）
+-   [ ] ⏳ XData / 扩展字典支持
+-   [ ] 代理实体（Proxy Entity）处理
+
+### 渲染与性能
+
+#### 渲染引擎
+
+-   [x] 基于 WebGL 的渲染（Three.js）
+-   [x] 仅针对 2D 的优化渲染管线
+-   [x] 基于图层的场景组织
+-   [x] 布局（Layout）/ 图纸空间（Paper Space）渲染
+-   [ ] 视口（Viewport）实体支持
+
+#### 性能优化
+
+-   [x] 几何体合并与批处理
+-   [x] 空间索引（基础）
+-   [x] 高级空间索引（R-tree / BVH）
+-   [ ] 细节层次（LOD）渲染
+-   [ ] 超大图纸的多画布 / 分块渲染
+
+### 查看与导航
+
+#### 视图控制
+
+-   [x] 平移（Pan）
+-   [x] 缩放（滚轮 / 框选缩放）
+-   [x] 适配视图 / 显示范围
+-   [ ] 命名视图
+-   [ ] 视图历史（撤销 / 重做视图变更）
+
+#### 显示控制
+
+-   [x] 图层显示 / 隐藏
+-   [x] 图层冻结 / 锁定
+-   [x] 线宽显示
+-   [ ] 线型比例
+-   [x] 背景 / 主题切换
+
+### 选择与交互
+
+#### 选择
+
+-   [x] 单个实体选择
+-   [x] 选中实体高亮
+-   [x] 窗口选择（Window Selection）
+-   [x] 交叉选择（Crossing Selection）
+-   [x] 选择过滤（按类型 / 图层）
+-   [x] 循环选择（Selection Cycling）
+
+#### 捕捉（OSNAP）
+
+-   [x] 端点（Endpoint）
+-   [x] 中点（Midpoint）
+-   [x] 圆心（Center）
+-   [ ] 交点（Intersection）
+-   [ ] 垂足 / 切点（Perpendicular / Tangent）
+-   [x] 最近点（Nearest）
+-   [ ] 捕捉追踪（Snap Tracking）
+
+### 编辑与修改
+
+#### 基础编辑
+
+-   [x] 实体编辑框架
+-   [x] 移动（Move）
+-   [x] 复制（Copy）
+-   [x] 旋转（Rotate）
+-   [ ] 缩放（Scale）
+-   [x] 删除（Delete）
+-   [x] 撤销 / 重做（Undo / Redo）
+
+#### 几何编辑
+
+-   [x] 夹点（Grip Points）
+-   [ ] 拉伸（Stretch）
+-   [ ] 修剪（Trim）
+-   [ ] 延伸（Extend）
+-   [x] 偏移（Offset）
+-   [ ] 分解（Explode）
+-   [ ] 连接 / 圆角 / 倒角（2D）
+
+### 绘制与创建工具
+
+#### 基础实体
+
+-   [x] 直线（Line）
+-   [x] 多段线（Polyline）
+-   [x] 样条曲线（Spline）
+-   [x] 圆（Circle）
+-   [x] 圆弧（Arc）
+-   [x] 椭圆（Ellipse）
+-   [x] 矩形 / 多边形（Rectangle / Polygon）
+
+#### 高级实体
+
+-   [x] 填充（Hatch）
+-   [ ] 文本（单行 / 多行）
+-   [ ] 标注（线性、对齐、角度）
+-   [ ] 块创建与插入
+
+### 测量
+
+-   [x] 距离
+-   [x] 弧长
+-   [x] 面积
+-   [x] 角度
+-   [ ] 坐标
+-   [ ] 实体统计（长度、面积、数量）
+
+### 标注
+
+-   [x] 距离
+-   [ ] 角度
+-   [ ] 坐标
+
+### 属性与 UI 面板
+
+#### 属性面板（Property Palette）
+
+-   [x] 选中实体属性
+-   [ ] 图层、颜色、线型编辑
+-   [x] 属性修改实时更新
+
+#### 面板与界面
+
+-   [x] 图层管理器
+-   [ ] 块管理器
+-   [x] 命令历史 / 控制台
+-   [x] 状态栏（捕捉、正交、网格）
+
+#### 命令系统
+
+-   [x] 命令注册机制
+-   [x] 命令别名
+-   [x] 命令提示（AutoCAD 风格）
+
+### 集成与可扩展性
+
+#### 框架集成
+
+-   [x] 与前端框架无关的核心设计
+-   [ ] React 集成示例
+-   [x] Vue 集成示例
+-   [ ] OpenLayers / 地图集成
+-   [ ] CMS / Notion 嵌入
+
+#### 插件系统
+
+-   [x] 插件 API
+-   [ ] 自定义实体支持
+-   [x] 自定义命令
+
+### 离线与在线编辑
+
+#### 离线编辑器
+
+-   [x] 浏览器本地编辑
+-   [x] 保存为 DXF
+-   [ ] 保存变更集 / 差异（diff）
+-   [ ] IndexedDB 持久化
+
+#### 在线编辑器
+
+-   [ ] 后端 API 设计
+-   [ ] 用户认证
+-   [ ] 文件版本管理
+-   [ ] 多用户访问控制
+-   [ ] 实时协作（未来）
+
+### 平台目标
+
+-   [ ] ⏳ Google Drive 集成
+-   [ ] 微信小程序查看器
+-   [ ] 移动端浏览器支持（只读）
+
+### 文档与社区
+
+-   [x] 架构文档
+-   [x] API 参考文档
+-   [ ] 贡献指南
+-   [x] 示例项目
+-   [x] 路线图与变更日志维护
+
+该路线图刻意拆分得较为细致，以便贡献者能够清楚地了解 **已有功能**、**缺失功能** 以及 **最需要帮助的方向**。
+
+## 参与贡献（Contributing）
+
+欢迎各种形式的贡献！你可以通过提交 issue 或 pull request 来修复 bug、添加新功能或提出建议。  
+在提交 bug 报告时，如果能提供有问题的图纸链接，将有助于问题的复现与修复。
+
+## 许可证
+
+cad-viewer monorepo 主体采用 [MIT](LICENSE) 授权。
+
+`@mlightcad/cad-simple-viewer` 的**默认 DXF/DWG 加载路径**依赖 GPL-3.0 包（DXF：`dxf-json` / `@mlightcad/dxf-json-converter`；DWG：`libredwg-web` / `@mlightcad/libredwg-converter`）。若您交付闭源产品且无法向客户分发 GPL 代码，可使用 [**专有 DWG/DXF 解析器**](./PROPRIETARY-PARSER.zh-CN.md) 替换上述 converter，其余技术栈可保持纯 MIT。
+
+→ **专有解析器说明：** [PROPRIETARY-PARSER.zh-CN.md](./PROPRIETARY-PARSER.zh-CN.md)（支持范围、授权条款、价格、集成方式、GPL 合规、支持维护）
+
+

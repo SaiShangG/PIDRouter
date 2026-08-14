@@ -1,0 +1,1519 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>P&ID 高亮流路工作台 UI 参考</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --ink: #152026;
+      --muted: #64747c;
+      --line: #d4dde0;
+      --soft: #edf2f3;
+      --panel: #f7f9f9;
+      --white: #ffffff;
+      --nav: #16353d;
+      --nav-2: #214951;
+      --green: #00a870;
+      --green-dark: #087b58;
+      --amber: #e69a20;
+      --red: #d84d45;
+      --blue: #287eae;
+      --cyan: #09a9b7;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #dfe7e9;
+      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    }
+
+    button,
+    select {
+      font: inherit;
+    }
+
+    button,
+    select,
+    .step,
+    .cycle-title,
+    .phase-title,
+    .state-row,
+    .page-jump,
+    .warning {
+      cursor: pointer;
+    }
+
+    button:hover,
+    .step:hover,
+    .cycle-title:hover,
+    .phase-title:hover,
+    .state-row:hover {
+      filter: brightness(.96);
+    }
+
+    .app {
+      width: 1440px;
+      height: 900px;
+      overflow: hidden;
+      background: var(--white);
+    }
+
+    .topbar {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 18px;
+      color: #fff;
+      background: var(--nav);
+      border-bottom: 1px solid #0d2930;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 266px;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #52d8b2;
+      color: #52d8b2;
+      font: 700 17px/1 Consolas;
+    }
+
+    .brand-title {
+      font-size: 17px;
+      font-weight: 650;
+    }
+
+    .brand-sub {
+      margin-top: 2px;
+      color: #a9c1c6;
+      font-size: 11px;
+    }
+
+    .crumb {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 13px;
+      color: #d8e4e6;
+    }
+
+    .crumb strong {
+      color: #fff;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 7px;
+    }
+
+    .top-btn {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid #42636a;
+      border-radius: 4px;
+      color: #eaf2f3;
+      background: #21434b;
+    }
+
+    .top-btn.primary {
+      border-color: var(--green);
+      background: var(--green-dark);
+      color: #fff;
+    }
+
+    .contextbar {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      background: #f2f5f5;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .select-wrap {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .select-wrap label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    select {
+      height: 32px;
+      min-width: 142px;
+      padding: 0 30px 0 10px;
+      color: var(--ink);
+      border: 1px solid #c4cfd2;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .step-select {
+      min-width: 210px;
+    }
+
+    .context-spacer {
+      flex: 1;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid #b8dacc;
+      border-radius: 15px;
+      color: #176a50;
+      background: #edf9f4;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .workspace {
+      height: 750px;
+      display: grid;
+      grid-template-columns: 250px 1fr 292px;
+    }
+
+    .left,
+    .right {
+      min-width: 0;
+      background: var(--panel);
+    }
+
+    .left {
+      border-right: 1px solid var(--line);
+    }
+
+    .right {
+      border-left: 1px solid var(--line);
+    }
+
+    .panel-head {
+      height: 43px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .panel-head strong {
+      font-size: 13px;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #cbd5d7;
+      border-radius: 4px;
+      color: #496068;
+      background: #fff;
+      font-size: 17px;
+    }
+
+    .skid-block {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .skid-label {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .skid-select {
+      width: 100%;
+    }
+
+    .tree {
+      padding: 9px;
+    }
+
+    .cycle-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .cycle-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: #176a50;
+      background: #dff3eb;
+      font-size: 10px;
+    }
+
+    .phase {
+      margin: 3px 0 8px;
+      border-left: 2px solid #becacc;
+    }
+
+    .phase-title {
+      padding: 7px 10px;
+      color: #43565d;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .step {
+      height: 36px;
+      margin-left: 7px;
+      padding: 0 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #4b5e64;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+
+    .step.active {
+      color: #075d43;
+      background: #dff4eb;
+      box-shadow: inset 3px 0 var(--green);
+      font-weight: 700;
+    }
+
+    .step-no {
+      width: 20px;
+      color: #7c8c91;
+      font: 700 10px/1 Consolas;
+    }
+
+    .step-check {
+      margin-left: auto;
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .center {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: #e7ecee;
+    }
+
+    .canvas-tools {
+      height: 43px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .tool {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 3px;
+      color: #40545b;
+      background: transparent;
+      font-size: 16px;
+    }
+
+    .tool.active {
+      color: #fff;
+      background: #2d626c;
+    }
+
+    .divider {
+      width: 1px;
+      height: 22px;
+      margin: 0 4px;
+      background: var(--line);
+    }
+
+    .tool-label {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .drawing-wrap {
+      flex: 1;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .drawing {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #bdc8cb;
+      box-shadow: 0 3px 13px rgba(18, 44, 52, .12);
+    }
+
+    .drawing::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .23;
+      background-image: linear-gradient(#dbe2e4 1px, transparent 1px), linear-gradient(90deg, #dbe2e4 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .pid {
+      position: absolute;
+      inset: 18px 20px 20px;
+      width: calc(100% - 40px);
+      height: calc(100% - 38px);
+    }
+
+    .pid .base {
+      fill: none;
+      stroke: #697a80;
+      stroke-width: 2;
+    }
+
+    .pid .minor {
+      fill: none;
+      stroke: #9ba8ac;
+      stroke-width: 1.5;
+    }
+
+    .pid .flow {
+      fill: none;
+      stroke: var(--green);
+      stroke-width: 7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .pid .air {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 5;
+      stroke-linecap: round;
+    }
+
+    .pid .signal {
+      fill: none;
+      stroke: var(--cyan);
+      stroke-width: 2;
+      stroke-dasharray: 7 5;
+    }
+
+    .pid .device {
+      fill: #fff;
+      stroke: #53676d;
+      stroke-width: 2;
+    }
+
+    .pid .active-device {
+      fill: #e6f8f1;
+      stroke: var(--green);
+      stroke-width: 4;
+    }
+
+    .pid .tank-fill {
+      fill: #69d5b5;
+      opacity: .78;
+    }
+
+    .pid text {
+      fill: #31464d;
+      font: 12px "Segoe UI", sans-serif;
+    }
+
+    .pid .tag {
+      font-weight: 700;
+    }
+
+    .drawing-title {
+      position: absolute;
+      z-index: 2;
+      top: 13px;
+      left: 16px;
+      padding: 5px 8px;
+      color: #3d535a;
+      background: rgba(255, 255, 255, .92);
+      border: 1px solid #d0d9db;
+      font-size: 11px;
+    }
+
+    .page-jump {
+      position: absolute;
+      z-index: 2;
+      right: 16px;
+      top: 14px;
+      padding: 6px 9px;
+      border: 1px solid #9fc8ba;
+      border-radius: 4px;
+      color: #11684c;
+      background: #ecf8f3;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .canvas-status {
+      height: 31px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 12px;
+      color: #5e7077;
+      background: #fff;
+      border-top: 1px solid var(--line);
+      font-size: 11px;
+    }
+
+    .canvas-status span:last-child {
+      margin-left: auto;
+    }
+
+    .tabs {
+      height: 42px;
+      display: flex;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .tab {
+      flex: 1;
+      border: 0;
+      color: #66777d;
+      background: transparent;
+      font-size: 12px;
+    }
+
+    .tab.active {
+      color: #11694e;
+      border-bottom: 2px solid var(--green);
+      font-weight: 700;
+    }
+
+    .step-summary {
+      padding: 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .summary-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .summary-sub {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .section {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .count {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .state-row {
+      height: 34px;
+      display: grid;
+      grid-template-columns: 67px 1fr auto;
+      align-items: center;
+      border-top: 1px solid #e2e8e9;
+      font-size: 11px;
+    }
+
+    .state-row:first-of-type {
+      border-top: 0;
+    }
+
+    .tag-name {
+      font-family: Consolas, monospace;
+      font-weight: 700;
+    }
+
+    .desc {
+      color: #596b71;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .state {
+      min-width: 54px;
+      padding: 4px 6px;
+      border-radius: 3px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .state.on {
+      color: #0b684b;
+      background: #d9f3e9;
+    }
+
+    .state.pulse {
+      color: #8a5700;
+      background: #fff0cf;
+    }
+
+    .state.monitor {
+      color: #156283;
+      background: #dcedf6;
+    }
+
+    .condition {
+      padding: 9px;
+      border-left: 3px solid var(--amber);
+      color: #5b4a28;
+      background: #fff7e8;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .right-actions {
+      display: flex;
+      gap: 7px;
+      padding: 12px 13px;
+    }
+
+    .action-btn {
+      flex: 1;
+      height: 32px;
+      border: 1px solid #bdc9cc;
+      border-radius: 4px;
+      color: #3e555c;
+      background: #fff;
+    }
+
+    .action-btn.primary {
+      border-color: var(--green-dark);
+      color: #fff;
+      background: var(--green-dark);
+    }
+
+    .footer {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 0 14px;
+      color: #5d6f75;
+      background: #f4f7f7;
+      border-top: 1px solid var(--line);
+      font-size: 11px;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .swatch {
+      width: 16px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--green);
+    }
+
+    .swatch.air {
+      background: var(--blue);
+    }
+
+    .swatch.signal {
+      height: 2px;
+      background: var(--cyan);
+    }
+
+    .swatch.manual {
+      height: 8px;
+      background: var(--amber);
+    }
+
+    .footer .warning {
+      margin-left: auto;
+      color: #9a6410;
+      font-weight: 700;
+    }
+
+    .poc-label {
+      margin-left: auto;
+      padding: 5px 8px;
+      border: 1px solid #a7cbc0;
+      border-radius: 3px;
+      color: #176a50;
+      background: #e8f6f1;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .poc-help {
+      padding: 10px 13px;
+      color: #53676d;
+      background: #eef4f4;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .state-row.poc-control {
+      grid-template-columns: 67px 1fr auto;
+    }
+
+    .state-row.poc-control .state {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .flow-off {
+      opacity: .08;
+    }
+
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: grid;
+      place-content: center;
+      justify-items: center;
+      gap: 10px;
+      padding: 32px;
+      text-align: center;
+      background: #f5f8f8;
+    }
+
+    .empty-state strong {
+      font-size: 18px;
+    }
+
+    .empty-state p {
+      max-width: 390px;
+      margin: 0 0 8px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .source-note {
+      padding: 9px 10px;
+      color: #456169;
+      background: #edf4f4;
+      border-left: 3px solid var(--cyan);
+    }
+
+    .is-hidden {
+      display: none !important;
+    }
+
+    .drawing.mode-pan {
+      cursor: grab;
+    }
+
+    .drawing.mode-highlight {
+      cursor: crosshair;
+    }
+
+    .drawing.mode-text {
+      cursor: text;
+    }
+
+    .pid {
+      transition: transform .2s ease, opacity .2s ease;
+      transform-origin: center;
+    }
+
+    .pid.muted .base,
+    .pid.muted .minor,
+    .pid.muted .device {
+      opacity: .25;
+    }
+
+    .editable .state {
+      outline: 2px solid rgba(0, 168, 112, .35);
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      z-index: 30;
+      transform: translate(-50%, 12px);
+      padding: 10px 15px;
+      border-radius: 4px;
+      color: #fff;
+      background: #173b43;
+      box-shadow: 0 7px 22px rgba(10, 35, 42, .25);
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: rgba(10, 29, 34, .48);
+    }
+
+    .modal {
+      width: 590px;
+      max-height: 720px;
+      overflow: auto;
+      border: 1px solid #b8c7ca;
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 20px 65px rgba(8, 29, 35, .32);
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .modal-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .modal-close {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      background: transparent;
+      font-size: 20px;
+    }
+
+    .modal-body {
+      padding: 16px;
+      color: #42565d;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .modal-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .modal-table th,
+    .modal-table td {
+      padding: 8px;
+      border: 1px solid var(--line);
+      text-align: left;
+    }
+
+    .modal-table th {
+      background: #edf3f3;
+    }
+
+    .form-row {
+      margin-bottom: 12px;
+    }
+
+    .form-row label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+
+    .form-row input,
+    .form-row select {
+      width: 100%;
+      height: 34px;
+      padding: 0 9px;
+      border: 1px solid #bdc9cc;
+      border-radius: 4px;
+    }
+
+    .check-row {
+      display: flex;
+      gap: 18px;
+      margin: 10px 0;
+    }
+
+    .context-menu {
+      position: fixed;
+      z-index: 15;
+      width: 180px;
+      padding: 5px;
+      border: 1px solid #bac8cb;
+      border-radius: 4px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(14, 42, 49, .2);
+    }
+
+    .context-menu button {
+      width: 100%;
+      padding: 8px 9px;
+      border: 0;
+      text-align: left;
+      color: #33494f;
+      background: transparent;
+    }
+
+    .context-menu button:hover {
+      color: #075d43;
+      background: #e6f5ef;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P&ID</div>
+        <div>
+          <div class="brand-title">FlowPath Studio</div>
+          <div class="brand-sub">高亮流路 POC · Version 1</div>
+        </div>
+      </div>
+      <div class="crumb"><span>制剂车间扩建项目</span><span>›</span><strong>配液与 CIP
+          系统</strong><span>›</span><span>PID-2101.dwg</span></div>
+      <div class="top-actions">
+        <button class="top-btn" id="undoButton">↶ 撤销</button>
+        <button class="top-btn" id="saveButton">保存步骤</button>
+        <button class="top-btn" id="matrixButton">打开图纸</button>
+        <button class="top-btn primary" id="reportButton">预览 PDF</button>
+      </div>
+    </header>
+
+    <section class="contextbar">
+      <div class="select-wrap"><label>设备</label><select id="equipmentSelect">
+          <option>T-101 配液罐</option>
+          <option>T-201 缓冲罐</option>
+          <option>CIP-01 清洗撬</option>
+        </select></div>
+      <div class="select-wrap"><label>Cycle</label><select id="cycleSelect">
+          <option>CIP 清洗循环</option>
+          <option>SIP 灭菌循环</option>
+          <option>产品输送循环</option>
+        </select></div>
+      <div class="select-wrap"><label>Phase</label><select id="phaseSelect">
+          <option>Phase 01 · 预冲洗</option>
+          <option selected>Phase 02 · 碱洗</option>
+          <option>Phase 03 · 排放</option>
+        </select></div>
+      <div class="select-wrap"><label>Step</label><select class="step-select" id="stepSelect">
+          <option>Step 01 · 打开进水阀</option>
+          <option>Step 02 · 启动循环泵</option>
+          <option>Step 03 · 加入清洗液</option>
+          <option selected>Step 04 · 循环清洗</option>
+          <option>Step 05 · 停止泵并排放</option>
+        </select></div>
+      <div class="context-spacer"></div>
+      <div class="status-pill" id="saveStatus"><span class="dot"></span><span>阶段已保存</span></div>
+    </section>
+
+    <section class="workspace">
+      <aside class="left">
+        <div class="panel-head"><strong>工艺导航</strong><button class="icon-btn" id="addStepButton" title="新增步骤">＋</button>
+        </div>
+        <div class="skid-block">
+          <div class="skid-label">容器 / SKID</div><select class="skid-select">
+            <option>T-101 配液罐系统</option>
+          </select>
+        </div>
+        <div class="tree">
+          <div class="cycle-title">⌄ CIP 清洗循环 <span class="cycle-badge">5 STEPS</span></div>
+          <div class="phase">
+            <div class="phase-title">⌄ Phase 01 · 预冲洗</div>
+            <div class="step"><span class="step-no">01</span>打开进水阀<span class="step-check">✓</span></div>
+            <div class="step"><span class="step-no">02</span>启动循环泵<span class="step-check">✓</span></div>
+          </div>
+          <div class="phase">
+            <div class="phase-title">⌄ Phase 02 · 碱洗</div>
+            <div class="step"><span class="step-no">03</span>加入清洗液<span class="step-check">✓</span></div>
+            <div class="step active"><span class="step-no">04</span>循环清洗<span class="step-check">●</span></div>
+          </div>
+          <div class="phase">
+            <div class="phase-title">⌄ Phase 03 · 排放</div>
+            <div class="step"><span class="step-no">05</span>停止泵并排放</div>
+          </div>
+          <div class="cycle-title">› SIP 灭菌循环 <span class="cycle-badge">7 STEPS</span></div>
+          <div class="cycle-title">› 产品输送循环 <span class="cycle-badge">4 STEPS</span></div>
+        </div>
+      </aside>
+
+      <section class="center">
+        <div class="canvas-tools">
+          <button class="tool active" data-mode="选择" title="选择">↖</button><button class="tool" data-mode="平移"
+            title="平移">✥</button><button class="tool" data-mode="缩小" title="缩小">⌕</button><button class="tool"
+            data-mode="放大" title="放大">⊞</button>
+          <span class="divider"></span><button class="tool" data-mode="流路高亮" title="流路高亮">⌁</button><button class="tool"
+            data-mode="手工标注" title="手工标注">✎</button><button class="tool" data-mode="文字" title="添加文字">T</button><button
+            class="tool" data-mode="液位" title="设置液位">▤</button>
+          <span class="divider"></span><button class="tool" data-mode="聚焦高亮" title="聚焦高亮">◫</button><button class="tool"
+            data-mode="显示全部" title="显示全部">◩</button>
+          <span class="tool-label">模型空间 · 高亮编辑模式</span>
+        </div>
+        <div class="drawing-wrap">
+          <div class="drawing" id="drawing">
+            <div class="drawing-title">PID-2101.dwg · POC 示例图纸</div>
+            <div class="page-jump" id="pageJump">DC-CIP-02 → 跳转第 2 页</div>
+            <svg class="pid" viewBox="0 0 800 570" aria-label="P&ID 高亮流路示意图">
+              <path class="minor" d="M40 70 H750 M40 520 H750 M50 90 V490 M760 90 V490" />
+              <path class="base"
+                d="M80 310 H210 M330 310 H440 M510 310 H700 M270 195 V120 H610 V300 M270 425 V485 H610 V330" />
+              <path class="base" d="M114 310 V225 H205 M114 310 V395 H205 M610 120 H720 V180 M610 485 H720 V430" />
+              <path class="flow" d="M80 310 H210 M330 310 H440 M510 310 H700" />
+              <path class="air" d="M270 195 V120 H610 V300" />
+              <path class="signal" d="M474 256 V180 H355 V130" />
+
+              <path class="device" d="M210 280 L270 310 L210 340 Z M330 280 L270 310 L330 340 Z" />
+              <circle class="active-device" cx="270" cy="310" r="42" />
+              <path class="active-device" d="M250 286 L290 310 L250 334 Z" />
+              <text class="tag" x="241" y="372">P-101</text><text x="227" y="389">循环泵 START</text>
+
+              <path class="active-device" d="M440 284 L475 310 L440 336 Z M510 284 L475 310 L510 336 Z" />
+              <text class="tag" x="450" y="365">XV-101</text><text x="451" y="382">ON</text>
+
+              <path class="device" d="M665 285 L700 310 L665 335 Z M735 285 L700 310 L735 335 Z" />
+              <text class="tag" x="676" y="365">HV-102</text><text x="667" y="382">手动打开</text>
+
+              <rect class="device" x="205" y="195" width="130" height="230" rx="30" />
+              <path class="tank-fill" d="M207 330 H333 V395 Q333 423 305 423 H235 Q207 423 207 395 Z" />
+              <path class="base" d="M205 230 Q270 255 335 230 M205 390 Q270 415 335 390" />
+              <text class="tag" x="245" y="260">T-101</text><text x="235" y="278">配液罐 · 65%</text>
+              <path class="base" d="M250 195 V165 H290 V195 M270 165 V140" />
+
+              <circle class="active-device" cx="474" cy="220" r="27" />
+              <text class="tag" x="456" y="224">PT</text><text class="tag" x="450" y="168">PT-101</text><text x="431"
+                y="151">MONITOR</text>
+
+              <rect class="device" x="610" y="250" width="55" height="120" rx="8" />
+              <path class="minor" d="M620 265 L655 290 L620 315 L655 340 L620 360" />
+              <text class="tag" x="609" y="395">HX-101</text><text x="598" y="412">板式换热器</text>
+
+              <path class="device" d="M105 220 h20 l-10 18 z M105 400 h20 l-10 -18 z" />
+              <text class="tag" x="65" y="211">AIR-IN</text><text class="tag" x="61" y="425">DRAIN</text>
+              <text class="tag" x="704" y="300">DC-CIP-02</text><text x="702" y="319">至 Page 2</text>
+
+              <path class="minor" d="M85 470 H180 M85 485 H155" />
+              <text x="85" y="455">人工步骤：确认回流视镜无气泡</text>
+            </svg>
+          </div>
+        </div>
+        <div class="canvas-status"><span>图层：18 / 22 可见</span><span>对象：1,842</span><span>坐标：1250.40,
+            786.20</span><span>缩放 84%</span></div>
+      </section>
+
+      <aside class="right">
+        <div class="tabs"><button class="tab active" data-tab="步骤状态">步骤状态</button><button class="tab"
+            data-tab="属性">属性</button><button class="tab" data-tab="联锁">联锁</button><button class="tab"
+            data-tab="校验">校验</button></div>
+        <div class="step-summary">
+          <div class="eyebrow">当前步骤 · Step 04</div>
+          <div class="summary-title">循环清洗</div>
+          <div class="summary-sub">Phase 02 · 碱洗 / T-101 配液罐</div>
+        </div>
+        <div class="section">
+          <div class="section-title"><span>阀门</span><span class="count">2 ACTIVE</span></div>
+          <div class="state-row"><span class="tag-name">XV-101</span><span class="desc">循环入口阀</span><span
+              class="state on">ON</span></div>
+          <div class="state-row"><span class="tag-name">XV-104</span><span class="desc">碱液计量阀</span><span
+              class="state pulse">PULSE</span></div>
+          <div class="state-row"><span class="tag-name">HV-102</span><span class="desc">回流手动阀</span><span
+              class="state pulse">MANUAL</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title"><span>电机与传感器</span><span class="count">2 ACTIVE</span></div>
+          <div class="state-row"><span class="tag-name">P-101</span><span class="desc">CIP 循环泵</span><span
+              class="state on">START</span></div>
+          <div class="state-row"><span class="tag-name">PT-101</span><span class="desc">回路压力</span><span
+              class="state monitor">MONITOR</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title"><span>容器状态</span><span class="count">1 VESSEL</span></div>
+          <div class="state-row"><span class="tag-name">T-101</span><span class="desc">当前液位</span><span
+              class="state on">65%</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title"><span>转移条件</span><span class="count">2 / 3</span></div>
+          <div class="condition">保持 PT-101 ≥ 2.0 bar，循环时间达到 15 min 后允许进入 Phase 03。</div>
+        </div>
+        <div class="right-actions"><button class="action-btn" id="copyStepButton">复制步骤</button><button
+            class="action-btn primary" id="editStateButton">编辑状态</button></div>
+      </aside>
+    </section>
+
+    <footer class="footer">
+      <strong>图例</strong>
+      <div class="legend"><span class="legend-item"><i class="swatch"></i>产品/CIP 流路</span><span class="legend-item"><i
+            class="swatch air"></i>压缩空气</span><span class="legend-item"><i class="swatch signal"></i>控制信号</span><span
+          class="legend-item"><i class="swatch manual"></i>手动操作</span></div>
+      <span class="warning" id="validationWarning">⚠ 图纸校验：2 个警告</span><span id="autoSaveTime">自动保存于 14:36</span>
+    </footer>
+  </main>
+  <div class="toast" id="toast"></div>
+  <div class="modal-backdrop is-hidden" id="modalBackdrop">
+    <section class="modal" role="dialog" aria-modal="true">
+      <header class="modal-head">
+        <h2 id="modalTitle"></h2><button class="modal-close" id="modalClose">×</button>
+      </header>
+      <div class="modal-body" id="modalBody"></div>
+      <footer class="modal-actions"><button class="action-btn" id="modalCancel">取消</button><button
+          class="action-btn primary" id="modalConfirm">确认</button></footer>
+    </section>
+  </div>
+  <div class="context-menu is-hidden" id="contextMenu">
+    <button data-action="ON">阀门 ON</button><button data-action="OFF">阀门 OFF</button><button data-action="PULSE">阀门
+      Pulse</button><button data-action="HIGHLIGHT">手动高亮此管线</button>
+  </div>
+  <script>
+    const byId = id => document.getElementById(id)
+    const toast = message => {
+      const node = byId('toast')
+      node.textContent = message
+      node.classList.add('show')
+      clearTimeout(window.toastTimer)
+      window.toastTimer = setTimeout(() => node.classList.remove('show'), 1800)
+    }
+
+    const modal = {
+      confirmAction: null,
+      open(title, body, confirmAction, confirmLabel = '确认') {
+        byId('modalTitle').textContent = title
+        byId('modalBody').innerHTML = body
+        byId('modalConfirm').textContent = confirmLabel
+        byId('modalBackdrop').classList.remove('is-hidden')
+        this.confirmAction = confirmAction || null
+      },
+      close() { byId('modalBackdrop').classList.add('is-hidden'); this.confirmAction = null }
+    }
+    byId('modalClose').onclick = () => modal.close()
+    byId('modalCancel').onclick = () => modal.close()
+    byId('modalBackdrop').onclick = event => { if (event.target === byId('modalBackdrop')) modal.close() }
+    byId('modalConfirm').onclick = () => { const action = modal.confirmAction; modal.close(); action?.() }
+
+    const state = { dirty: false, history: [], zoom: 1, page: 1, editing: false }
+    const setDirty = value => {
+      state.dirty = value
+      const status = byId('saveStatus')
+      status.querySelector('span:last-child').textContent = value ? '存在未保存更改' : '阶段已保存'
+      status.style.borderColor = value ? '#e4c078' : '#b8dacc'
+      status.style.color = value ? '#8a5700' : '#176a50'
+    }
+    const snapshot = label => { state.history.push(label); setDirty(true) }
+
+    const steps = [
+      ['01', '打开进水阀', 'Phase 01 · 预冲洗'], ['02', '启动循环泵', 'Phase 01 · 预冲洗'],
+      ['03', '加入清洗液', 'Phase 02 · 碱洗'], ['04', '循环清洗', 'Phase 02 · 碱洗'],
+      ['05', '停止泵并排放', 'Phase 03 · 排放']
+    ]
+    const selectStep = (number, name, phase) => {
+      document.querySelectorAll('.step').forEach(node => node.classList.toggle('active', node.querySelector('.step-no')?.textContent === number))
+      byId('stepSelect').value = `Step ${number} · ${name}`
+      byId('phaseSelect').value = phase
+      document.querySelector('.eyebrow').textContent = `当前步骤 · Step ${number}`
+      document.querySelector('.summary-title').textContent = name
+      document.querySelector('.summary-sub').textContent = `${phase} / ${byId('equipmentSelect').value}`
+      toast(`已切换到 Step ${number} · ${name}`)
+    }
+    document.querySelectorAll('.step').forEach(node => node.onclick = () => {
+      const number = node.querySelector('.step-no').textContent
+      const item = steps.find(step => step[0] === number)
+      if (item) selectStep(...item)
+    })
+    byId('stepSelect').onchange = event => {
+      const number = event.target.value.match(/Step (\d+)/)?.[1]
+      const item = steps.find(step => step[0] === number)
+      if (item) selectStep(...item)
+    }
+    byId('phaseSelect').onchange = event => {
+      const item = steps.find(step => step[2] === event.target.value)
+      if (item) selectStep(...item)
+    }
+    byId('cycleSelect').onchange = event => toast(`已加载 ${event.target.value} 的全部步骤`)
+    byId('equipmentSelect').onchange = event => {
+      document.querySelector('.summary-sub').textContent = `${byId('phaseSelect').value} / ${event.target.value}`
+      toast(`已定位 ${event.target.value}`)
+    }
+    document.querySelector('.skid-select').onchange = event => toast(`已切换到 ${event.target.value}`)
+
+    document.querySelectorAll('.cycle-title').forEach((node, index) => node.onclick = () => {
+      if (index === 0) {
+        document.querySelectorAll('.phase').forEach(phase => phase.classList.toggle('is-hidden'))
+        node.firstChild.textContent = document.querySelector('.phase').classList.contains('is-hidden') ? '› CIP 清洗循环 ' : '⌄ CIP 清洗循环 '
+      } else {
+        byId('cycleSelect').selectedIndex = index
+        toast(`${node.textContent.trim()}：模拟加载完成`)
+      }
+    })
+    document.querySelectorAll('.phase-title').forEach(node => node.onclick = event => {
+      event.stopPropagation()
+      node.parentElement.querySelectorAll('.step').forEach(step => step.classList.toggle('is-hidden'))
+    })
+
+    document.querySelectorAll('.tool').forEach(tool => tool.onclick = () => {
+      const mode = tool.dataset.mode
+      if (mode === '放大' || mode === '缩小') {
+        state.zoom = Math.min(1.35, Math.max(.75, state.zoom + (mode === '放大' ? .1 : -.1)))
+        document.querySelector('.pid').style.transform = `scale(${state.zoom})`
+        document.querySelector('.canvas-status span:last-child').textContent = `缩放 ${Math.round(state.zoom * 84)}%`
+        toast(`${mode}至 ${Math.round(state.zoom * 84)}%`)
+        return
+      }
+      if (mode === '聚焦高亮') document.querySelector('.pid').classList.add('muted')
+      if (mode === '显示全部') document.querySelector('.pid').classList.remove('muted')
+      document.querySelectorAll('.tool').forEach(item => item.classList.remove('active'))
+      tool.classList.add('active')
+      byId('drawing').className = `drawing mode-${mode === '平移' ? 'pan' : mode.includes('高亮') ? 'highlight' : mode === '文字' ? 'text' : 'select'}`
+      document.querySelector('.tool-label').textContent = `模型空间 · ${mode}模式`
+      toast(`工具：${mode}`)
+    })
+
+    byId('drawing').onclick = event => {
+      if (event.target.closest('.page-jump')) return
+      const activeMode = document.querySelector('.tool.active')?.dataset.mode
+      if (activeMode === '文字') { snapshot('添加文字'); toast('已在图纸上添加模拟文字标注') }
+      if (activeMode === '液位') { snapshot('设置液位'); toast('容器 T-101 液位设置为 75%') }
+      if (activeMode?.includes('高亮')) { snapshot('修改高亮'); toast('已添加一段手动高亮流路') }
+    }
+    byId('drawing').oncontextmenu = event => {
+      event.preventDefault()
+      const menu = byId('contextMenu')
+      menu.style.left = `${event.clientX}px`; menu.style.top = `${event.clientY}px`
+      menu.classList.remove('is-hidden')
+    }
+    document.addEventListener('click', event => { if (!event.target.closest('#contextMenu')) byId('contextMenu').classList.add('is-hidden') })
+    document.querySelectorAll('#contextMenu button').forEach(button => button.onclick = () => {
+      snapshot(button.dataset.action)
+      toast(`已执行：${button.textContent}`)
+      byId('contextMenu').classList.add('is-hidden')
+    })
+
+    byId('pageJump').onclick = () => {
+      state.page = state.page === 1 ? 2 : 1
+      document.querySelector('.drawing-title').textContent = `PID-210${state.page} · 配液与 CIP 系统 · Page ${state.page} / 2`
+      byId('pageJump').textContent = state.page === 1 ? 'DC-CIP-02 → 跳转第 2 页' : 'DC-CIP-01 → 返回第 1 页'
+      toast(`已通过远程连接切换至第 ${state.page} 页`)
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => {
+      document.querySelectorAll('.tab').forEach(item => item.classList.remove('active')); tab.classList.add('active')
+      const name = tab.dataset.tab
+      const sections = document.querySelectorAll('.right .section')
+      sections.forEach(section => section.classList.remove('is-hidden'))
+      if (name === '属性') modal.open('对象属性', '<table class="modal-table"><tr><th>属性</th><th>值</th></tr><tr><td>对象类型</td><td>工艺设备 / 阀门</td></tr><tr><td>图层</td><td>P---PVL</td></tr><tr><td>Handle</td><td>4A2F</td></tr><tr><td>介质</td><td>CIP Return</td></tr></table>')
+      if (name === '联锁') modal.open('步骤联锁', '<div class="condition">PT-101 ≥ 2.0 bar</div><br><div class="condition">XV-101 已确认打开</div><br><div class="condition">循环计时 ≥ 15 min</div>')
+      if (name === '校验') byId('validationWarning').click()
+    })
+
+    byId('editStateButton').onclick = () => {
+      state.editing = !state.editing
+      document.querySelector('.right').classList.toggle('editable', state.editing)
+      byId('editStateButton').textContent = state.editing ? '完成编辑' : '编辑状态'
+      toast(state.editing ? '点击任一状态可循环切换' : '状态编辑已完成')
+    }
+    document.querySelectorAll('.state-row').forEach(row => row.onclick = () => {
+      if (!state.editing) return
+      const badge = row.querySelector('.state'); if (!badge) return
+      const options = ['ON', 'OFF', 'PULSE']; const next = options[(options.indexOf(badge.textContent) + 1) % options.length]
+      snapshot(`修改 ${row.querySelector('.tag-name').textContent}`)
+      badge.textContent = next; badge.className = `state ${next === 'ON' ? 'on' : 'pulse'}`
+    })
+
+    byId('saveButton').onclick = () => { setDirty(false); byId('autoSaveTime').textContent = `已保存于 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`; toast('当前阶段已保存') }
+    byId('undoButton').onclick = () => { const action = state.history.pop(); if (!action) return toast('没有可撤销的操作'); setDirty(state.history.length > 0); toast(`已撤销：${action}`) }
+    byId('copyStepButton').onclick = () => modal.open('复制当前步骤', '<div class="form-row"><label>新步骤名称</label><input id="copyName" value="Step 05 · 循环清洗副本"></div><div class="check-row"><label><input type="checkbox" checked> 设备状态</label><label><input type="checkbox" checked> 流路高亮</label><label><input type="checkbox" checked> 联锁条件</label></div>', () => { snapshot('复制步骤'); toast('已复制当前步骤并保留全部状态') }, '创建副本')
+    byId('addStepButton').onclick = () => modal.open('新增阶段或步骤', '<div class="form-row"><label>类型</label><select><option>新步骤</option><option>新阶段</option><option>新循环</option></select></div><div class="form-row"><label>名称</label><input value="最终漂洗"></div><div class="form-row"><label>创建方式</label><select><option>复制当前步骤</option><option>复制历史步骤</option><option>使用空白状态</option></select></div>', () => { snapshot('新增步骤'); toast('已创建模拟步骤') }, '创建')
+
+    byId('matrixButton').onclick = () => modal.open('阀门矩阵', '<table class="modal-table"><tr><th>Phase / Step</th><th>Open Valve</th><th>Pulse</th><th>Motor</th><th>Sensor</th></tr><tr><td>P01 / S01</td><td>XV-101</td><td>—</td><td>—</td><td>PT-101</td></tr><tr><td>P02 / S04</td><td>XV-101, HV-102</td><td>XV-104</td><td>P-101</td><td>PT-101 MONITOR</td></tr><tr><td>P03 / S05</td><td>XV-201</td><td>—</td><td>STOP</td><td>LT-101</td></tr></table>', () => toast('阀门矩阵已导出为 CSV'), '导出 CSV')
+    byId('reportButton').onclick = () => modal.open('生成流路 PDF 报告', '<div class="form-row"><label>报告范围</label><select><option>全部 Cycle</option><option>当前 Cycle</option><option>当前 Phase</option></select></div><div class="form-row"><label>输出方式</label><select><option>合并为单个 PDF</option><option>每个 Sequence 单独生成</option></select></div><div class="check-row"><label><input type="checkbox" checked> Cycle / Phase / Step</label><label><input type="checkbox" checked> 高亮图例</label></div><table class="modal-table"><tr><th>页码</th><th>内容</th><th>操作</th></tr><tr><td>001</td><td>CIP / P01 / S01</td><td>替换</td></tr><tr><td>002</td><td>CIP / P02 / S04</td><td>替换</td></tr></table>', () => toast('正在模拟生成 PDF 报告'), '生成 PDF')
+    byId('validationWarning').onclick = () => modal.open('图纸质量检查', '<table class="modal-table"><tr><th>级别</th><th>对象</th><th>问题</th></tr><tr><td>警告</td><td>LINE 7C10</td><td>检测到未连接端点</td></tr><tr><td>警告</td><td>DC-CIP-03</td><td>远程连接位号未找到对应项</td></tr><tr><td>通过</td><td>设备块</td><td>38 / 38 均为 Block</td></tr></table>', () => toast('已定位第一个异常对象'), '定位问题')
+  </script>
+  <script>
+    const processes = []
+    let currentProcessIndex = -1
+    let currentPhaseIndex = -1
+
+    const processSelect = byId('cycleSelect')
+    const phasePicker = byId('phaseSelect')
+    const stepPicker = byId('stepSelect')
+    const drawing = byId('drawing')
+    const pid = document.querySelector('.pid')
+    const pageJump = byId('pageJump')
+    const contextControls = document.querySelectorAll('.contextbar .select-wrap')
+
+    contextControls[0].classList.add('is-hidden')
+    contextControls[1].querySelector('label').textContent = '工艺'
+    contextControls[3].classList.add('is-hidden')
+    document.querySelector('.skid-block').classList.add('is-hidden')
+    pageJump.classList.add('is-hidden')
+    byId('validationWarning').classList.add('is-hidden')
+    byId('addStepButton').title = '新建工艺或阶段'
+    byId('matrixButton').textContent = '新建阶段'
+    byId('reportButton').textContent = '阶段概览'
+    document.querySelector('.brand-sub').textContent = '高亮流路阶段管理'
+
+    const escapeHtml = value => String(value).replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[character])
+    const currentProcess = () => processes[currentProcessIndex]
+    const currentPhase = () => currentProcess()?.phases[currentPhaseIndex]
+    const phaseLabel = phase => `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`
+    const clonePhaseState = source => ({
+      drawingName: source.drawingName,
+      highlighted: source.highlighted,
+      devices: { ...source.devices }
+    })
+
+    const showEmptyState = (title, message, actionLabel, action) => {
+      let empty = byId('workspaceEmpty')
+      if (!empty) {
+        empty = document.createElement('div')
+        empty.id = 'workspaceEmpty'
+        empty.className = 'empty-state'
+        drawing.append(empty)
+      }
+      empty.innerHTML = `<strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p><button class="action-btn primary" id="emptyAction">${escapeHtml(actionLabel)}</button>`
+      byId('emptyAction').onclick = action
+      empty.classList.remove('is-hidden')
+      pid.classList.add('is-hidden')
+      document.querySelector('.drawing-title').classList.add('is-hidden')
+    }
+
+    const hideEmptyState = () => {
+      byId('workspaceEmpty')?.classList.add('is-hidden')
+      pid.classList.remove('is-hidden')
+      document.querySelector('.drawing-title').classList.remove('is-hidden')
+    }
+
+    const openCreateProcess = () => modal.open('新建工艺', `
+      <div class="form-row"><label>工艺名称</label><input id="processName" value="CIP" placeholder="例如：CIP"></div>
+      <p class="source-note">工艺创建后为空。请继续创建第一个 Phase 并选择一张新图纸。</p>`, () => {
+      const name = byId('processName').value.trim()
+      if (!name) return toast('请输入工艺名称')
+      processes.push({ id: crypto.randomUUID(), name, phases: [] })
+      currentProcessIndex = processes.length - 1
+      currentPhaseIndex = -1
+      renderWorkspace()
+      snapshot('新建工艺')
+      toast(`已创建工艺 ${name}`)
+    }, '创建工艺')
+
+    const refreshPhaseSource = () => {
+      const mode = byId('phaseSourceMode')?.value
+      const sourceRow = byId('historySourceRow')
+      const sourceSelect = byId('historySource')
+      if (!sourceRow || !sourceSelect) return
+      sourceRow.classList.toggle('is-hidden', mode !== 'history')
+      if (mode === 'history') {
+        sourceSelect.innerHTML = currentProcess().phases.map((phase, index) =>
+          `<option value="${index}">${escapeHtml(phaseLabel(phase))} · ${escapeHtml(phase.drawingName)}</option>`).join('')
+      }
+      const source = mode === 'previous'
+        ? currentProcess().phases.at(-1)
+        : mode === 'history' ? currentProcess().phases[Number(sourceSelect.value || 0)] : null
+      byId('drawingName').value = source?.drawingName || `PID-${String(currentProcess().phases.length + 1).padStart(4, '0')}.dwg`
+    }
+
+    const openCreatePhase = () => {
+      const process = currentProcess()
+      if (!process) return openCreateProcess()
+      const hasHistory = process.phases.length > 0
+      modal.open('新建阶段', `
+        <div class="form-row"><label>阶段编号</label><input id="phaseNumber" type="number" min="1" value="${process.phases.length + 1}"></div>
+        <div class="form-row"><label>阶段名称</label><input id="phaseName" value="${hasHistory ? '下一阶段' : '初始阶段'}"></div>
+        <div class="form-row"><label>创建方式</label><select id="phaseSourceMode">
+          ${hasHistory ? '<option value="previous">使用上一阶段的已标记图纸</option><option value="history">使用任意历史阶段的已标记图纸</option>' : ''}
+          <option value="new">使用一张新图纸</option>
+        </select></div>
+        <div class="form-row is-hidden" id="historySourceRow"><label>历史阶段</label><select id="historySource"></select></div>
+        <div class="form-row"><label>下一张图纸名称</label><input id="drawingName"></div>
+        <p class="source-note">复制阶段会完整保留所选图纸的高亮和设备状态，直到您主动修改。</p>`, () => {
+        const number = Number(byId('phaseNumber').value)
+        const name = byId('phaseName').value.trim()
+        const drawingName = byId('drawingName').value.trim()
+        const mode = byId('phaseSourceMode').value
+        if (!number || !name || !drawingName) return toast('请填写完整的阶段和图纸信息')
+        if (process.phases.some(phase => phase.number === number)) return toast(`Phase ${number} 已存在`)
+        const sourceIndex = mode === 'previous' ? process.phases.length - 1 : Number(byId('historySource')?.value)
+        const source = mode === 'new' ? null : process.phases[sourceIndex]
+        const inherited = source ? clonePhaseState(source) : { highlighted: false, devices: { xv101: 'OFF', xv104: 'OFF', pump: 'STOP' } }
+        process.phases.push({ id: crypto.randomUUID(), number, name, drawingName, ...inherited, drawingName })
+        currentPhaseIndex = process.phases.length - 1
+        renderWorkspace()
+        snapshot('新建阶段')
+        toast(source ? `已从 ${phaseLabel(source)} 复制全部高亮状态` : '已使用新图纸创建阶段')
+      }, '创建阶段')
+      byId('phaseSourceMode').onchange = refreshPhaseSource
+      byId('historySource').onchange = refreshPhaseSource
+      refreshPhaseSource()
+    }
+
+    const openRenameDrawing = () => {
+      const phase = currentPhase()
+      modal.open('重命名图纸', `<div class="form-row"><label>图纸名称</label><input id="renameDrawing" value="${escapeHtml(phase.drawingName)}"></div>`, () => {
+        const name = byId('renameDrawing').value.trim()
+        if (!name) return toast('请输入图纸名称')
+        phase.drawingName = name
+        renderWorkspace()
+        snapshot('重命名图纸')
+        toast('图纸已重命名')
+      }, '保存名称')
+    }
+
+    const statusClass = value => value === 'ON' || value === 'START' ? 'on' : 'pulse'
+    const renderPanel = phase => {
+      document.querySelector('.right').innerHTML = `
+        <div class="panel-head"><strong>阶段图纸状态</strong><span class="cycle-badge">${phase.highlighted ? '已高亮' : '未高亮'}</span></div>
+        <div class="step-summary"><div class="eyebrow">${escapeHtml(phaseLabel(phase))}</div><div class="summary-title">${escapeHtml(phase.name)}</div><div class="summary-sub">${escapeHtml(phase.drawingName)}</div></div>
+        <div class="poc-help">设备状态和流路高亮属于当前阶段。复制阶段后，两者保持不变并可独立修改。</div>
+        <div class="section"><div class="section-title"><span>阀门</span><span class="count">ON / OFF</span></div>
+          <div class="state-row poc-control"><span class="tag-name">XV-101</span><span class="desc">循环入口阀</span><button class="state ${statusClass(phase.devices.xv101)}" data-device="xv101">${phase.devices.xv101}</button></div>
+          <div class="state-row poc-control"><span class="tag-name">XV-104</span><span class="desc">排放阀</span><button class="state ${statusClass(phase.devices.xv104)}" data-device="xv104">${phase.devices.xv104}</button></div>
+        </div>
+        <div class="section"><div class="section-title"><span>电机</span><span class="count">START / STOP</span></div>
+          <div class="state-row poc-control"><span class="tag-name">P-101</span><span class="desc">CIP 循环泵</span><button class="state ${statusClass(phase.devices.pump)}" data-device="pump">${phase.devices.pump}</button></div>
+        </div>
+        <div class="right-actions"><button class="action-btn" id="renameDrawingButton">重命名图纸</button><button class="action-btn primary" id="nextPhaseButton">创建下一阶段</button></div>`
+      document.querySelectorAll('[data-device]').forEach(button => button.onclick = () => {
+        const key = button.dataset.device
+        phase.devices[key] = key === 'pump' ? (phase.devices[key] === 'START' ? 'STOP' : 'START') : (phase.devices[key] === 'ON' ? 'OFF' : 'ON')
+        phase.highlighted = phase.devices.xv101 === 'ON' || phase.devices.xv104 === 'ON'
+        snapshot(`修改 ${key}`)
+        renderWorkspace()
+      })
+      byId('renameDrawingButton').onclick = openRenameDrawing
+      byId('nextPhaseButton').onclick = openCreatePhase
+    }
+
+    const renderWorkspace = () => {
+      processSelect.innerHTML = processes.map((process, index) => `<option value="${index}">${escapeHtml(process.name)}</option>`).join('')
+      processSelect.value = String(currentProcessIndex)
+      const process = currentProcess()
+      phasePicker.innerHTML = process?.phases.map((phase, index) => `<option value="${index}">${escapeHtml(phaseLabel(phase))}</option>`).join('') || ''
+      phasePicker.value = String(currentPhaseIndex)
+      document.querySelector('.context-spacer').innerHTML = `<span class="poc-label">${process ? `${process.phases.length} 个阶段` : '尚未创建工艺'}</span>`
+      document.querySelector('.tree').innerHTML = process ? `
+        <div class="cycle-title">⌄ ${escapeHtml(process.name)} <span class="cycle-badge">${process.phases.length} PHASES</span></div>
+        <div class="phase">${process.phases.map((phase, index) => `<div class="step ${index === currentPhaseIndex ? 'active' : ''}" data-phase-index="${index}"><span class="step-no">${String(phase.number).padStart(2, '0')}</span>${escapeHtml(phase.name)}<span class="step-check">${phase.highlighted ? '●' : ''}</span></div>`).join('')}</div>` : ''
+      document.querySelectorAll('[data-phase-index]').forEach(node => node.onclick = () => {
+        currentPhaseIndex = Number(node.dataset.phaseIndex)
+        renderWorkspace()
+      })
+      if (!process) {
+        showEmptyState('从第一个工艺开始', '工作区当前为空。创建一个工艺，例如 CIP，然后为它添加 Phase。', '创建工艺', openCreateProcess)
+        document.querySelector('.right').innerHTML = '<div class="poc-help">创建工艺后，可从新图纸开始建立第一个阶段。</div>'
+        return
+      }
+      const phase = currentPhase()
+      if (!phase) {
+        showEmptyState(`${process.name} 尚无阶段`, '创建第一个 Phase，并为它选择一张新图纸。', '创建阶段', openCreatePhase)
+        document.querySelector('.right').innerHTML = '<div class="poc-help">第一个阶段从新图纸开始；后续阶段可以复制任意历史阶段。</div>'
+        return
+      }
+      hideEmptyState()
+      document.querySelector('.drawing-title').textContent = `${phase.drawingName} · ${phaseLabel(phase)}`
+      document.querySelector('.pid .flow').classList.toggle('flow-off', !phase.highlighted)
+      document.querySelector('.tool-label').textContent = phase.highlighted ? '当前阶段 · 已保留高亮' : '当前阶段 · 无高亮'
+      renderPanel(phase)
+    }
+
+    processSelect.onchange = () => {
+      currentProcessIndex = Number(processSelect.value)
+      currentPhaseIndex = currentProcess().phases.length ? 0 : -1
+      renderWorkspace()
+    }
+    phasePicker.onchange = () => { currentPhaseIndex = Number(phasePicker.value); renderWorkspace() }
+    byId('addStepButton').onclick = () => currentProcess() ? openCreatePhase() : openCreateProcess()
+    byId('matrixButton').onclick = openCreatePhase
+    byId('reportButton').onclick = () => {
+      const process = currentProcess()
+      if (!process) return toast('请先创建工艺')
+      modal.open(`${process.name} 阶段概览`, `<table class="modal-table"><tr><th>阶段</th><th>图纸</th><th>高亮</th></tr>${process.phases.map(phase => `<tr><td>${escapeHtml(phaseLabel(phase))}</td><td>${escapeHtml(phase.drawingName)}</td><td>${phase.highlighted ? '已保留' : '无'}</td></tr>`).join('')}</table>`)
+    }
+    drawing.onclick = event => {
+      if (event.target.closest('button') || !currentPhase()) return
+      const activeMode = document.querySelector('.tool.active')?.dataset.mode
+      if (!activeMode?.includes('高亮')) return
+      currentPhase().highlighted = !currentPhase().highlighted
+      snapshot('修改高亮')
+      renderWorkspace()
+      toast(currentPhase().highlighted ? '已添加高亮流路' : '已清除高亮流路')
+    }
+
+    renderWorkspace()
+  </script>
+</body>
+
+</html>

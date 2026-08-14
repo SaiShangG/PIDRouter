@@ -1,0 +1,399 @@
+import {
+  PHASE_WORKSPACE_STORAGE_KEY,
+  PhaseWorkspaceStore
+} from '../src/phase/phaseWorkspaceStore'
+import type { DrawingAssetRef } from '../src/phase/types'
+
+const drawing: DrawingAssetRef = {
+  id: 'drawing-1',
+  kind: 'local',
+  sourceName: 'PID-0001.dwg'
+}
+
+const createStore = () => {
+  let id = 0
+  return new PhaseWorkspaceStore(
+    undefined,
+    () => `id-${++id}`,
+    () => '2026-08-11T00:00:00.000Z'
+  )
+}
+
+const createProcessContext = (store: PhaseWorkspaceStore) => {
+  const process = store.createProcess('CIP')
+  return { process, sequence: process.sequences[0] }
+}
+
+const legacyPhase = {
+  id: 'phase-1',
+  number: 1,
+  name: 'Initial rinse',
+  drawingAssetId: drawing.id,
+  drawingDisplayName: 'CIP-01.dwg',
+  flowState: { openBoundaryHandleKeys: ['1a'] },
+  deviceStates: {
+    '1a': { key: '1a', label: 'XV-101', mode: 'open' }
+  },
+  createdAt: '2026-08-10T00:00:00.000Z',
+  updatedAt: '2026-08-10T00:00:00.000Z'
+}
+
+describe('PhaseWorkspaceStore', () => {
+  it('creates a process with an active default sequence and a phase', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Initial rinse',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+
+    const snapshot = store.snapshot()
+    expect(snapshot.activeProcessId).toBe(process.id)
+    expect(snapshot.processes[0].activeSequenceId).toBe(sequence.id)
+    expect(snapshot.processes[0].sequences[0].activePhaseId).toBe(phase.id)
+    expect(phase.drawing).toEqual({
+      kind: 'assigned',
+      assetId: drawing.id,
+      displayName: 'CIP-01.dwg'
+    })
+  })
+
+  it('deletes a process, falls back to its neighbor, and preserves shared drawings', () => {
+    const store = createStore()
+    const first = store.createProcess('CIP')
+    const firstSequence = first.sequences[0]
+    store.createPhase({
+      processId: first.id,
+      sequenceId: firstSequence.id,
+      number: 1,
+      name: 'Initial rinse',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    const second = store.createProcess('SIP')
+    store.createPhase({
+      processId: second.id,
+      sequenceId: second.sequences[0].id,
+      number: 1,
+      name: 'Sterilization',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+
+    const deleted = store.deleteProcess(second.id)
+    let snapshot = store.snapshot()
+    expect(deleted.id).toBe(second.id)
+    expect(snapshot.activeProcessId).toBe(first.id)
+    expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
+
+    store.deleteProcess(first.id)
+    snapshot = store.snapshot()
+    expect(snapshot.activeProcessId).toBeUndefined()
+    expect(snapshot.processes).toEqual([])
+    expect(snapshot.drawingAssets[drawing.id]).toBeUndefined()
+  })
+
+  it('migrates v1 processes into deterministic default sequences', () => {
+    const storage = {
+      getItem: jest.fn((key: string) =>
+        key === PHASE_WORKSPACE_STORAGE_KEY
+          ? JSON.stringify({
+              version: 1,
+              processes: [
+                {
+                  id: 'process-1',
+                  name: 'CIP',
+                  phases: [legacyPhase],
+                  activePhaseId: legacyPhase.id,
+                  createdAt: '2026-08-10T00:00:00.000Z',
+                  updatedAt: '2026-08-10T00:00:00.000Z'
+                }
+              ],
+              drawingAssets: { [drawing.id]: drawing },
+              activeProcessId: 'process-1'
+            })
+          : null
+      )
+    }
+
+    const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
+    const process = snapshot.processes[0]
+    const sequence = process.sequences[0]
+
+    expect(snapshot.version).toBe(3)
+    expect(process.activeSequenceId).toBe('sequence-default-process-1')
+    expect(sequence.id).toBe('sequence-default-process-1')
+    expect(sequence.activePhaseId).toBe(legacyPhase.id)
+    expect(sequence.phases[0]).toEqual({
+      ...legacyPhase,
+      drawing: {
+        kind: 'assigned',
+        assetId: drawing.id,
+        displayName: 'CIP-01.dwg'
+      },
+      drawingAssetId: undefined,
+      drawingDisplayName: undefined
+    })
+    expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
+  })
+
+  it('creates, renames, reorders, copies, and deletes sequences', () => {
+    const store = createStore()
+    const { process, sequence: first } = createProcessContext(store)
+    const second = store.createSequence(process.id, 2, 'Tank wash')
+    store.renameSequence(process.id, second.id, 'Vessel wash')
+    store.reorderSequence(process.id, second.id, 0)
+    const copied = store.copySequence(process.id, first.id, 3, 'Copied route')
+
+    let processSnapshot = store.snapshot().processes[0]
+    expect(processSnapshot.sequences.map(sequence => sequence.number)).toEqual([
+      2,
+      1,
+      3
+    ])
+    expect(processSnapshot.sequences[0].name).toBe('Vessel wash')
+    expect(copied.name).toBe('Copied route')
+
+    store.deleteSequence(process.id, second.id)
+    processSnapshot = store.snapshot().processes[0]
+    expect(processSnapshot.sequences.map(sequence => sequence.id)).not.toContain(
+      second.id
+    )
+  })
+
+  it('clones phase state within its sequence without shared references', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const first = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Initial rinse',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    store.updatePhaseState(process.id, sequence.id, first.id, {
+      flowState: { openBoundaryHandleKeys: ['1a', '2b'] },
+      deviceStates: {
+        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
+      }
+    })
+
+    const second = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: 'Caustic wash',
+      source: { kind: 'previous', displayName: 'CIP-02.dwg' }
+    })
+    const historical = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 24,
+      name: 'Final rinse',
+      source: { kind: 'history', phaseId: first.id }
+    })
+
+    second.flowState.openBoundaryHandleKeys.push('changed')
+    second.deviceStates['1a'].mode = 'closed'
+    const storedFirst = store.snapshot().processes[0].sequences[0].phases[0]
+    expect(storedFirst.flowState.openBoundaryHandleKeys).toEqual(['1a', '2b'])
+    expect(storedFirst.deviceStates['1a'].mode).toBe('open')
+    expect(historical.sourcePhaseId).toBe(first.id)
+  })
+
+  it('keeps phase numbering and ordering scoped to each sequence', () => {
+    const store = createStore()
+    const { process, sequence: first } = createProcessContext(store)
+    const second = store.createSequence(process.id, 2, 'Second route')
+
+    for (const sequence of [first, second]) {
+      store.createPhase({
+        processId: process.id,
+        sequenceId: sequence.id,
+        number: 1,
+        name: 'Phase 1',
+        source: {
+          kind: 'new',
+          drawing: {
+            id: `drawing-${sequence.id}`,
+            kind: 'blank',
+            sourceName: `${sequence.id}.dwg`
+          },
+          displayName: `${sequence.id}.dwg`
+        }
+      })
+    }
+
+    const firstPhase = store.createPhase({
+      processId: process.id,
+      sequenceId: first.id,
+      number: 2,
+      name: 'Phase 2',
+      source: { kind: 'previous' }
+    })
+    store.reorderPhase(process.id, first.id, firstPhase.id, 0)
+
+    const snapshot = store.snapshot().processes[0]
+    expect(snapshot.sequences[0].phases.map(phase => phase.number)).toEqual([2, 1])
+    expect(snapshot.sequences[1].phases.map(phase => phase.number)).toEqual([1])
+  })
+
+  it('retains a drawing until no phase in any sequence references it', () => {
+    const store = createStore()
+    const { process, sequence: first } = createProcessContext(store)
+    const firstPhase = store.createPhase({
+      processId: process.id,
+      sequenceId: first.id,
+      number: 1,
+      name: 'Initial rinse',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    const copied = store.copySequence(process.id, first.id, 2, 'Copied route')
+
+    store.deletePhase(process.id, first.id, firstPhase.id)
+    expect(store.snapshot().drawingAssets[drawing.id]).toBeDefined()
+
+    store.deleteSequence(process.id, copied.id)
+    expect(store.snapshot().drawingAssets[drawing.id]).toBeUndefined()
+  })
+
+  it('creates an unassigned phase without registering a drawing', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Plan later',
+      source: { kind: 'unassigned' }
+    })
+
+    expect(phase.drawing).toEqual({ kind: 'unassigned' })
+    expect(store.snapshot().drawingAssets).toEqual({})
+  })
+
+  it('migrates v2 phases with missing assets as unassigned', () => {
+    const storage = {
+      getItem: jest.fn(() =>
+        JSON.stringify({
+          version: 2,
+          processes: [
+            {
+              id: 'process-1',
+              name: 'CIP',
+              sequences: [
+                {
+                  id: 'sequence-1',
+                  number: 1,
+                  name: 'Route',
+                  phases: [legacyPhase, { ...legacyPhase, id: 'phase-2', drawingAssetId: 'missing' }],
+                  createdAt: legacyPhase.createdAt,
+                  updatedAt: legacyPhase.updatedAt
+                }
+              ],
+              activeSequenceId: 'sequence-1',
+              createdAt: legacyPhase.createdAt,
+              updatedAt: legacyPhase.updatedAt
+            }
+          ],
+          drawingAssets: { [drawing.id]: drawing },
+          activeProcessId: 'process-1'
+        })
+      )
+    }
+
+    const phases = PhaseWorkspaceStore.load(storage).snapshot().processes[0]
+      .sequences[0].phases
+    expect(phases[0].drawing.kind).toBe('assigned')
+    expect(phases[1].drawing).toEqual({ kind: 'unassigned' })
+  })
+
+  it('associates and replaces drawings while retaining shared old assets', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const first = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'First',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    const second = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: 'Second',
+      source: { kind: 'previous' }
+    })
+    const replacement: DrawingAssetRef = {
+      id: 'drawing-2',
+      kind: 'url',
+      sourceName: 'CIP-02.dwg',
+      url: 'https://example.test/CIP-02.dwg'
+    }
+
+    expect(
+      store.associateDrawing(
+        process.id,
+        sequence.id,
+        first.id,
+        replacement,
+        'CIP-02.dwg'
+      )
+    ).toBeUndefined()
+    expect(store.snapshot().drawingAssets[drawing.id]).toBeDefined()
+
+    const removed = store.associateDrawing(
+      process.id,
+      sequence.id,
+      second.id,
+      replacement,
+      'CIP-02.dwg'
+    )
+    expect(removed).toEqual(drawing)
+    expect(store.snapshot().drawingAssets[drawing.id]).toBeUndefined()
+  })
+
+  it('associates a drawing and marked state from a Phase in another sequence', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const source = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Marked source',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    store.updatePhaseState(process.id, sequence.id, source.id, {
+      flowState: { openBoundaryHandleKeys: ['1a'] },
+      deviceStates: {
+        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
+      }
+    })
+    const targetSequence = store.createSequence(process.id, 2, 'Target route')
+    const target = store.createPhase({
+      processId: process.id,
+      sequenceId: targetSequence.id,
+      number: 1,
+      name: 'Target',
+      source: { kind: 'unassigned' }
+    })
+
+    store.associateMarkedPhase(
+      process.id,
+      targetSequence.id,
+      target.id,
+      process.id,
+      sequence.id,
+      source.id
+    )
+
+    const associated = store.snapshot().processes[0].sequences[1].phases[0]
+    expect(associated.drawing).toEqual(source.drawing)
+    expect(associated.sourcePhaseId).toBe(source.id)
+    expect(associated.flowState.openBoundaryHandleKeys).toEqual(['1a'])
+    expect(associated.deviceStates['1a'].mode).toBe('open')
+  })
+})
