@@ -89,6 +89,9 @@ import {
   type ResolvedEntityPresentation,
   resolveEntityPresentation} from './presentation/presentationStyleResolver'
 import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
+import { IndexedDbProjectRepository } from './project/IndexedDbProjectRepository'
+import { ProjectManagementModal } from './project/ProjectManagementModal'
+import { injectProjectManagementStyles } from './project/projectManagementStyles'
 import { registerLazyPlugins } from './register'
 import {
   PhaseReportExporter,
@@ -765,6 +768,7 @@ class CadViewerApp {
   private selectionOpenButton: HTMLButtonElement
   private selectionCloseButton: HTMLButtonElement
   private pidDrawingLibraryButton: HTMLButtonElement
+  private projectManagementButton: HTMLButtonElement
   private reportWorkspaceButton: HTMLButtonElement
   private dockButton: HTMLButtonElement
   private dockMenu: HTMLDivElement
@@ -807,8 +811,10 @@ class CadViewerApp {
   )
   private readonly drawingLibraryRepository =
     new ProcessAssistantDrawingRepository(this.processAssistantFileApi)
+  private readonly projectRepository = new IndexedDbProjectRepository()
   private phasePanel?: PhaseWorkspacePanel
   private drawingLibrary?: DrawingLibraryModal
+  private projectManagement?: ProjectManagementModal
   private reportWorkspace?: ReportWorkspaceModal
   private loadedPhase?: { processId: string; sequenceId: string; phaseId: string }
   private loadedDrawingAssetId?: string
@@ -856,6 +862,9 @@ class CadViewerApp {
     ) as HTMLButtonElement
     this.pidDrawingLibraryButton = document.getElementById(
       'pidDrawingLibraryButton'
+    ) as HTMLButtonElement
+    this.projectManagementButton = document.getElementById(
+      'projectManagementButton'
     ) as HTMLButtonElement
     this.reportWorkspaceButton = document.getElementById(
       'reportWorkspaceButton'
@@ -910,6 +919,7 @@ class CadViewerApp {
       setupFileSidebarResize(this.fileSidebarColumn, fileSidebarResizeHandle)
     }
     this.setupDrawingLibrary()
+    this.setupProjectManagement()
     this.setupReportWorkspace()
     this.setupDockMenu()
     this.setupViewerToolbarMenu()
@@ -996,6 +1006,17 @@ class CadViewerApp {
     this.pidDrawingLibraryButton.addEventListener('click', () => {
       this.captureLoadedPhaseState()
       void this.drawingLibrary?.open()
+    })
+  }
+
+  private setupProjectManagement() {
+    injectProjectManagementStyles()
+    this.projectManagement = new ProjectManagementModal(
+      this.projectRepository,
+      this.drawingLibraryRepository
+    )
+    this.projectManagementButton.addEventListener('click', () => {
+      void this.projectManagement?.open()
     })
   }
 
