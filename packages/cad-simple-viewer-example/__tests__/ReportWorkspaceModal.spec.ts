@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 
 import type { PhaseWorkspaceState } from '../src/phase/types'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type {
   PhaseReportExportResult,
   PhaseReportOutputMode,
@@ -16,7 +17,7 @@ type ExportReport = (
 ) => Promise<PhaseReportExportResult>
 
 const workspace: PhaseWorkspaceState = {
-  version: 3,
+  version: 4,
   drawingAssets: {
     drawing: { id: 'drawing', kind: 'blank', sourceName: 'Blank.dwg' }
   },
@@ -24,6 +25,7 @@ const workspace: PhaseWorkspaceState = {
     {
       id: 'process',
       name: 'CIP',
+      presentationProfile: createDefaultPresentationProfile(),
       createdAt: 'now',
       updatedAt: 'now',
       sequences: [
@@ -42,7 +44,7 @@ const workspace: PhaseWorkspaceState = {
               assetId: 'drawing',
               displayName: 'Blank.dwg'
             },
-            flowState: { openBoundaryHandleKeys: [] },
+            flowState: { flowPaths: [] },
             deviceStates: {},
             createdAt: 'now',
             updatedAt: 'now'

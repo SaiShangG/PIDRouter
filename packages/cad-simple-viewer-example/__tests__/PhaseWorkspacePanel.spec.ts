@@ -44,6 +44,7 @@ const createHarness = (locale: 'en' | 'zh' = 'zh') => {
       store.activate(processId, sequenceId)
     }),
     createPhase: jest.fn(async () => undefined),
+    copyPhase: jest.fn(async () => undefined),
     associateDrawing: jest.fn(async () => undefined),
     activateProcess: jest.fn(async () => undefined),
     activatePhase: jest.fn(async () => undefined),
@@ -244,6 +245,24 @@ describe('PhaseWorkspacePanel', () => {
     ).toBe(true)
   })
 
+  it('shows the active Phase style summary without an inline style action', () => {
+    const { store, panel } = createHarness()
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Rinse',
+      source: { kind: 'unassigned' }
+    })
+    panel.render()
+
+    expect(panel.element.textContent).toContain('0 条流路')
+    expect(panel.element.textContent).toContain('3 px 默认线宽')
+    expect(panel.element.querySelector('[aria-label="高亮样式"]')).toBeNull()
+  })
+
   it('maintains expanded state independently for each sequence', async () => {
     const { store, panel } = createHarness()
     const process = store.createProcess('CIP')
@@ -368,6 +387,66 @@ describe('PhaseWorkspacePanel', () => {
         name: '碱洗'
       })
     )
+  })
+
+  it('copies a Phase to a selected sequence with editable defaults', async () => {
+    const { store, panel, actions } = createHarness()
+    const process = store.createProcess('CIP')
+    const sourceSequence = process.sequences[0]
+    const sourcePhase = store.createPhase({
+      processId: process.id,
+      sequenceId: sourceSequence.id,
+      number: 4,
+      name: '预冲洗',
+      source: { kind: 'unassigned' }
+    })
+    const targetSequence = store.createSequence(process.id, 2, '碱洗')
+    store.createPhase({
+      processId: process.id,
+      sequenceId: targetSequence.id,
+      number: 7,
+      name: '循环',
+      source: { kind: 'unassigned' }
+    })
+    store.activate(process.id, sourceSequence.id, sourcePhase.id)
+    panel.render()
+
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
+    expect(panel.element.querySelector<HTMLInputElement>('[aria-label="来源 Phase"]')!.value)
+      .toContain('Phase 04 · 预冲洗')
+    expect(panel.element.querySelector<HTMLSelectElement>('[aria-label="目标序列"]')!.value)
+      .toBe(sourceSequence.id)
+    expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value)
+      .toBe('5')
+    expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 名称"]')!.value)
+      .toBe('预冲洗 副本')
+
+    const target = panel.element.querySelector<HTMLSelectElement>(
+      '[aria-label="目标序列"]'
+    )!
+    target.value = targetSequence.id
+    target.dispatchEvent(new Event('change'))
+    expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value)
+      .toBe('8')
+    panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value = '7'
+    panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(actions.copyPhase).not.toHaveBeenCalled()
+    panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value = '8'
+    panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 名称"]')!.value =
+      '预冲洗复制'
+    panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+
+    expect(actions.copyPhase).toHaveBeenCalledWith({
+      processId: process.id,
+      sourceSequenceId: sourceSequence.id,
+      sourcePhaseId: sourcePhase.id,
+      targetSequenceId: targetSequence.id,
+      number: 8,
+      name: '预冲洗复制'
+    })
   })
 
   it('creates a Phase without a drawing and later opens the association flow', () => {

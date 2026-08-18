@@ -156,4 +156,34 @@ describe('AcSvgEntity transforms', () => {
 
     expect(renderer.export()).toContain('stroke="#00c853"')
   })
+
+  it('applies structured styles recursively and leaves unmatched entities unchanged', () => {
+    const renderer = new AcSvgRenderer()
+    const child = renderer.lines([
+      { x: 0, y: 0, z: 0 },
+      { x: 2, y: 0, z: 0 }
+    ])
+    const group = renderer.group([child])
+    group.objectId = 'flow-group'
+    const other = renderer.lines([
+      { x: 0, y: 1, z: 0 },
+      { x: 2, y: 1, z: 0 }
+    ])
+    other.objectId = 'other'
+
+    renderer.overrideEntityStyles([
+      {
+        entityIds: new Set(['flow-group']),
+        strokeColor: 0x123456,
+        strokeWidthPx: 4.5,
+        opacity: 0.4
+      }
+    ])
+
+    const exported = renderer.export()
+    expect(exported).toContain('stroke="#123456"')
+    expect(exported).toContain('stroke-width="4.5"')
+    expect(exported).toContain('stroke-opacity="0.4"')
+    expect(exported.match(/stroke-width="4.5"/g)).toHaveLength(1)
+  })
 })

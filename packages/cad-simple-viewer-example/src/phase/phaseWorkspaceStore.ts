@@ -1,10 +1,13 @@
 import {
   type CreatePhaseInput,
   type DrawingAssetRef,
+  type FlowPathStatus,
+  type HighlightStyle,
   PHASE_WORKSPACE_SCHEMA_VERSION,
   type PhaseDrawingAssociation,
   type PhaseSnapshot,
   type PhaseWorkspaceState,
+  type PresentationProfile,
   type ProcessDefinition,
   type SequenceDefinition
 } from './types'
@@ -13,10 +16,80 @@ export const PHASE_WORKSPACE_STORAGE_KEY =
   'cad-simple-viewer-example-phase-workspace'
 
 const DEFAULT_SEQUENCE_NAME = '默认序列'
+const DEFAULT_FLOW_PATH_NAME = '默认流路'
 
-interface LegacyPhaseSnapshot extends Omit<PhaseSnapshot, 'drawing'> {
+const createHighlightStyle = (
+  color: number,
+  lineWidthPx: number
+): HighlightStyle => ({ color, lineWidthPx, opacity: 1, visible: true })
+
+export const createDefaultPresentationProfile = (): PresentationProfile => ({
+  defaultFlowStyle: createHighlightStyle(0x00c853, 3),
+  unknownDeviceStyle: null,
+  dimmedBaseStyle: { color: 0x9e9e9e, opacity: 0.35 },
+  deviceStyles: {
+    valve: {
+      open: null,
+      closed: null,
+      pulse: null
+    },
+    motor: {
+      start: null,
+      stop: null
+    },
+    processEquipment: { active: null }
+  },
+  deviceStylesInitialized: true,
+  utilities: []
+})
+
+const cloneHighlightStyle = (style: HighlightStyle): HighlightStyle => ({
+  ...style
+})
+
+const cloneNullableStyle = (style: HighlightStyle | null) =>
+  style ? cloneHighlightStyle(style) : null
+
+export const clonePresentationProfile = (
+  profile: PresentationProfile
+): PresentationProfile => ({
+  defaultFlowStyle: cloneHighlightStyle(profile.defaultFlowStyle),
+  unknownDeviceStyle: cloneNullableStyle(profile.unknownDeviceStyle),
+  dimmedBaseStyle: { ...profile.dimmedBaseStyle },
+  deviceStyles: {
+    valve: {
+      open: cloneNullableStyle(profile.deviceStyles.valve.open),
+      closed: cloneNullableStyle(profile.deviceStyles.valve.closed),
+      pulse: cloneNullableStyle(profile.deviceStyles.valve.pulse)
+    },
+    motor: {
+      start: cloneNullableStyle(profile.deviceStyles.motor.start),
+      stop: cloneNullableStyle(profile.deviceStyles.motor.stop)
+    },
+    processEquipment: {
+      active: cloneNullableStyle(profile.deviceStyles.processEquipment.active)
+    }
+  },
+  deviceStylesInitialized: profile.deviceStylesInitialized,
+  utilities: profile.utilities.map(utility => ({
+    ...utility,
+    style: cloneHighlightStyle(utility.style)
+  }))
+})
+
+const cloneFlowPath = (flowPath: FlowPathStatus): FlowPathStatus => ({
+  ...flowPath,
+  handleKeys: [...flowPath.handleKeys],
+  styleOverride: flowPath.styleOverride
+    ? { ...flowPath.styleOverride }
+    : undefined
+})
+
+interface LegacyPhaseSnapshot
+  extends Omit<PhaseSnapshot, 'drawing' | 'flowState'> {
   drawingAssetId: string
   drawingDisplayName: string
+  flowState: { openBoundaryHandleKeys: string[] }
 }
 
 interface LegacyProcessDefinition {
@@ -39,13 +112,34 @@ interface V2SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
   phases: LegacyPhaseSnapshot[]
 }
 
-interface V2ProcessDefinition extends Omit<ProcessDefinition, 'sequences'> {
+interface V2ProcessDefinition
+  extends Omit<ProcessDefinition, 'sequences' | 'presentationProfile'> {
   sequences: V2SequenceDefinition[]
 }
 
 interface V2PhaseWorkspaceState {
   version: 2
   processes: V2ProcessDefinition[]
+  drawingAssets: Record<string, DrawingAssetRef>
+  activeProcessId?: string
+}
+
+interface V3PhaseSnapshot extends Omit<PhaseSnapshot, 'flowState'> {
+  flowState: { openBoundaryHandleKeys: string[] }
+}
+
+interface V3SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
+  phases: V3PhaseSnapshot[]
+}
+
+interface V3ProcessDefinition
+  extends Omit<ProcessDefinition, 'sequences' | 'presentationProfile'> {
+  sequences: V3SequenceDefinition[]
+}
+
+interface V3PhaseWorkspaceState {
+  version: 3
+  processes: V3ProcessDefinition[]
   drawingAssets: Record<string, DrawingAssetRef>
   activeProcessId?: string
 }
@@ -63,7 +157,7 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
   flowState: {
-    openBoundaryHandleKeys: [...phase.flowState.openBoundaryHandleKeys]
+    flowPaths: phase.flowState.flowPaths.map(cloneFlowPath)
   },
   deviceStates: Object.fromEntries(
     Object.entries(phase.deviceStates).map(([key, device]) => [key, { ...device }])
@@ -84,6 +178,7 @@ const cloneState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
   ),
   processes: state.processes.map(process => ({
     ...process,
+    presentationProfile: clonePresentationProfile(process.presentationProfile),
     sequences: process.sequences.map(cloneSequence)
   }))
 })
@@ -129,6 +224,155 @@ const isV2WorkspaceState = (value: unknown): value is V2PhaseWorkspaceState => {
   )
 }
 
+const isV3WorkspaceState = (value: unknown): value is V3PhaseWorkspaceState => {
+  if (!isRecord(value)) return false
+  return (
+    value.version === 3 &&
+    Array.isArray(value.processes) &&
+    value.processes.every(
+      process => isRecord(process) && Array.isArray(process.sequences)
+    ) &&
+    isRecord(value.drawingAssets)
+  )
+}
+
+const clamp = (value: unknown, fallback: number, min: number, max: number) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : fallback
+
+const normalizeStyle = (
+  value: unknown,
+  fallback: HighlightStyle
+): HighlightStyle => {
+  const style = isRecord(value) ? value : {}
+  return {
+    color: Math.round(clamp(style.color, fallback.color, 0, 0xffffff)),
+    lineWidthPx: clamp(style.lineWidthPx, fallback.lineWidthPx, 1, 12),
+    opacity: clamp(style.opacity, fallback.opacity, 0, 1),
+    visible:
+      typeof style.visible === 'boolean' ? style.visible : fallback.visible
+  }
+}
+
+const normalizeProfile = (value: unknown): PresentationProfile => {
+  const defaults = createDefaultPresentationProfile()
+  if (!isRecord(value)) return defaults
+  const deviceStyles = isRecord(value.deviceStyles) ? value.deviceStyles : {}
+  const valve = isRecord(deviceStyles.valve) ? deviceStyles.valve : {}
+  const motor = isRecord(deviceStyles.motor) ? deviceStyles.motor : {}
+  const processEquipment = isRecord(deviceStyles.processEquipment)
+    ? deviceStyles.processEquipment
+    : {}
+  const preserveDeviceStyles = value.deviceStylesInitialized === true
+  const normalizeDeviceStyle = (candidate: unknown, color: number, width: number) =>
+    preserveDeviceStyles && candidate != null
+      ? normalizeStyle(candidate, createHighlightStyle(color, width))
+      : null
+  const seenUtilityIds = new Set<string>()
+  const utilities = Array.isArray(value.utilities)
+    ? value.utilities.flatMap((candidate, index) => {
+        if (!isRecord(candidate)) return []
+        const baseId =
+          typeof candidate.id === 'string' && candidate.id.trim()
+            ? candidate.id.trim()
+            : `utility-${index + 1}`
+        let id = baseId
+        let suffix = 2
+        while (seenUtilityIds.has(id)) id = `${baseId}-${suffix++}`
+        seenUtilityIds.add(id)
+        return [
+          {
+            id,
+            name:
+              typeof candidate.name === 'string' && candidate.name.trim()
+                ? candidate.name.trim()
+                : id,
+            style: normalizeStyle(candidate.style, defaults.defaultFlowStyle),
+            enabled:
+              typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
+            order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
+          }
+        ]
+      })
+    : []
+  const dimmedBaseStyle = isRecord(value.dimmedBaseStyle)
+    ? value.dimmedBaseStyle
+    : {}
+  return {
+    defaultFlowStyle: normalizeStyle(
+      value.defaultFlowStyle,
+      defaults.defaultFlowStyle
+    ),
+    unknownDeviceStyle: normalizeDeviceStyle(value.unknownDeviceStyle, 0x546e7a, 2),
+    dimmedBaseStyle: {
+      color: Math.round(
+        clamp(dimmedBaseStyle.color, defaults.dimmedBaseStyle.color, 0, 0xffffff)
+      ),
+      opacity: clamp(
+        dimmedBaseStyle.opacity,
+        defaults.dimmedBaseStyle.opacity,
+        0,
+        1
+      )
+    },
+    deviceStyles: {
+      valve: {
+        open: normalizeDeviceStyle(valve.open, 0x00c853, 3),
+        closed: normalizeDeviceStyle(valve.closed, 0xd32f2f, 3),
+        pulse: normalizeDeviceStyle(valve.pulse, 0xf9a825, 3)
+      },
+      motor: {
+        start: normalizeDeviceStyle(motor.start, 0x00796b, 3),
+        stop: normalizeDeviceStyle(motor.stop, 0x616161, 2)
+      },
+      processEquipment: {
+        active: normalizeDeviceStyle(processEquipment.active, 0x00c853, 3)
+      }
+    },
+    deviceStylesInitialized: true,
+    utilities
+  }
+}
+
+const normalizeFlowPaths = (
+  value: unknown,
+  phaseId: string,
+  profile: PresentationProfile
+): FlowPathStatus[] => {
+  if (!Array.isArray(value)) return []
+  const utilityIds = new Set(profile.utilities.map(utility => utility.id))
+  return value.flatMap((candidate, index) => {
+    if (!isRecord(candidate)) return []
+    const utilityId =
+      typeof candidate.utilityId === 'string' && utilityIds.has(candidate.utilityId)
+        ? candidate.utilityId
+        : undefined
+    const styleOverride = isRecord(candidate.styleOverride)
+      ? normalizeStyle(candidate.styleOverride, profile.defaultFlowStyle)
+      : undefined
+    return [
+      {
+        id:
+          typeof candidate.id === 'string' && candidate.id
+            ? candidate.id
+            : `flow-${phaseId}-${index + 1}`,
+        name:
+          typeof candidate.name === 'string' && candidate.name.trim()
+            ? candidate.name.trim()
+            : `${DEFAULT_FLOW_PATH_NAME} ${index + 1}`,
+        handleKeys: Array.isArray(candidate.handleKeys)
+          ? candidate.handleKeys.filter(
+              (handle): handle is string => typeof handle === 'string'
+            )
+          : [],
+        utilityId,
+        styleOverride
+      }
+    ]
+  })
+}
+
 const migrateDrawing = (
   phase: LegacyPhaseSnapshot,
   drawingAssets: Record<string, DrawingAssetRef>
@@ -151,7 +395,15 @@ const migratePhase = (
   drawing: migrateDrawing(phase, drawingAssets),
   sourcePhaseId: phase.sourcePhaseId,
   flowState: {
-    openBoundaryHandleKeys: [...phase.flowState.openBoundaryHandleKeys]
+    flowPaths: phase.flowState.openBoundaryHandleKeys.length
+      ? [
+          {
+            id: `flow-default-${phase.id}`,
+            name: DEFAULT_FLOW_PATH_NAME,
+            handleKeys: [...phase.flowState.openBoundaryHandleKeys]
+          }
+        ]
+      : []
   },
   deviceStates: Object.fromEntries(
     Object.entries(phase.deviceStates).map(([key, device]) => [key, { ...device }])
@@ -178,6 +430,7 @@ const migrateLegacyState = (
     return {
       id: process.id,
       name: process.name,
+      presentationProfile: createDefaultPresentationProfile(),
       sequences: [
         {
           id: sequenceId,
@@ -206,6 +459,7 @@ const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => (
   ),
   processes: legacy.processes.map(process => ({
     ...process,
+    presentationProfile: createDefaultPresentationProfile(),
     sequences: process.sequences.map(sequence => ({
       ...sequence,
       phases: sequence.phases.map(phase =>
@@ -213,6 +467,67 @@ const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => (
       )
     }))
   }))
+})
+
+const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => ({
+      version: PHASE_WORKSPACE_SCHEMA_VERSION,
+      activeProcessId: legacy.activeProcessId,
+      drawingAssets: Object.fromEntries(
+        Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
+      ),
+      processes: legacy.processes.map(process => ({
+        ...process,
+        presentationProfile: createDefaultPresentationProfile(),
+        sequences: process.sequences.map(sequence => ({
+          ...sequence,
+          phases: sequence.phases.map(phase => ({
+            ...phase,
+            drawing: { ...phase.drawing },
+            flowState: {
+              flowPaths: phase.flowState.openBoundaryHandleKeys.length
+                ? [
+                    {
+                      id: `flow-default-${phase.id}`,
+                      name: DEFAULT_FLOW_PATH_NAME,
+                      handleKeys: [...phase.flowState.openBoundaryHandleKeys]
+                    }
+                  ]
+                : []
+            },
+            deviceStates: Object.fromEntries(
+              Object.entries(phase.deviceStates).map(([key, device]) => [
+                key,
+                { ...device }
+              ])
+            )
+          }))
+        }))
+      }))
+    })
+
+const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
+  ...state,
+  version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  processes: state.processes.map(process => {
+    const presentationProfile = normalizeProfile(process.presentationProfile)
+    return {
+      ...process,
+      presentationProfile,
+      sequences: process.sequences.map(sequence => ({
+        ...sequence,
+        phases: sequence.phases.map(phase => ({
+          ...phase,
+          flowState: {
+            flowPaths: normalizeFlowPaths(
+              phase.flowState.flowPaths,
+              phase.id,
+              presentationProfile
+            )
+          }
+        }))
+      }))
+    }
+  })
 })
 
 export class PhaseWorkspaceStore {
@@ -223,7 +538,7 @@ export class PhaseWorkspaceStore {
     private readonly createId: () => string = () => crypto.randomUUID(),
     private readonly now: () => string = () => new Date().toISOString()
   ) {
-    this.state = cloneState(initialState)
+    this.state = cloneState(normalizeState(initialState))
   }
 
   static load(storage: Pick<Storage, 'getItem'> = localStorage) {
@@ -232,6 +547,9 @@ export class PhaseWorkspaceStore {
       if (!raw) return new PhaseWorkspaceStore()
       const parsed: unknown = JSON.parse(raw)
       if (isWorkspaceState(parsed)) return new PhaseWorkspaceStore(parsed)
+      if (isV3WorkspaceState(parsed)) {
+        return new PhaseWorkspaceStore(migrateV3State(parsed))
+      }
       if (isV2WorkspaceState(parsed)) {
         return new PhaseWorkspaceStore(migrateV2State(parsed))
       }
@@ -272,6 +590,7 @@ export class PhaseWorkspaceStore {
     const process: ProcessDefinition = {
       id: this.createId(),
       name: normalizedName,
+      presentationProfile: createDefaultPresentationProfile(),
       sequences: [sequence],
       activeSequenceId: sequence.id,
       createdAt: timestamp,
@@ -454,8 +773,8 @@ export class PhaseWorkspaceStore {
       drawing: phaseDrawing,
       sourcePhaseId: sourcePhase?.id,
       flowState: sourcePhase
-        ? { openBoundaryHandleKeys: [...sourcePhase.flowState.openBoundaryHandleKeys] }
-        : { openBoundaryHandleKeys: [] },
+        ? { flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath) }
+        : { flowPaths: [] },
       deviceStates: sourcePhase
         ? Object.fromEntries(
             Object.entries(sourcePhase.deviceStates).map(([key, device]) => [
@@ -475,6 +794,47 @@ export class PhaseWorkspaceStore {
     return clonePhase(phase)
   }
 
+  copyPhase(
+    processId: string,
+    sourceSequenceId: string,
+    sourcePhaseId: string,
+    targetSequenceId: string,
+    number: number,
+    name: string
+  ): PhaseSnapshot {
+    const process = this.requireProcess(processId)
+    const source = this.requirePhase(processId, sourceSequenceId, sourcePhaseId)
+    const target = this.requireSequence(processId, targetSequenceId)
+    const normalizedName = name.trim()
+    if (!Number.isInteger(number) || number < 1) {
+      throw new Error('Phase number must be a positive integer')
+    }
+    if (!normalizedName) throw new Error('Phase name is required')
+    if (target.phases.some(phase => phase.number === number)) {
+      throw new Error(`Phase ${number} already exists`)
+    }
+    if (source.drawing.kind === 'assigned') {
+      this.requireDrawing(source.drawing.assetId)
+    }
+
+    const timestamp = this.now()
+    const phase: PhaseSnapshot = {
+      ...clonePhase(source),
+      id: this.createId(),
+      number,
+      name: normalizedName,
+      sourcePhaseId: source.id,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }
+    target.phases.push(phase)
+    target.activePhaseId = phase.id
+    target.updatedAt = timestamp
+    process.activeSequenceId = target.id
+    process.updatedAt = timestamp
+    return clonePhase(phase)
+  }
+
   updatePhaseState(
     processId: string,
     sequenceId: string,
@@ -483,12 +843,33 @@ export class PhaseWorkspaceStore {
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     phase.flowState = {
-      openBoundaryHandleKeys: [...state.flowState.openBoundaryHandleKeys]
+      flowPaths: state.flowState.flowPaths.map(cloneFlowPath)
     }
     phase.deviceStates = Object.fromEntries(
       Object.entries(state.deviceStates).map(([key, device]) => [key, { ...device }])
     )
     phase.updatedAt = this.now()
+  }
+
+  updatePresentationProfile(
+    processId: string,
+    presentationProfile: PresentationProfile
+  ) {
+    const process = this.requireProcess(processId)
+    process.presentationProfile = normalizeProfile(presentationProfile)
+    const utilityIds = new Set(
+      process.presentationProfile.utilities.map(utility => utility.id)
+    )
+    for (const sequence of process.sequences) {
+      for (const phase of sequence.phases) {
+        for (const flowPath of phase.flowState.flowPaths) {
+          if (flowPath.utilityId && !utilityIds.has(flowPath.utilityId)) {
+            delete flowPath.utilityId
+          }
+        }
+      }
+    }
+    process.updatedAt = this.now()
   }
 
   renameDrawing(
@@ -554,7 +935,7 @@ export class PhaseWorkspaceStore {
     phase.drawing = { ...sourcePhase.drawing }
     phase.sourcePhaseId = sourcePhase.id
     phase.flowState = {
-      openBoundaryHandleKeys: [...sourcePhase.flowState.openBoundaryHandleKeys]
+      flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath)
     }
     phase.deviceStates = Object.fromEntries(
       Object.entries(sourcePhase.deviceStates).map(([key, device]) => [

@@ -36,6 +36,13 @@ import { AcSvgPoint } from './AcSvgPoint'
 import { AcSvgShape } from './AcSvgShape'
 import { AcSvgStyleContext, AcSvgStyleUtil } from './AcSvgStyleUtil'
 
+export interface AcSvgEntityStyleOverride {
+  entityIds: ReadonlySet<string>
+  strokeColor: number
+  strokeWidthPx: number
+  opacity: number
+}
+
 export class AcSvgRenderer implements AcGiRenderer<AcSvgEntity> {
   /**
    * Clears the shared block rendering cache before SVG/PDF export.
@@ -171,14 +178,34 @@ export class AcSvgRenderer implements AcGiRenderer<AcSvgEntity> {
 
   /** Recolours matching database entities in place without adding overlays. */
   overrideEntityStrokeColors(objectIds: ReadonlySet<string>, color: number) {
-    const hex = AcSvgStyleUtil.rgbToHex(color)
+    this.overrideEntityStyles([
+      {
+        entityIds: objectIds,
+        strokeColor: color,
+        strokeWidthPx: 1,
+        opacity: 1
+      }
+    ], false)
+  }
+
+  /** Applies structured stroke styles to matching entities and descendants. */
+  overrideEntityStyles(
+    overrides: readonly AcSvgEntityStyleOverride[],
+    includeDimensions = true
+  ) {
     const visit = (entity: AcSvgEntity, inheritedMatch = false) => {
-      const matched = inheritedMatch || objectIds.has(entity.objectId)
-      if (matched) {
-        entity.setStrokeColorOverride(hex)
+      const override = overrides.find(
+        item => inheritedMatch || item.entityIds.has(entity.objectId)
+      )
+      if (override) {
+        entity.setStyleOverride({
+          strokeColor: AcSvgStyleUtil.rgbToHex(override.strokeColor),
+          strokeWidth: includeDimensions ? override.strokeWidthPx : undefined,
+          opacity: includeDimensions ? override.opacity : undefined
+        })
       }
       if (entity instanceof AcSvgGroup) {
-        entity.children.forEach(child => visit(child, matched))
+        entity.children.forEach(child => visit(child, Boolean(override)))
       }
     }
     this._entities.forEach(entity => visit(entity))

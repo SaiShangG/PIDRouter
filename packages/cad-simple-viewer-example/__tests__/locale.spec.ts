@@ -50,6 +50,8 @@ describe('app locale', () => {
   it('preserves interpolated values in localized runtime messages', () => {
     expect(translateUiText('zh', 'Open File')).toBe('打开文件')
     expect(translateUiText('en', '打开文件')).toBe('Open File')
+    expect(translateUiText('en', '复制 Phase')).toBe('Copy Phase')
+    expect(translateUiText('en', '目标序列')).toBe('Target sequence')
     expect(translateUiText('zh', 'Successfully loaded: Area-1.dwg')).toBe(
       '加载成功：Area-1.dwg'
     )

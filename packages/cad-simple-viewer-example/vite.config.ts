@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { exampleRollupOutput } from '../vite-config/pluginRollupOutput'
 
@@ -21,11 +21,22 @@ function assertViewerRuntimeExists(): void {
   }
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   assertViewerRuntimeExists()
+  const env = loadEnv(mode, __dirname, '')
+  const processAssistantTarget =
+    env.VITE_PROCESS_ASSISTANT_API_URL || 'http://192.168.1.100:5153'
 
   return {
     base: './',
+    server: {
+      proxy: {
+        '/api': {
+          target: processAssistantTarget,
+          changeOrigin: true
+        }
+      }
+    },
     build: {
       modulePreload: false,
       minify: true,

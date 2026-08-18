@@ -4,6 +4,19 @@ import {
 } from '../src/phase/phaseWorkspaceStore'
 import type { DrawingAssetRef } from '../src/phase/types'
 
+const flowState = (handleKeys: string[] = []) => ({
+  flowPaths: handleKeys.length
+    ? [
+        {
+          id: 'flow-1',
+          name: 'Main route',
+          handleKeys: [...handleKeys],
+          styleOverride: { color: 0x123456, lineWidthPx: 4 }
+        }
+      ]
+    : []
+})
+
 const drawing: DrawingAssetRef = {
   id: 'drawing-1',
   kind: 'local',
@@ -121,7 +134,8 @@ describe('PhaseWorkspaceStore', () => {
     const process = snapshot.processes[0]
     const sequence = process.sequences[0]
 
-    expect(snapshot.version).toBe(3)
+    expect(snapshot.version).toBe(4)
+    expect(process.presentationProfile.defaultFlowStyle.color).toBe(0x00c853)
     expect(process.activeSequenceId).toBe('sequence-default-process-1')
     expect(sequence.id).toBe('sequence-default-process-1')
     expect(sequence.activePhaseId).toBe(legacyPhase.id)
@@ -133,7 +147,16 @@ describe('PhaseWorkspaceStore', () => {
         displayName: 'CIP-01.dwg'
       },
       drawingAssetId: undefined,
-      drawingDisplayName: undefined
+      drawingDisplayName: undefined,
+      flowState: {
+        flowPaths: [
+          {
+            id: `flow-default-${legacyPhase.id}`,
+            name: '默认流路',
+            handleKeys: ['1a']
+          }
+        ]
+      }
     })
     expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
   })
@@ -173,7 +196,7 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
     })
     store.updatePhaseState(process.id, sequence.id, first.id, {
-      flowState: { openBoundaryHandleKeys: ['1a', '2b'] },
+      flowState: flowState(['1a', '2b']),
       deviceStates: {
         '1a': { key: '1a', label: 'XV-101', mode: 'open' }
       }
@@ -194,12 +217,72 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'history', phaseId: first.id }
     })
 
-    second.flowState.openBoundaryHandleKeys.push('changed')
+    second.flowState.flowPaths[0].handleKeys.push('changed')
+    second.flowState.flowPaths[0].styleOverride!.color = 0xffffff
     second.deviceStates['1a'].mode = 'closed'
     const storedFirst = store.snapshot().processes[0].sequences[0].phases[0]
-    expect(storedFirst.flowState.openBoundaryHandleKeys).toEqual(['1a', '2b'])
+    expect(storedFirst.flowState.flowPaths[0].handleKeys).toEqual(['1a', '2b'])
+    expect(storedFirst.flowState.flowPaths[0].styleOverride?.color).toBe(0x123456)
     expect(storedFirst.deviceStates['1a'].mode).toBe('open')
     expect(historical.sourcePhaseId).toBe(first.id)
+  })
+
+  it('copies a phase across sequences without sharing mutable state', () => {
+    const store = createStore()
+    const { process, sequence: sourceSequence } = createProcessContext(store)
+    const source = store.createPhase({
+      processId: process.id,
+      sequenceId: sourceSequence.id,
+      number: 1,
+      name: 'Initial rinse',
+      source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
+    })
+    store.updatePhaseState(process.id, sourceSequence.id, source.id, {
+      flowState: flowState(['1a']),
+      deviceStates: {
+        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
+      }
+    })
+    const targetSequence = store.createSequence(process.id, 2, 'Tank wash')
+
+    const copy = store.copyPhase(
+      process.id,
+      sourceSequence.id,
+      source.id,
+      targetSequence.id,
+      3,
+      'Initial rinse copy'
+    )
+
+    expect(copy).toMatchObject({
+      number: 3,
+      name: 'Initial rinse copy',
+      drawing: source.drawing,
+      sourcePhaseId: source.id
+    })
+    copy.flowState.flowPaths[0].handleKeys.push('changed')
+    copy.flowState.flowPaths[0].styleOverride!.lineWidthPx = 12
+    copy.deviceStates['1a'].mode = 'closed'
+    const snapshot = store.snapshot()
+    const storedSource = snapshot.processes[0].sequences[0].phases[0]
+    const storedTarget = snapshot.processes[0].sequences[1]
+    expect(storedSource.flowState.flowPaths[0].handleKeys).toEqual(['1a'])
+    expect(storedSource.flowState.flowPaths[0].styleOverride?.lineWidthPx).toBe(4)
+    expect(storedSource.deviceStates['1a'].mode).toBe('open')
+    expect(storedTarget.phases.map(phase => phase.id)).toEqual([copy.id])
+    expect(storedTarget.activePhaseId).toBe(copy.id)
+    expect(snapshot.processes[0].activeSequenceId).toBe(targetSequence.id)
+    expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
+    expect(() =>
+      store.copyPhase(
+        process.id,
+        sourceSequence.id,
+        source.id,
+        targetSequence.id,
+        3,
+        'Duplicate number'
+      )
+    ).toThrow('Phase 3 already exists')
   })
 
   it('keeps phase numbering and ordering scoped to each sequence', () => {
@@ -310,6 +393,62 @@ describe('PhaseWorkspaceStore', () => {
     expect(phases[1].drawing).toEqual({ kind: 'unassigned' })
   })
 
+  it('migrates v3 handles into a default flow path and profile', () => {
+    const storage = {
+      getItem: jest.fn(() =>
+        JSON.stringify({
+          version: 3,
+          processes: [
+            {
+              id: 'process-1',
+              name: 'CIP',
+              sequences: [
+                {
+                  id: 'sequence-1',
+                  number: 1,
+                  name: 'Route',
+                  phases: [
+                    {
+                      id: 'phase-1',
+                      number: 1,
+                      name: 'Rinse',
+                      drawing: { kind: 'unassigned' },
+                      flowState: { openBoundaryHandleKeys: ['1a', '2b'] },
+                      deviceStates: legacyPhase.deviceStates,
+                      createdAt: legacyPhase.createdAt,
+                      updatedAt: legacyPhase.updatedAt
+                    }
+                  ],
+                  createdAt: legacyPhase.createdAt,
+                  updatedAt: legacyPhase.updatedAt
+                }
+              ],
+              createdAt: legacyPhase.createdAt,
+              updatedAt: legacyPhase.updatedAt
+            }
+          ],
+          drawingAssets: {}
+        })
+      )
+    }
+
+    const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
+    expect(snapshot.version).toBe(4)
+    expect(snapshot.processes[0].presentationProfile.defaultFlowStyle).toEqual({
+      color: 0x00c853,
+      lineWidthPx: 3,
+      opacity: 1,
+      visible: true
+    })
+    expect(
+      snapshot.processes[0].sequences[0].phases[0].flowState.flowPaths[0]
+    ).toEqual({
+      id: 'flow-default-phase-1',
+      name: '默认流路',
+      handleKeys: ['1a', '2b']
+    })
+  })
+
   it('associates and replaces drawings while retaining shared old assets', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)
@@ -367,7 +506,7 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
     })
     store.updatePhaseState(process.id, sequence.id, source.id, {
-      flowState: { openBoundaryHandleKeys: ['1a'] },
+      flowState: flowState(['1a']),
       deviceStates: {
         '1a': { key: '1a', label: 'XV-101', mode: 'open' }
       }
@@ -393,7 +532,11 @@ describe('PhaseWorkspaceStore', () => {
     const associated = store.snapshot().processes[0].sequences[1].phases[0]
     expect(associated.drawing).toEqual(source.drawing)
     expect(associated.sourcePhaseId).toBe(source.id)
-    expect(associated.flowState.openBoundaryHandleKeys).toEqual(['1a'])
+    expect(associated.flowState.flowPaths[0].handleKeys).toEqual(['1a'])
+    expect(associated.flowState.flowPaths[0].styleOverride).toEqual({
+      color: 0x123456,
+      lineWidthPx: 4
+    })
     expect(associated.deviceStates['1a'].mode).toBe('open')
   })
 })

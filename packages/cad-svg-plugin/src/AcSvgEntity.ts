@@ -16,7 +16,11 @@ export class AcSvgEntity implements AcGiEntity {
   private _layerName: string
   private _visible: boolean
   private _userData: object
-  private _strokeColorOverride?: string
+  private _styleOverride?: {
+    strokeColor?: string
+    strokeWidth?: number
+    opacity?: number
+  }
   protected _box: AcGeBox2d
   protected _localSvg: string
   protected _matrix?: AcGeMatrix3d
@@ -80,12 +84,27 @@ export class AcSvgEntity implements AcGiEntity {
     if (!this._visible || !this._localSvg) {
       return ''
     }
-    const localSvg = this._strokeColorOverride
-      ? this._localSvg.replace(
-          /stroke="(?!none")[^"]+"/g,
-          `stroke="${this._strokeColorOverride}"`
-        )
-      : this._localSvg
+    let localSvg = this._localSvg
+    if (this._styleOverride?.strokeColor) {
+      localSvg = localSvg.replace(
+        /stroke="(?!none")[^"]+"/g,
+        `stroke="${this._styleOverride.strokeColor}"`
+      )
+    }
+    if (this._styleOverride?.strokeWidth != null) {
+      localSvg = localSvg.replace(
+        /(<[^>]+stroke="(?!none)[^"]+"[^>]*)(\/?>)/g,
+        (_match, attributes: string, close: string) =>
+          `${attributes.replace(/\s+stroke-width="[^"]*"/g, '')} stroke-width="${this._styleOverride!.strokeWidth}"${close}`
+      )
+    }
+    if (this._styleOverride?.opacity != null) {
+      localSvg = localSvg.replace(
+        /(<[^>]+stroke="(?!none)[^"]+"[^>]*)(\/?>)/g,
+        (_match, attributes: string, close: string) =>
+          `${attributes.replace(/\s+stroke-opacity="[^"]*"/g, '')} stroke-opacity="${this._styleOverride!.opacity}"${close}`
+      )
+    }
     if (!this._matrix) {
       return localSvg
     }
@@ -95,7 +114,15 @@ export class AcSvgEntity implements AcGiEntity {
 
   /** Overrides visible stroke colours without adding duplicate geometry. */
   setStrokeColorOverride(color?: string) {
-    this._strokeColorOverride = color
+    this.setStyleOverride({ strokeColor: color })
+  }
+
+  setStyleOverride(style?: {
+    strokeColor?: string
+    strokeWidth?: number
+    opacity?: number
+  }) {
+    this._styleOverride = style ? { ...style } : undefined
   }
 
   get objectId() {
@@ -191,7 +218,9 @@ export class AcSvgEntity implements AcGiEntity {
     this._userData = { ...source._userData }
     this._box = source._box.clone()
     this._localSvg = source._localSvg
-    this._strokeColorOverride = source._strokeColorOverride
+    this._styleOverride = source._styleOverride
+      ? { ...source._styleOverride }
+      : undefined
     this._matrix = source._matrix ? source._matrix.clone() : undefined
     this._basePoint = source._basePoint
       ? new AcGePoint3d(source._basePoint)

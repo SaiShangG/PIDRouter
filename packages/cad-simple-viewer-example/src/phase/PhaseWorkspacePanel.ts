@@ -51,6 +51,15 @@ export interface CopySequenceRequest extends NewSequenceRequest {
   sequenceId: string
 }
 
+export interface CopyPhaseRequest {
+  processId: string
+  sourceSequenceId: string
+  sourcePhaseId: string
+  targetSequenceId: string
+  number: number
+  name: string
+}
+
 export interface PhaseWorkspacePanelActions {
   createProcess(name: string): void
   deleteProcess(processId: string): Promise<void>
@@ -61,6 +70,7 @@ export interface PhaseWorkspacePanelActions {
   reorderSequence(processId: string, sequenceId: string, targetIndex: number): void
   activateSequence(processId: string, sequenceId: string): Promise<void>
   createPhase(request: NewPhaseRequest): Promise<void>
+  copyPhase(request: CopyPhaseRequest): Promise<void>
   associateDrawing(request: DrawingAssociationRequest): Promise<void>
   activateProcess(processId: string): Promise<void>
   activatePhase(processId: string, sequenceId: string, phaseId: string): Promise<void>
@@ -416,6 +426,9 @@ export class PhaseWorkspacePanel {
       })
       const controls = document.createElement('div')
       controls.className = 'phase-tree-order-controls'
+      const copy = this.createIconButton('复制 Phase', Copy, trigger => {
+        this.openPhaseCopyModal(process, sequence, phase, trigger)
+      })
       const moveUp = this.createButton('', false)
       moveUp.className = 'phase-tree-order-button phase-icon-button'
       moveUp.title = '上移'
@@ -442,7 +455,7 @@ export class PhaseWorkspacePanel {
         this.actions.reorderPhase(process.id, sequence.id, phase.id, index + 1)
         this.render()
       })
-      controls.append(moveUp, moveDown)
+      controls.append(copy, moveUp, moveDown)
       item.addEventListener('dragstart', event => {
         event.dataTransfer?.setData('text/plain', phase.id)
         if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
@@ -473,6 +486,132 @@ export class PhaseWorkspacePanel {
     })
     group.append(row, list)
     return group
+  }
+
+  private openPhaseCopyModal(
+    process: PhaseWorkspaceState['processes'][number],
+    sourceSequence: PhaseWorkspaceState['processes'][number]['sequences'][number],
+    sourcePhase: PhaseWorkspaceState['processes'][number]['sequences'][number]['phases'][number],
+    trigger: HTMLButtonElement
+  ) {
+    this.element.querySelector('.phase-operation-modal')?.remove()
+    const modal = document.createElement('div')
+    modal.className = 'phase-workspace-modal phase-operation-modal'
+    modal.setAttribute('role', 'dialog')
+    modal.setAttribute('aria-modal', 'true')
+    modal.setAttribute('aria-labelledby', 'phaseOperationModalTitle')
+    const dialog = document.createElement('section')
+    dialog.className = 'phase-workspace-modal-dialog phase-operation-dialog'
+    const header = document.createElement('header')
+    const title = document.createElement('h2')
+    title.id = 'phaseOperationModalTitle'
+    title.textContent = '复制 Phase'
+    const close = this.createButton('', false)
+    close.className = 'phase-workspace-modal-close phase-icon-button'
+    close.setAttribute('aria-label', '关闭对话框')
+    close.title = '关闭'
+    close.append(createPhaseIcon(X))
+    header.append(title, close)
+
+    const form = document.createElement('form')
+    form.className = 'phase-workspace-modal-form phase-copy-modal-form'
+    const source = document.createElement('input')
+    source.readOnly = true
+    source.value = `Phase ${String(sourcePhase.number).padStart(2, '0')} · ${sourcePhase.name}`
+    source.setAttribute('aria-label', '来源 Phase')
+    const target = document.createElement('select')
+    target.required = true
+    target.setAttribute('aria-label', '目标序列')
+    process.sequences.forEach(sequence => {
+      target.add(
+        new Option(
+          `${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
+          sequence.id
+        )
+      )
+    })
+    target.value = sourceSequence.id
+    const number = document.createElement('input')
+    number.type = 'number'
+    number.min = '1'
+    number.required = true
+    number.setAttribute('aria-label', '新 Phase 编号')
+    const name = document.createElement('input')
+    name.required = true
+    name.setAttribute('aria-label', '新 Phase 名称')
+    const copySuffix = this.getLocale() === 'zh' ? '副本' : 'Copy'
+    name.value = `${sourcePhase.name} ${copySuffix}`
+    const setNextNumber = () => {
+      const targetSequence = process.sequences.find(
+        sequence => sequence.id === target.value
+      )
+      number.value = String(
+        Math.max(0, ...(targetSequence?.phases.map(phase => phase.number) ?? [])) + 1
+      )
+    }
+    setNextNumber()
+    target.addEventListener('change', setNextNumber)
+
+    const actions = document.createElement('footer')
+    actions.className = 'phase-workspace-modal-actions'
+    const cancel = this.createButton('取消', false)
+    const submit = this.createButton('复制', true)
+    submit.type = 'submit'
+    actions.append(cancel, submit)
+    form.append(
+      this.createModalField('来源 Phase', source),
+      this.createFormField('目标序列', target),
+      this.createModalField('新 Phase 编号', number),
+      this.createModalField('新 Phase 名称', name),
+      actions
+    )
+    dialog.append(header, form)
+    modal.append(dialog)
+    const closeModal = () => {
+      modal.remove()
+      trigger.focus()
+    }
+    close.addEventListener('click', closeModal)
+    cancel.addEventListener('click', closeModal)
+    modal.addEventListener('click', event => {
+      if (event.target === modal) closeModal()
+    })
+    modal.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeModal()
+    })
+    form.addEventListener('submit', async event => {
+      event.preventDefault()
+      const phaseNumber = Number(number.value)
+      const phaseName = name.value.trim()
+      const targetSequence = process.sequences.find(
+        sequence => sequence.id === target.value
+      )
+      if (
+        !targetSequence ||
+        !phaseName ||
+        !Number.isInteger(phaseNumber) ||
+        phaseNumber < 1 ||
+        targetSequence.phases.some(phase => phase.number === phaseNumber)
+      ) return
+      submit.disabled = true
+      try {
+        await this.actions.copyPhase({
+          processId: process.id,
+          sourceSequenceId: sourceSequence.id,
+          sourcePhaseId: sourcePhase.id,
+          targetSequenceId: targetSequence.id,
+          number: phaseNumber,
+          name: phaseName
+        })
+        modal.remove()
+        this.render()
+      } finally {
+        submit.disabled = false
+      }
+    })
+    this.element.append(modal)
+    localizeDom(modal, this.getLocale())
+    target.focus()
   }
 
   private openSequenceEditorModal(
@@ -761,8 +900,11 @@ export class PhaseWorkspacePanel {
     )
     const status = document.createElement('div')
     status.className = 'phase-overview-statuses'
+    const process = this.getState().processes.find(item => item.id === processId)!
     status.append(
-      this.createStatusBadge(`${phase.flowState.openBoundaryHandleKeys.length} 个高亮边界`),
+      this.createStatusBadge(`${phase.flowState.flowPaths.length} 条流路`),
+      this.createStatusBadge(`${process.presentationProfile.utilities.length} 个 Utility`),
+      this.createStatusBadge(`${process.presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`),
       this.createStatusBadge(`${Object.keys(phase.deviceStates).length} 个设备`)
     )
     this.addDetail(details, '状态', status)

@@ -3,7 +3,10 @@
 import { resolveExportDownloadName } from '@mlightcad/cad-simple-viewer'
 import { jsPDF } from 'jspdf'
 
-import { AcApPdfConvertor } from '../src/AcApPdfConvertor'
+import {
+  AcApPdfConvertor,
+  PDF_STROKE_POINTS_PER_VIEWER_PIXEL
+} from '../src/AcApPdfConvertor'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
   AcApSettingManager: { instance: { fontMapping: {} } },
@@ -84,5 +87,49 @@ describe('AcApPdfConvertor text path rendering', () => {
 
     await converter.convert(context)
     expect(save).toHaveBeenCalledWith('drawing.pdf')
+  })
+
+  it('converts structured widths and preserves legacy highlight options', () => {
+    const converter = new AcApPdfConvertor() as unknown as {
+      resolveEntityStyleOverrides(options: object): Array<{
+        entityIds: ReadonlySet<string>
+        strokeColor: number
+        strokeWidthPx: number
+        opacity: number
+      }>
+    }
+    const ids = new Set(['1a'])
+    expect(
+      converter.resolveEntityStyleOverrides({
+        entityStyleOverrides: [
+          {
+            entityIds: ids,
+            strokeColor: 0x123456,
+            strokeWidthPx: 4,
+            opacity: 0.5
+          }
+        ]
+      })
+    ).toEqual([
+      {
+        entityIds: ids,
+        strokeColor: 0x123456,
+        strokeWidthPx: 4 * PDF_STROKE_POINTS_PER_VIEWER_PIXEL,
+        opacity: 0.5
+      }
+    ])
+    expect(
+      converter.resolveEntityStyleOverrides({
+        highlightedEntityIds: ids,
+        highlightColor: 0x00c853
+      })
+    ).toEqual([
+      {
+        entityIds: ids,
+        strokeColor: 0x00c853,
+        strokeWidthPx: 1,
+        opacity: 1
+      }
+    ])
   })
 })

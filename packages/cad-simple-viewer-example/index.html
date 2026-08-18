@@ -425,6 +425,7 @@
 
     #cad-container {
       position: absolute;
+      isolation: isolate;
       inset: 0;
       overflow: hidden;
     }
@@ -509,6 +510,8 @@
     <aside class="phase-sidebar" aria-label="工艺与阶段">
       <header class="phase-sidebar-header" id="phaseSidebarHeader">
         <strong id="phaseSidebarTitle">工艺与阶段</strong>
+        <button class="phase-sidebar-style-button" id="phaseHighlightStyleButton" type="button" aria-label="高亮样式"
+          title="高亮样式" disabled></button>
       </header>
       <div class="phase-sidebar-content" id="phaseWorkspaceMount"></div>
     </aside>
@@ -597,6 +600,9 @@
             </div>
           </div>
         </div>
+        <button type="button" id="pidDrawingLibraryButton" aria-haspopup="dialog">
+          PID 图纸
+        </button>
         <button type="button" id="reportWorkspaceButton" aria-haspopup="dialog">
           报告
         </button>

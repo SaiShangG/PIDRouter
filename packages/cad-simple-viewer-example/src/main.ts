@@ -25,17 +25,31 @@ import {
   AcGeBox2d,
   log
 } from '@mlightcad/data-model'
-import { Languages } from 'lucide'
+import { Languages, Palette } from 'lucide'
 import type { Object3D } from 'three'
 
 import { setupAgentIntegration } from './agentIntegration'
 import { createAgentToolbarItem } from './agentToolbarItem'
+import { ProcessAssistantClient } from './api/processAssistantClient'
+import {
+  getProcessAssistantConfig,
+  PROCESS_ASSISTANT_API_URL
+} from './api/processAssistantConfig'
+import { ProcessAssistantFileApi } from './api/processAssistantFileApi'
+import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi'
+import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
+import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
 import {
   applyDemoToolbarLayout,
   getCurrentDemoToolbarLayoutId,
   getDemoToolbarLayouts} from './demoToolbarPresets'
+import { DrawingLibraryModal } from './drawing-library/DrawingLibraryModal'
+import { injectDrawingLibraryStyles } from './drawing-library/drawingLibraryStyles'
+import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyles'
+import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssistantDrawingRepository'
+import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import flowConnectionJsonText from './FlowConnection/1.json?raw'
 import {
@@ -49,16 +63,31 @@ import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import { createPhaseIcon } from './phase/phaseIcons'
 import {
+  type CopyPhaseRequest,
   type CopySequenceRequest,
   type DrawingAssociationRequest,
   type NewPhaseRequest,
   type NewSequenceRequest,
   PhaseWorkspacePanel
 } from './phase/PhaseWorkspacePanel'
+import { PhaseWorkspaceRepository } from './phase/phaseWorkspaceRepository'
 import { PhaseWorkspaceStore } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
-import type { DeviceState, DrawingAssetRef } from './phase/types'
+import type {
+  DeviceState,
+  DrawingAssetRef,
+  FlowStateSnapshot
+} from './phase/types'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
+import {
+  HighlightStyleDialog,
+  type HighlightStyleDraft
+} from './presentation/HighlightStyleDialog'
+import { PhasePresentationController } from './presentation/PhasePresentationController'
+import {
+  type ResolvedEntityPresentation,
+  resolveEntityPresentation} from './presentation/presentationStyleResolver'
+import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
 import { registerLazyPlugins } from './register'
 import {
   PhaseReportExporter,
@@ -67,6 +96,7 @@ import {
 import { ReportManifestStore } from './report/reportManifest'
 import { ReportWorkspaceModal } from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
+import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
 import { injectUiReferenceThemeStyles } from './uiReferenceThemeStyles'
 import { localizeDom, translateUiText } from './uiTranslations'
 
@@ -75,8 +105,6 @@ const EXAMPLE_COMMAND_ALIASES = {
   CIRCLE: ['CI'],
   ZOOM: ['ZZ']
 }
-
-const OPEN_HIGHLIGHT_COLOR = 0x00c853
 
 interface FlowConnectionEdge {
   From?: number
@@ -735,6 +763,7 @@ class CadViewerApp {
   private selectionActionMenu: HTMLDivElement
   private selectionOpenButton: HTMLButtonElement
   private selectionCloseButton: HTMLButtonElement
+  private pidDrawingLibraryButton: HTMLButtonElement
   private reportWorkspaceButton: HTMLButtonElement
   private dockButton: HTMLButtonElement
   private dockMenu: HTMLDivElement
@@ -763,11 +792,22 @@ class CadViewerApp {
   private openHighlightRoots = new Map<AcDbObjectId, PreviewRoot>()
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
   private openFlowBoundaryHandleKeys = new Set<string>()
+  private readonly phasePresentationController = new PhasePresentationController()
   private runtimeDeviceStates: Record<string, DeviceState> = {}
-  private readonly phaseStore = PhaseWorkspaceStore.load()
+  private phaseStore = new PhaseWorkspaceStore()
+  private phaseRepository?: PhaseWorkspaceRepository
   private readonly reportStore = ReportManifestStore.load()
   private readonly drawingAssetStore = new DrawingAssetStore()
+  private readonly processAssistantClient = new ProcessAssistantClient({
+    baseUrl: PROCESS_ASSISTANT_API_URL
+  })
+  private readonly processAssistantFileApi = new ProcessAssistantFileApi(
+    this.processAssistantClient
+  )
+  private readonly drawingLibraryRepository =
+    new ProcessAssistantDrawingRepository(this.processAssistantFileApi)
   private phasePanel?: PhaseWorkspacePanel
+  private drawingLibrary?: DrawingLibraryModal
   private reportWorkspace?: ReportWorkspaceModal
   private loadedPhase?: { processId: string; sequenceId: string; phaseId: string }
   private loadedDrawingAssetId?: string
@@ -777,6 +817,7 @@ class CadViewerApp {
     phaseId: string
     token: number
   }
+  private readonly backendPhaseSaveTimers = new Map<string, number>()
   private phaseActivationToken = 0
   private lastCanvasPointer: { x: number; y: number } | null = null
   private lastPickedObjectId: AcDbObjectId | null = null
@@ -811,6 +852,9 @@ class CadViewerApp {
     ) as HTMLButtonElement
     this.selectionCloseButton = document.getElementById(
       'selectionCloseButton'
+    ) as HTMLButtonElement
+    this.pidDrawingLibraryButton = document.getElementById(
+      'pidDrawingLibraryButton'
     ) as HTMLButtonElement
     this.reportWorkspaceButton = document.getElementById(
       'reportWorkspaceButton'
@@ -864,6 +908,7 @@ class CadViewerApp {
     if (this.fileSidebarColumn && fileSidebarResizeHandle) {
       setupFileSidebarResize(this.fileSidebarColumn, fileSidebarResizeHandle)
     }
+    this.setupDrawingLibrary()
     this.setupReportWorkspace()
     this.setupDockMenu()
     this.setupViewerToolbarMenu()
@@ -939,6 +984,47 @@ class CadViewerApp {
     })
   }
 
+  private setupDrawingLibrary() {
+    injectDrawingLibraryStyles()
+    this.drawingLibrary = new DrawingLibraryModal(
+      this.drawingLibraryRepository,
+      {
+        open: record => this.openLibraryDrawing(record)
+      }
+    )
+    this.pidDrawingLibraryButton.addEventListener('click', () => {
+      this.captureLoadedPhaseState()
+      void this.drawingLibrary?.open()
+    })
+  }
+
+  private async openLibraryDrawing(record: DrawingRecord) {
+    await this.initialize()
+    this.clearMessages()
+    this.captureLoadedPhaseState()
+    this.invalidateLoadedPhaseBinding()
+    this.setLoadingState(true)
+    try {
+      const content = await this.drawingLibraryRepository.getContent(record.id)
+      const success = await AcApDocManager.instance.openDocument(
+        record.originalFileName,
+        content,
+        {
+          minimumChunkSize: 1000,
+          mode: AcEdOpenMode.Write,
+          openViewMode: AcApOpenViewMode.Extents,
+          sysVars: { lwdisplay: false }
+        }
+      )
+      if (!success) throw new Error(`无法打开 ${record.name}`)
+      this.predefinedButtons.forEach(item => item.classList.remove('active'))
+      document.title = record.name
+      this.showMessage(`Successfully loaded: ${record.name}`, 'success')
+    } finally {
+      this.finishLoadingState()
+    }
+  }
+
   private async exportPhaseReport(
     mode: 'merged' | 'per-sequence',
     signal: AbortSignal,
@@ -981,8 +1067,7 @@ class CadViewerApp {
           bounds: flowConnectionPidBounds ?? undefined,
           excludedLayers: PDF_EXCLUDED_LAYERS,
           includeBackground: false,
-          highlightedEntityIds: this.getPdfFlowPathObjectIds(),
-          highlightColor: OPEN_HIGHLIGHT_COLOR
+          entityStyleOverrides: this.getPdfEntityStyleOverrides()
         }),
       compose: pages => composer.compose(pages.map(bytes => ({ bytes }))),
       restore: async location => {
@@ -1543,6 +1628,7 @@ class CadViewerApp {
       ) as AcApSimpleUiPlugin
       injectUiReferenceThemeStyles()
       setupAgentIntegration(plugin)
+      await this.loadProcessAssistantWorkspace()
       this.setupPhaseWorkspace()
 
       AcApDocManager.instance.events.documentActivated.addEventListener(
@@ -1574,16 +1660,35 @@ class CadViewerApp {
     }
   }
 
+  private async loadProcessAssistantWorkspace(): Promise<void> {
+    try {
+      const config = getProcessAssistantConfig()
+      const client = new ProcessAssistantClient({ baseUrl: config.baseUrl })
+      const repository = new PhaseWorkspaceRepository({
+        baseUrl: config.baseUrl,
+        projectId: config.projectId,
+        files: new ProcessAssistantFileApi(client),
+        procedures: new ProcessAssistantProcedureApi(client),
+        operations: new ProcessAssistantOperationApi(client),
+        phases: new ProcessAssistantPhaseApi(client)
+      })
+      this.phaseRepository = repository
+      const workspace = await repository.load()
+      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      this.showMessage('已加载后台 Process 数据', 'success')
+    } catch (error) {
+      log.error('Failed to load ProcessAssistant workspace:', error)
+      this.showMessage('后台 API 不可用，未加载本地测试数据', 'error')
+    }
+  }
+
   private setupPhaseWorkspace() {
     injectPhaseWorkspaceStyles()
     this.phasePanel = new PhaseWorkspacePanel(
       () => this.phaseStore.snapshot(),
       {
         createProcess: name => {
-          this.phaseStore.createProcess(name)
-          this.phaseStore.persist()
-          this.phasePanel?.render()
-          this.syncPhaseContextBar()
+          void this.createBackendProcess(name)
         },
         deleteProcess: processId => this.deleteWorkspaceProcess(processId),
         createSequence: request => {
@@ -1593,6 +1698,10 @@ class CadViewerApp {
           void this.copyWorkspaceSequence(request)
         },
         renameSequence: (processId, sequenceId, name) => {
+          if (this.phaseRepository) {
+            void this.renameBackendSequence(processId, sequenceId, name)
+            return
+          }
           this.phaseStore.renameSequence(processId, sequenceId, name)
           this.phaseStore.persist()
           this.phasePanel?.render()
@@ -1601,6 +1710,10 @@ class CadViewerApp {
         deleteSequence: (processId, sequenceId) =>
           this.deleteWorkspaceSequence(processId, sequenceId),
         reorderSequence: (processId, sequenceId, targetIndex) => {
+          if (this.phaseRepository) {
+            void this.reorderBackendSequence(processId, sequenceId, targetIndex)
+            return
+          }
           this.phaseStore.reorderSequence(processId, sequenceId, targetIndex)
           this.phaseStore.persist()
           this.phasePanel?.render()
@@ -1609,11 +1722,21 @@ class CadViewerApp {
         activateSequence: (processId, sequenceId) =>
           this.activateWorkspaceSequence(processId, sequenceId),
         createPhase: request => this.createWorkspacePhase(request),
+        copyPhase: request => this.copyWorkspacePhase(request),
         associateDrawing: request => this.associateWorkspaceDrawing(request),
         activateProcess: processId => this.activateWorkspaceProcess(processId),
         activatePhase: (processId, sequenceId, phaseId) =>
-          this.activateWorkspacePhase(processId, sequenceId, phaseId),
+          this.activateWorkspacePhase(processId, sequenceId, phaseId, false),
         reorderPhase: (processId, sequenceId, phaseId, targetIndex) => {
+          if (this.phaseRepository) {
+            void this.reorderBackendPhase(
+              processId,
+              sequenceId,
+              phaseId,
+              targetIndex
+            )
+            return
+          }
           this.phaseStore.reorderPhase(
             processId,
             sequenceId,
@@ -1624,6 +1747,10 @@ class CadViewerApp {
           this.syncPhaseContextBar()
         },
         renamePhase: (processId, sequenceId, phaseId, name) => {
+          if (this.phaseRepository) {
+            void this.renameBackendPhase(processId, sequenceId, phaseId, name)
+            return
+          }
           this.phaseStore.renamePhase(processId, sequenceId, phaseId, name)
           this.phaseStore.persist()
           this.phasePanel?.render()
@@ -1650,6 +1777,10 @@ class CadViewerApp {
         deletePhase: (processId, sequenceId, phaseId) =>
           this.deleteWorkspacePhase(processId, sequenceId, phaseId),
         renameDrawing: (processId, sequenceId, phaseId, name) => {
+          if (this.phaseRepository) {
+            void this.renameBackendDrawing(processId, sequenceId, phaseId, name)
+            return
+          }
           this.phaseStore.renameDrawing(processId, sequenceId, phaseId, name)
           this.phaseStore.persist()
           const isLoaded =
@@ -1664,6 +1795,18 @@ class CadViewerApp {
     const mount = document.getElementById('phaseWorkspaceMount')
     if (!mount) throw new Error('Phase workspace mount was not found')
     mount.replaceChildren(this.phasePanel.element)
+    const styleButton = document.getElementById(
+      'phaseHighlightStyleButton'
+    ) as HTMLButtonElement | null
+    if (!styleButton) throw new Error('Highlight style button was not found')
+    styleButton.replaceChildren(createPhaseIcon(Palette))
+    styleButton.addEventListener('click', () => {
+      const state = this.phaseStore.snapshot()
+      const process = state.processes.find(
+        item => item.id === state.activeProcessId
+      )
+      if (process) this.openHighlightStyleDialog(process.id)
+    })
     const sidebar = document.querySelector<HTMLElement>('.phase-sidebar')
     const resizeHandle = document.getElementById('phaseSidebarResizeHandle')
     if (!sidebar || !resizeHandle) {
@@ -1672,6 +1815,26 @@ class CadViewerApp {
     setupPhaseSidebarResize(sidebar, resizeHandle)
     this.setupPhaseContextBar()
     this.syncPhaseContextBar()
+  }
+
+  private async createBackendProcess(name: string): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) {
+      this.showMessage('后台 API 尚未初始化，无法创建 Process', 'error')
+      return
+    }
+    try {
+      const processId = await repository.createProcess(name)
+      const workspace = await repository.load()
+      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      this.phaseStore.activate(String(processId))
+      this.phasePanel?.render()
+      this.syncPhaseContextBar()
+      this.showMessage('Process 已保存到后台', 'success')
+    } catch (error) {
+      log.error('Failed to create backend Process:', error)
+      this.showMessage('Process 保存失败', 'error')
+    }
   }
 
   private setupPhaseContextBar() {
@@ -1728,6 +1891,9 @@ class CadViewerApp {
     ) as HTMLSelectElement | null
     const summary = document.getElementById('phaseContextSummary')
     const status = document.querySelector('#phaseContextStatus span')
+    const styleButton = document.getElementById(
+      'phaseHighlightStyleButton'
+    ) as HTMLButtonElement | null
     if (!processSelect || !sequenceSelect || !phaseSelect || !summary || !status) return
 
     const state = this.phaseStore.snapshot()
@@ -1766,6 +1932,10 @@ class CadViewerApp {
     )
     phaseSelect.disabled = !sequence || sequence.phases.length === 0
     phaseSelect.value = sequence?.activePhaseId ?? ''
+    if (styleButton) {
+      styleButton.disabled = !process
+      styleButton.setAttribute('aria-haspopup', 'dialog')
+    }
     summary.textContent = sequence
       ? `${sequence.phases.length} ${translate(this.appLocale, 'phaseCount')}`
       : translate(this.appLocale, 'noProcess')
@@ -1800,6 +1970,10 @@ class CadViewerApp {
 
   private async deleteWorkspaceProcess(processId: string) {
     this.captureLoadedPhaseState()
+    if (this.phaseRepository) {
+      await this.deleteBackendProcess(processId)
+      return
+    }
     const stateBeforeDelete = this.phaseStore.snapshot()
     const process = stateBeforeDelete.processes.find(item => item.id === processId)
     if (!process) throw new Error('Process was not found')
@@ -1848,8 +2022,46 @@ class CadViewerApp {
     document.title = 'CAD Viewer'
   }
 
+  private async deleteBackendProcess(processId: string): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      const wasLoaded = this.loadedPhase?.processId === processId
+      await repository.deleteProcess(processId)
+      const workspace = await repository.load()
+      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      this.phaseStore.persist()
+      this.reportStore.reconcile(workspace)
+      this.reportStore.persist()
+      if (wasLoaded) this.invalidateLoadedPhaseBinding()
+      this.phasePanel?.render()
+      this.syncPhaseContextBar()
+      this.showMessage('Process 已从后台删除', 'success')
+    } catch (error) {
+      log.error('Failed to delete backend Process:', error)
+      this.showMessage('Process 删除失败', 'error')
+      throw error
+    }
+  }
+
   private async createWorkspaceSequence(request: NewSequenceRequest) {
     this.captureLoadedPhaseState()
+    if (this.phaseRepository) {
+      try {
+        const sequenceId = await this.phaseRepository.createSequence(request)
+        const workspace = await this.phaseRepository.load()
+        this.phaseStore = new PhaseWorkspaceStore(workspace)
+        this.phaseStore.activate(request.processId, String(sequenceId))
+        this.phaseStore.persist()
+        this.phasePanel?.render()
+        this.syncPhaseContextBar()
+        this.showMessage('Sequence 已保存到后台', 'success')
+      } catch (error) {
+        log.error('Failed to create backend Sequence:', error)
+        this.showMessage('Sequence 保存失败', 'error')
+      }
+      return
+    }
     const sequence = this.phaseStore.createSequence(
       request.processId,
       request.number,
@@ -1859,7 +2071,118 @@ class CadViewerApp {
     await this.activateWorkspaceSequence(request.processId, sequence.id)
   }
 
+  private async renameBackendSequence(
+    processId: string,
+    sequenceId: string,
+    name: string
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      const process = this.phaseStore
+        .snapshot()
+        .processes.find(item => item.id === processId)
+      const sequenceIndex = process?.sequences.findIndex(
+        item => item.id === sequenceId
+      )
+      const sequence =
+        sequenceIndex !== undefined && sequenceIndex >= 0
+          ? process?.sequences[sequenceIndex]
+          : undefined
+      if (!sequence) throw new Error('Sequence was not found')
+      await repository.updateSequence(
+        processId,
+        { ...sequence, name },
+        sequenceIndex! + 1
+      )
+      await this.reloadBackendWorkspace(processId, sequenceId)
+      this.showMessage('Sequence 已更新', 'success')
+    } catch (error) {
+      log.error('Failed to rename backend Sequence:', error)
+      this.showMessage('Sequence 更新失败', 'error')
+    }
+  }
+
+  private async reorderBackendSequence(
+    processId: string,
+    sequenceId: string,
+    targetIndex: number
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      const process = this.phaseStore
+        .snapshot()
+        .processes.find(item => item.id === processId)
+      if (!process) throw new Error('Process was not found')
+      const sequences = [...process.sequences]
+      const currentIndex = sequences.findIndex(item => item.id === sequenceId)
+      if (
+        currentIndex < 0 ||
+        targetIndex < 0 ||
+        targetIndex >= sequences.length
+      ) {
+        throw new Error('Sequence target index is out of range')
+      }
+      const [sequence] = sequences.splice(currentIndex, 1)
+      sequences.splice(targetIndex, 0, sequence)
+      await Promise.all(
+        sequences.map((item, index) =>
+          repository.updateSequence(processId, item, index + 1)
+        )
+      )
+      await this.reloadBackendWorkspace(processId, sequenceId)
+      this.showMessage('Sequence 顺序已更新', 'success')
+    } catch (error) {
+      log.error('Failed to reorder backend Sequence:', error)
+      this.showMessage('Sequence 排序失败', 'error')
+    }
+  }
+
+  private async reloadBackendWorkspace(
+    processId?: string,
+    sequenceId?: string,
+    phaseId?: string
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    const workspace = await repository.load()
+    this.phaseStore = new PhaseWorkspaceStore(workspace)
+    if (processId) this.phaseStore.activate(processId, sequenceId, phaseId)
+    this.phaseStore.persist()
+    this.phasePanel?.render()
+    this.syncPhaseContextBar()
+  }
+
   private async copyWorkspaceSequence(request: CopySequenceRequest) {
+    if (this.phaseRepository) {
+      try {
+        this.captureLoadedPhaseState()
+        const process = this.phaseStore
+          .snapshot()
+          .processes.find(item => item.id === request.processId)
+        const source = process?.sequences.find(
+          item => item.id === request.sequenceId
+        )
+        if (!source) throw new Error('Sequence was not found')
+        const sequenceId = await this.phaseRepository.createSequence(request)
+        for (const [index, phase] of source.phases.entries()) {
+          await this.phaseRepository.createPhase({
+            sequenceId: String(sequenceId),
+            number: phase.number,
+            name: phase.name,
+            orderIndex: index + 1,
+            data: this.phaseRepository.createPhaseData(phase)
+          })
+        }
+        await this.reloadBackendWorkspace(request.processId, String(sequenceId))
+        this.showMessage('Sequence 已复制到后台', 'success')
+      } catch (error) {
+        log.error('Failed to copy backend Sequence:', error)
+        this.showMessage('Sequence 复制失败', 'error')
+      }
+      return
+    }
     this.captureLoadedPhaseState()
     const sequence = this.phaseStore.copySequence(
       request.processId,
@@ -1869,6 +2192,53 @@ class CadViewerApp {
     )
     this.phaseStore.persist()
     await this.activateWorkspaceSequence(request.processId, sequence.id)
+  }
+
+  private async copyWorkspacePhase(request: CopyPhaseRequest) {
+    try {
+      this.captureLoadedPhaseState()
+      if (this.phaseRepository) {
+        const source = this.phaseStore
+          .snapshot()
+          .processes.find(process => process.id === request.processId)
+          ?.sequences.find(item => item.id === request.sourceSequenceId)
+          ?.phases.find(item => item.id === request.sourcePhaseId)
+        if (!source) throw new Error('Source phase was not found')
+        const phaseId = await this.phaseRepository.createPhase({
+          sequenceId: request.targetSequenceId,
+          number: request.number,
+          name: request.name,
+          data: this.phaseRepository.createPhaseData(source)
+        })
+        await this.reloadBackendWorkspace(
+          request.processId,
+          request.targetSequenceId,
+          String(phaseId)
+        )
+        this.showMessage('Phase 已复制到后台', 'success')
+        return
+      }
+      const phase = this.phaseStore.copyPhase(
+        request.processId,
+        request.sourceSequenceId,
+        request.sourcePhaseId,
+        request.targetSequenceId,
+        request.number,
+        request.name
+      )
+      this.phaseStore.persist()
+      this.syncPhaseContextBar()
+      await this.activateWorkspacePhase(
+        request.processId,
+        request.targetSequenceId,
+        phase.id
+      )
+      this.showMessage(`Phase ${phase.number} copied`, 'success')
+    } catch (error) {
+      log.error('Failed to copy phase:', error)
+      this.showMessage(String(error), 'error')
+      throw error
+    }
   }
 
   private async activateWorkspaceSequence(
@@ -1904,6 +2274,22 @@ class CadViewerApp {
     sequenceId: string
   ) {
     this.captureLoadedPhaseState()
+    if (this.phaseRepository) {
+      try {
+        const wasLoaded =
+          this.loadedPhase?.processId === processId &&
+          this.loadedPhase.sequenceId === sequenceId
+        await this.phaseRepository.deleteSequence(sequenceId)
+        await this.reloadBackendWorkspace(processId)
+        if (wasLoaded) this.invalidateLoadedPhaseBinding()
+        this.showMessage('Sequence 已从后台删除', 'success')
+      } catch (error) {
+        log.error('Failed to delete backend Sequence:', error)
+        this.showMessage('Sequence 删除失败', 'error')
+        throw error
+      }
+      return
+    }
     const stateBeforeDelete = this.phaseStore.snapshot()
     const sequence = stateBeforeDelete.processes
       .find(process => process.id === processId)
@@ -1969,6 +2355,10 @@ class CadViewerApp {
 
   private async createWorkspacePhase(request: NewPhaseRequest) {
     try {
+      if (this.phaseRepository) {
+        await this.createBackendPhase(request)
+        return
+      }
       let source: Parameters<PhaseWorkspaceStore['createPhase']>[0]['source']
       if (request.sourceKind === 'previous') {
         source = {
@@ -2014,12 +2404,86 @@ class CadViewerApp {
     }
   }
 
+  private async createBackendPhase(request: NewPhaseRequest): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    const state = this.phaseStore.snapshot()
+    const sequence = state.processes
+      .find(process => process.id === request.processId)
+      ?.sequences.find(item => item.id === request.sequenceId)
+    if (!sequence) throw new Error('Sequence was not found')
+
+    let sourcePhase: (typeof sequence.phases)[number] | undefined
+    if (request.sourceKind === 'previous') {
+      sourcePhase = sequence.phases[sequence.phases.length - 1]
+      if (!sourcePhase) throw new Error('上一 Phase 不存在')
+    } else if (request.sourceKind === 'history') {
+      sourcePhase = sequence.phases.find(
+        phase => phase.id === request.sourcePhaseId
+      )
+      if (!sourcePhase) throw new Error('历史 Phase 不存在')
+    }
+
+    let drawing: { fileId: number; displayName: string } | undefined
+    if (request.sourceKind === 'local') {
+      if (!request.file) throw new Error('请选择 DWG 文件')
+      drawing = await repository.uploadDrawing(request.file)
+      if (request.drawingDisplayName.trim()) {
+        drawing.displayName = request.drawingDisplayName.trim()
+      }
+    } else if (request.sourceKind === 'url' || request.sourceKind === 'blank') {
+      throw new Error('实际后台仅支持上传文件，暂不支持 URL 或空白图纸')
+    }
+
+    const phaseId = await repository.createPhase({
+      sequenceId: request.sequenceId,
+      number: request.number,
+      name: request.name,
+      data: repository.createPhaseData(sourcePhase, drawing)
+    })
+    await this.reloadBackendWorkspace(
+      request.processId,
+      request.sequenceId,
+      String(phaseId)
+    )
+    await this.activateWorkspacePhase(
+      request.processId,
+      request.sequenceId,
+      String(phaseId),
+      false
+    )
+    this.showMessage(`Phase ${request.number} 已保存到后台`, 'success')
+  }
+
   private async deleteWorkspacePhase(
     processId: string,
     sequenceId: string,
     phaseId: string
   ) {
     try {
+      if (this.phaseRepository) {
+        this.cancelBackendPhaseSave(phaseId)
+        const wasLoaded =
+          this.loadedPhase?.processId === processId &&
+          this.loadedPhase.sequenceId === sequenceId &&
+          this.loadedPhase.phaseId === phaseId
+        await this.phaseRepository.deletePhase(phaseId)
+        const workspace = await this.phaseRepository.load()
+        this.phaseStore = new PhaseWorkspaceStore(workspace)
+        const nextPhase = workspace.processes
+          .find(process => process.id === processId)
+          ?.sequences.find(sequence => sequence.id === sequenceId)?.phases[0]
+        this.phaseStore.activate(processId, sequenceId, nextPhase?.id)
+        this.phaseStore.persist()
+        if (wasLoaded) this.invalidateLoadedPhaseBinding()
+        this.phasePanel?.render()
+        this.syncPhaseContextBar()
+        if (wasLoaded && nextPhase) {
+          await this.activateWorkspacePhase(processId, sequenceId, nextPhase.id)
+        }
+        this.showMessage('Phase 已从后台删除', 'success')
+        return
+      }
       const stateBeforeDelete = this.phaseStore.snapshot()
       const phase = stateBeforeDelete.processes
         .find(process => process.id === processId)
@@ -2074,6 +2538,74 @@ class CadViewerApp {
     }
   }
 
+  private async renameBackendPhase(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    name: string
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      this.cancelBackendPhaseSave(phaseId)
+      const sequence = this.phaseStore
+        .snapshot()
+        .processes.find(process => process.id === processId)
+        ?.sequences.find(item => item.id === sequenceId)
+      const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
+      const phase =
+        phaseIndex !== undefined && phaseIndex >= 0
+          ? sequence?.phases[phaseIndex]
+          : undefined
+      if (!phase) throw new Error('Phase was not found')
+      await repository.updatePhase(
+        sequenceId,
+        { ...phase, name },
+        phaseIndex! + 1
+      )
+      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+      this.showMessage('Phase 已更新', 'success')
+    } catch (error) {
+      log.error('Failed to rename backend Phase:', error)
+      this.showMessage('Phase 更新失败', 'error')
+    }
+  }
+
+  private async reorderBackendPhase(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    targetIndex: number
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      this.cancelBackendPhaseSave(phaseId)
+      const sequence = this.phaseStore
+        .snapshot()
+        .processes.find(process => process.id === processId)
+        ?.sequences.find(item => item.id === sequenceId)
+      if (!sequence) throw new Error('Sequence was not found')
+      const phases = [...sequence.phases]
+      const currentIndex = phases.findIndex(item => item.id === phaseId)
+      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= phases.length) {
+        throw new Error('Phase target index is out of range')
+      }
+      const [phase] = phases.splice(currentIndex, 1)
+      phases.splice(targetIndex, 0, phase)
+      await Promise.all(
+        phases.map((item, index) =>
+          repository.updatePhase(sequenceId, item, index + 1)
+        )
+      )
+      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+      this.showMessage('Phase 顺序已更新', 'success')
+    } catch (error) {
+      log.error('Failed to reorder backend Phase:', error)
+      this.showMessage('Phase 排序失败', 'error')
+    }
+  }
+
   private async createDrawingAsset(
     request: NewPhaseRequest | DrawingAssociationRequest
   ): Promise<DrawingAssetRef> {
@@ -2103,6 +2635,10 @@ class CadViewerApp {
     let drawing: DrawingAssetRef | undefined
     try {
       this.captureLoadedPhaseState()
+      if (this.phaseRepository) {
+        await this.associateBackendDrawing(request)
+        return
+      }
       let removed: DrawingAssetRef | undefined
       if (request.sourceKind === 'marked') {
         if (
@@ -2151,6 +2687,116 @@ class CadViewerApp {
       log.error('Failed to associate phase drawing:', error)
       this.showMessage(String(error), 'error')
       throw error
+    }
+  }
+
+  private async associateBackendDrawing(
+    request: DrawingAssociationRequest
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    const state = this.phaseStore.snapshot()
+    const sequence = state.processes
+      .find(process => process.id === request.processId)
+      ?.sequences.find(item => item.id === request.sequenceId)
+    const phaseIndex = sequence?.phases.findIndex(
+      item => item.id === request.phaseId
+    )
+    const phase =
+      phaseIndex !== undefined && phaseIndex >= 0
+        ? sequence?.phases[phaseIndex]
+        : undefined
+    if (!phase) throw new Error('Phase was not found')
+
+    let fileId: number
+    let displayName: string
+    if (request.sourceKind === 'local') {
+      if (!request.file) throw new Error('请选择 DWG 文件')
+      const uploaded = await repository.uploadDrawing(request.file)
+      fileId = uploaded.fileId
+      displayName = request.drawingDisplayName.trim() || uploaded.displayName
+    } else if (request.sourceKind === 'marked') {
+      const source = state.processes
+        .find(process => process.id === request.sourceProcessId)
+        ?.sequences.find(item => item.id === request.sourceSequenceId)
+        ?.phases.find(item => item.id === request.sourcePhaseId)
+      if (!source || source.drawing.kind !== 'assigned') {
+        throw new Error('所选 Phase 未关联后台图纸')
+      }
+      const match = /^file:(\d+)$/.exec(source.drawing.assetId)
+      if (!match) throw new Error('所选 Phase 不是后台图纸')
+      fileId = Number(match[1])
+      displayName =
+        request.drawingDisplayName.trim() || source.drawing.displayName
+    } else {
+      throw new Error('实际后台仅支持上传文件或复用已标记 Phase 图纸')
+    }
+
+    this.cancelBackendPhaseSave(request.phaseId)
+    await repository.updatePhase(
+      request.sequenceId,
+      {
+        ...phase,
+        drawing: {
+          kind: 'assigned',
+          assetId: `file:${fileId}`,
+          displayName
+        }
+      },
+      phaseIndex! + 1
+    )
+    await this.reloadBackendWorkspace(
+      request.processId,
+      request.sequenceId,
+      request.phaseId
+    )
+    await this.activateWorkspacePhase(
+      request.processId,
+      request.sequenceId,
+      request.phaseId,
+      false
+    )
+    this.showMessage('阶段图纸已保存到后台', 'success')
+  }
+
+  private async renameBackendDrawing(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    name: string
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      const sequence = this.phaseStore
+        .snapshot()
+        .processes.find(process => process.id === processId)
+        ?.sequences.find(item => item.id === sequenceId)
+      const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
+      const phase =
+        phaseIndex !== undefined && phaseIndex >= 0
+          ? sequence?.phases[phaseIndex]
+          : undefined
+      if (!phase || phase.drawing.kind !== 'assigned') {
+        throw new Error('Phase drawing was not found')
+      }
+      const displayName = name.trim()
+      if (!displayName) throw new Error('Drawing display name is required')
+      this.cancelBackendPhaseSave(phaseId)
+      await repository.updatePhase(
+        sequenceId,
+        {
+          ...phase,
+          drawing: { ...phase.drawing, displayName }
+        },
+        phaseIndex! + 1
+      )
+      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+      if (this.loadedPhase?.phaseId === phaseId) document.title = displayName
+      this.showMessage('图纸显示名已更新', 'success')
+    } catch (error) {
+      log.error('Failed to rename backend drawing:', error)
+      this.showMessage('图纸显示名更新失败', 'error')
     }
   }
 
@@ -2396,12 +3042,13 @@ class CadViewerApp {
     const layout = view.cadScene.activeLayout
     if (!layout) return
 
-    for (const ownerId of this.selectedObjectIds) {
-      this.openFlowBoundary(ownerId)
-      this.setDeviceState(ownerId, 'open')
-      this.logOpenFlowConnection(ownerId)
-      this.openHighlightGroups.set(ownerId, this.getOpenHighlightObjectIds(ownerId))
-    }
+    const ownerId = this.selectedObjectIds[0]
+    this.removeOpenHighlight()
+    this.runtimeDeviceStates = {}
+    this.openFlowBoundary(ownerId)
+    this.setDeviceState(ownerId, 'open')
+    this.logOpenFlowConnection(ownerId)
+    this.openHighlightGroups.set(ownerId, this.getOpenHighlightObjectIds(ownerId))
 
     this.recomputeOpenHighlightGroups()
     this.clearViewerSelection()
@@ -2435,10 +3082,7 @@ class CadViewerApp {
   }
 
   private getOpenHighlightObjectIds(objectId: AcDbObjectId) {
-    return new Set<AcDbObjectId>([
-      objectId,
-      ...this.getConnectedObjectIds(objectId)
-    ])
+    return new Set<AcDbObjectId>([objectId])
   }
 
   private logOpenFlowConnection(objectId: AcDbObjectId) {
@@ -2509,14 +3153,6 @@ class CadViewerApp {
     }
   }
 
-  private getConnectedObjectIds(objectId: AcDbObjectId) {
-    const { connectedHandles } = this.getFlowConnectionTraversal(objectId)
-
-    return [...connectedHandles]
-      .map(handleId => this.resolveObjectIdByHandle(handleId))
-      .filter((id): id is AcDbObjectId => id != null)
-  }
-
   private isClosedFlowBoundary(
     handleId: number,
     traversableBoundaryKeys: Set<string>
@@ -2555,18 +3191,6 @@ class CadViewerApp {
     handleKeysFromObjectId(objectId).forEach(handleKey => {
       this.openFlowBoundaryHandleKeys.delete(handleKey)
     })
-  }
-
-  private resolveObjectIdByHandle(handleId: number) {
-    const db = AcApDocManager.instance.curDocument?.database
-    if (!db) return undefined
-
-    for (const handleKey of handleKeysFromNumber(handleId)) {
-      const entity = db.tables.blockTable.getEntityById(handleKey)
-      if (entity) return entity.objectId
-    }
-
-    return undefined
   }
 
   private resolveObjectIdByHandleKey(handleKey: string) {
@@ -2619,7 +3243,7 @@ class CadViewerApp {
       if (!root) return
 
       root.name = 'SelectionOpenHighlight'
-      this.applyOpenHighlightStyle(root)
+      this.applyOpenHighlightStyle(root, id)
       ;(layout.internalObject as LayoutObjectHost).add(root)
       this.openHighlightRoots.set(id, root)
       changedHighlight = true
@@ -2638,8 +3262,207 @@ class CadViewerApp {
     return ids
   }
 
-  private getPdfFlowPathObjectIds() {
-    return this.getReferencedOpenHighlightIds()
+  private getPdfEntityStyleOverrides() {
+    const draft = this.getLoadedHighlightStyleDraft()
+    const flowState = this.getLoadedFlowState()
+    if (!draft || !flowState) return []
+    const groups = new Map<
+      string,
+      { entityIds: Set<string>; style: ResolvedEntityPresentation }
+    >()
+    for (const flowPath of flowState.flowPaths) {
+      flowPath.handleKeys.forEach(handleKey => {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        if (!ownerId) return
+        const style = resolveEntityPresentation(draft.presentationProfile, {
+          flowPath
+        })
+        if (!style.visible) return
+        const group = groups.get(style.key) ?? { entityIds: new Set(), style }
+        const highlightedIds =
+          this.openHighlightGroups.get(ownerId) ??
+          this.getOpenHighlightObjectIds(ownerId)
+        highlightedIds.forEach(id => group.entityIds.add(String(id)))
+        groups.set(style.key, group)
+
+        const deviceState = this.runtimeDeviceStates[handleKey]
+        if (!deviceState) return
+        const deviceStyle = resolveEntityPresentation(draft.presentationProfile, {
+          deviceState
+        })
+        if (!deviceStyle.visible) return
+        const deviceGroup = groups.get(deviceStyle.key) ?? {
+          entityIds: new Set(),
+          style: deviceStyle
+        }
+        deviceGroup.entityIds.add(String(ownerId))
+        groups.set(deviceStyle.key, deviceGroup)
+      })
+    }
+    return [...groups.values()].map(({ entityIds, style }) => ({
+      entityIds,
+      strokeColor: style.color,
+      strokeWidthPx: style.lineWidthPx,
+      opacity: style.opacity
+    }))
+  }
+
+  private getHighlightStyleDraft(processId: string): HighlightStyleDraft | undefined {
+    const process = this.phaseStore
+      .snapshot()
+      .processes.find(item => item.id === processId)
+    return process
+      ? { presentationProfile: process.presentationProfile }
+      : undefined
+  }
+
+  private getLoadedHighlightStyleDraft() {
+    return this.loadedPhase
+      ? this.getHighlightStyleDraft(this.loadedPhase.processId)
+      : undefined
+  }
+
+  private getLoadedFlowState(): FlowStateSnapshot | undefined {
+    if (!this.loadedPhase) return undefined
+    const loaded = this.loadedPhase
+    return this.phaseStore
+      .snapshot()
+      .processes.find(process => process.id === loaded.processId)
+      ?.sequences.find(sequence => sequence.id === loaded.sequenceId)
+      ?.phases.find(phase => phase.id === loaded.phaseId)?.flowState
+  }
+
+  private openHighlightStyleDialog(processId: string) {
+    const value = this.getHighlightStyleDraft(processId)
+    if (!value || !this.phasePanel) return
+    this.phasePanel.element.querySelector('.highlight-style-modal')?.remove()
+    const dialog = new HighlightStyleDialog({
+      value,
+      getLocale: () => this.appLocale,
+      onPreview: draft => this.applyHighlightStyleDraft(draft),
+      onCancel: draft => this.applyHighlightStyleDraft(draft),
+      onApply: draft => {
+        if (this.phaseRepository) {
+          void this.saveBackendPresentationProfile(processId, draft)
+          return
+        }
+        this.phaseStore.updatePresentationProfile(
+          processId,
+          draft.presentationProfile
+        )
+        this.phaseStore.persist()
+        if (this.loadedPhase?.processId === processId) {
+          this.applyHighlightStyleDraft(draft)
+        }
+        this.phasePanel?.render()
+      },
+      onClose: () => undefined
+    })
+    this.phasePanel.element.append(dialog.element)
+    dialog.element.querySelector<HTMLElement>('[role="tab"]')?.focus()
+  }
+
+  private async saveBackendPresentationProfile(
+    processId: string,
+    draft: HighlightStyleDraft
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    try {
+      const process = this.phaseStore
+        .snapshot()
+        .processes.find(item => item.id === processId)
+      if (!process) throw new Error('Process was not found')
+      await repository.updateProcess({
+        ...process,
+        presentationProfile: draft.presentationProfile
+      })
+      this.phaseStore.updatePresentationProfile(
+        processId,
+        draft.presentationProfile
+      )
+      this.phaseStore.persist()
+      if (this.loadedPhase?.processId === processId) {
+        this.applyHighlightStyleDraft(draft)
+      }
+      this.phasePanel?.render()
+      this.showMessage('Process 展示配置已保存', 'success')
+    } catch (error) {
+      log.error('Failed to save backend Process profile:', error)
+      this.showMessage('Process 展示配置保存失败', 'error')
+    }
+  }
+
+  private applyHighlightStyleDraft(draft: HighlightStyleDraft) {
+    this.openHighlightRoots.forEach((root, objectId) => {
+      this.phasePresentationController.apply(
+        root as unknown as Parameters<PhasePresentationController['apply']>[0],
+        this.resolvePresentationForObjectId(objectId, draft)
+      )
+    })
+    const view = AcApDocManager.instance.curView
+    if (view) view.isDirty = true
+  }
+
+  private captureFlowPaths(): FlowStateSnapshot['flowPaths'] {
+    const activeHandles = [...this.openFlowBoundaryHandleKeys].sort()
+    return activeHandles.length && this.loadedPhase
+      ? [
+          {
+            id: `flow-default-${this.loadedPhase.phaseId}`,
+            name: '默认流路',
+            handleKeys: activeHandles
+          }
+        ]
+      : []
+  }
+
+  private resolvePresentationForObjectId(
+    objectId: AcDbObjectId,
+    draft = this.getLoadedHighlightStyleDraft()
+  ): ResolvedEntityPresentation {
+    if (!draft) {
+      return resolveEntityPresentation({
+        defaultFlowStyle: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true },
+        unknownDeviceStyle: { color: 0x546e7a, lineWidthPx: 2, opacity: 1, visible: true },
+        dimmedBaseStyle: { color: 0x9e9e9e, opacity: 0.35 },
+        deviceStyles: {
+          valve: {
+            open: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true },
+            closed: { color: 0xd32f2f, lineWidthPx: 3, opacity: 1, visible: true },
+            pulse: { color: 0xf9a825, lineWidthPx: 3, opacity: 1, visible: true }
+          },
+          motor: {
+            start: { color: 0x00796b, lineWidthPx: 3, opacity: 1, visible: true },
+            stop: { color: 0x616161, lineWidthPx: 2, opacity: 1, visible: true }
+          },
+          processEquipment: {
+            active: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true }
+          }
+        },
+        deviceStylesInitialized: true,
+        utilities: []
+      })
+    }
+    for (const flowPath of this.getLoadedFlowState()?.flowPaths ?? []) {
+      for (const handleKey of flowPath.handleKeys) {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        if (!ownerId) continue
+        const group =
+          this.openHighlightGroups.get(ownerId) ??
+          this.getOpenHighlightObjectIds(ownerId)
+        if (group.has(objectId)) {
+          const isOwnerObject = objectId === ownerId
+          return resolveEntityPresentation(draft.presentationProfile, {
+            flowPath,
+            deviceState: isOwnerObject
+              ? this.runtimeDeviceStates[handleKey]
+              : undefined
+          })
+        }
+      }
+    }
+    return resolveEntityPresentation(draft.presentationProfile)
   }
 
   private clearViewerSelection() {
@@ -2678,20 +3501,77 @@ class CadViewerApp {
 
   private captureLoadedPhaseState() {
     if (!this.loadedPhase) return
+    const currentPhase = this.phaseStore
+      .snapshot()
+      .processes.find(process => process.id === this.loadedPhase?.processId)
+      ?.sequences.find(
+        sequence => sequence.id === this.loadedPhase?.sequenceId
+      )
+      ?.phases.find(phase => phase.id === this.loadedPhase?.phaseId)
+    if (!currentPhase) return
+    const nextState = {
+      flowState: {
+        flowPaths: this.captureFlowPaths()
+      },
+      deviceStates: this.runtimeDeviceStates
+    }
+    const stateChanged =
+      JSON.stringify(currentPhase.flowState) !==
+        JSON.stringify(nextState.flowState) ||
+      JSON.stringify(currentPhase.deviceStates) !==
+        JSON.stringify(nextState.deviceStates)
+    if (!stateChanged) return
     this.phaseStore.updatePhaseState(
       this.loadedPhase.processId,
       this.loadedPhase.sequenceId,
       this.loadedPhase.phaseId,
-      {
-        flowState: {
-          openBoundaryHandleKeys: [...this.openFlowBoundaryHandleKeys].sort()
-        },
-        deviceStates: this.runtimeDeviceStates
-      }
+      nextState
     )
     this.phaseStore.persist()
+    this.scheduleBackendPhaseSave(
+      this.loadedPhase.processId,
+      this.loadedPhase.sequenceId,
+      this.loadedPhase.phaseId
+    )
     this.phasePanel?.render()
     this.syncPhaseContextBar()
+  }
+
+  private scheduleBackendPhaseSave(
+    processId: string,
+    sequenceId: string,
+    phaseId: string
+  ): void {
+    const repository = this.phaseRepository
+    if (!repository) return
+    this.cancelBackendPhaseSave(phaseId)
+    const timer = window.setTimeout(async () => {
+      this.backendPhaseSaveTimers.delete(phaseId)
+      try {
+        const sequence = this.phaseStore
+          .snapshot()
+          .processes.find(process => process.id === processId)
+          ?.sequences.find(item => item.id === sequenceId)
+        const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
+        const phase =
+          phaseIndex !== undefined && phaseIndex >= 0
+            ? sequence?.phases[phaseIndex]
+            : undefined
+        if (!phase) return
+        await repository.updatePhase(sequenceId, phase, phaseIndex! + 1)
+      } catch (error) {
+        log.error('Failed to save backend Phase state:', error)
+        this.showMessage('Phase 状态保存失败', 'error')
+      }
+    }, 300)
+    this.backendPhaseSaveTimers.set(phaseId, timer)
+  }
+
+  private cancelBackendPhaseSave(phaseId: string): void {
+    const timer = this.backendPhaseSaveTimers.get(phaseId)
+    if (timer === undefined) return
+    window.clearTimeout(timer)
+    this.backendPhaseSaveTimers.delete(phaseId)
   }
 
   private applyPendingPhaseState(): boolean {
@@ -2725,7 +3605,7 @@ class CadViewerApp {
         { ...device }
       ])
     )
-    phase.flowState.openBoundaryHandleKeys.forEach(handleKey => {
+    phase.flowState.flowPaths.flatMap(flowPath => flowPath.handleKeys).forEach(handleKey => {
       this.openFlowBoundaryHandleKeys.add(handleKey)
       const ownerId = this.resolveObjectIdByHandleKey(handleKey)
       if (ownerId) {
@@ -2755,32 +3635,24 @@ class CadViewerApp {
     return true
   }
 
-  private applyOpenHighlightStyle(root: PreviewRoot) {
-    root.renderOrder = 10000
-    root.traverse(object => {
-      object.renderOrder = 10000
-      if (!this.hasObjectMaterial(object)) return
-      this.tintObjectMaterial(object.material)
-    })
-  }
-
-  private tintObjectMaterial(material: PreviewMaterial | PreviewMaterial[]) {
-    if (Array.isArray(material)) {
-      material.forEach(item => this.tintObjectMaterial(item))
-      return
-    }
-
-    material.color?.set(OPEN_HIGHLIGHT_COLOR)
-    material.emissive?.set(OPEN_HIGHLIGHT_COLOR)
-    material.uniforms?.u_color?.value?.set(OPEN_HIGHLIGHT_COLOR)
-    material.uniforms?.u_startColor?.value?.set(OPEN_HIGHLIGHT_COLOR)
-    material.uniforms?.u_endColor?.value?.set(OPEN_HIGHLIGHT_COLOR)
-    material.depthTest = false
-    material.depthWrite = false
-    material.needsUpdate = true
+  private applyOpenHighlightStyle(root: PreviewRoot, objectId: AcDbObjectId) {
+    const view = AcApDocManager.instance.curView
+    upgradePreviewWideLines(
+      root,
+      this.resolvePresentationForObjectId(objectId),
+      view.width,
+      view.height
+    )
+    this.phasePresentationController.apply(
+      root as unknown as Parameters<PhasePresentationController['apply']>[0],
+      this.resolvePresentationForObjectId(objectId)
+    )
   }
 
   private disposePreviewRoot(root: PreviewRoot) {
+    this.phasePresentationController.forget(
+      root as unknown as Parameters<PhasePresentationController['forget']>[0]
+    )
     root.traverse(object => {
       if (this.hasObjectMaterial(object)) {
         const material = object.material
@@ -2858,6 +3730,11 @@ class CadViewerApp {
     })
 
     window.addEventListener('resize', () => {
+      const view = AcApDocManager.instance.curView
+      if (view) {
+        this.phasePresentationController.resize(view.width, view.height)
+        view.isDirty = true
+      }
       if (!this.isMobileLayout()) {
         this.setFileSidebarExpanded(false)
         return
@@ -3116,12 +3993,16 @@ class CadViewerApp {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     injectAppShellResponsiveStyles()
+    injectConfirmationModalStyles()
+    injectParsingDetailsStyles()
     injectUiReferenceThemeStyles()
     injectPhaseWorkspaceStyles()
     new CadViewerApp()
   })
 } else {
   injectAppShellResponsiveStyles()
+  injectConfirmationModalStyles()
+  injectParsingDetailsStyles()
   injectUiReferenceThemeStyles()
   injectPhaseWorkspaceStyles()
   new CadViewerApp()

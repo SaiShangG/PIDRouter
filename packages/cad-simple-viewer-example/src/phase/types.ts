@@ -1,4 +1,54 @@
-export const PHASE_WORKSPACE_SCHEMA_VERSION = 3
+export const PHASE_WORKSPACE_SCHEMA_VERSION = 4
+
+export interface HighlightStyle {
+  color: number
+  lineWidthPx: number
+  opacity: number
+  visible: boolean
+}
+
+export interface DeviceHighlightStyles {
+  valve: {
+    open: HighlightStyle | null
+    closed: HighlightStyle | null
+    pulse: HighlightStyle | null
+  }
+  motor: {
+    start: HighlightStyle | null
+    stop: HighlightStyle | null
+  }
+  processEquipment: {
+    active: HighlightStyle | null
+  }
+}
+
+export interface UtilityStyleDefinition {
+  id: string
+  name: string
+  style: HighlightStyle
+  enabled: boolean
+  order: number
+}
+
+export interface PresentationProfile {
+  defaultFlowStyle: HighlightStyle
+  unknownDeviceStyle: HighlightStyle | null
+  dimmedBaseStyle: {
+    color: number
+    opacity: number
+  }
+  deviceStyles: DeviceHighlightStyles
+  deviceStylesInitialized: boolean
+  utilities: UtilityStyleDefinition[]
+}
+
+export interface FlowPathStatus {
+  id: string
+  name: string
+  handleKeys: string[]
+  utilityId?: string
+  styleOverride?: Partial<HighlightStyle>
+}
 
 export type DrawingAssetKind = 'local' | 'url' | 'blank'
 
@@ -9,7 +59,14 @@ export interface DrawingAssetRef {
   url?: string
 }
 
-export type DeviceMode = 'open' | 'closed' | 'start' | 'stop' | 'unknown'
+export type DeviceMode =
+  | 'open'
+  | 'closed'
+  | 'pulse'
+  | 'start'
+  | 'stop'
+  | 'active'
+  | 'unknown'
 
 export interface DeviceState {
   key: string
@@ -18,7 +75,7 @@ export interface DeviceState {
 }
 
 export interface FlowStateSnapshot {
-  openBoundaryHandleKeys: string[]
+  flowPaths: FlowPathStatus[]
 }
 
 export type PhaseDrawingAssociation =
@@ -50,6 +107,7 @@ export interface SequenceDefinition {
 export interface ProcessDefinition {
   id: string
   name: string
+  presentationProfile: PresentationProfile
   sequences: SequenceDefinition[]
   activeSequenceId?: string
   createdAt: string

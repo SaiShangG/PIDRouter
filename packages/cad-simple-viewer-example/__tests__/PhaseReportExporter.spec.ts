@@ -1,17 +1,19 @@
 import JSZip from 'jszip'
 
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type { PhaseWorkspaceState } from '../src/phase/types'
 import { PhaseReportExporter } from '../src/report/PhaseReportExporter'
 import type { ReportManifest } from '../src/report/reportManifest'
 
 const workspace: PhaseWorkspaceState = {
-  version: 3,
+  version: 4,
   activeProcessId: 'process',
   drawingAssets: {},
   processes: [
     {
       id: 'process',
       name: 'CIP',
+      presentationProfile: createDefaultPresentationProfile(),
       activeSequenceId: 'sequence-1',
       createdAt: 'now',
       updatedAt: 'now',
@@ -27,7 +29,7 @@ const workspace: PhaseWorkspaceState = {
           number: phaseNumber,
           name: `Step ${phaseNumber}`,
           drawing: { kind: 'unassigned' as const },
-          flowState: { openBoundaryHandleKeys: [] },
+          flowState: { flowPaths: [] },
           deviceStates: {},
           createdAt: 'now',
           updatedAt: 'now'

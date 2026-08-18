@@ -98,6 +98,26 @@ export function injectUiReferenceThemeStyles() {
 
     .phase-sidebar-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+    .phase-sidebar-style-button {
+      flex: 0 0 30px;
+      width: 30px;
+      height: 30px;
+      margin-left: auto;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #b7d4cb;
+      border-radius: 5px;
+      color: #087b58;
+      background: #f5fbf9;
+      cursor: pointer;
+    }
+
+    .phase-sidebar-style-button:hover:not(:disabled) { border-color: #087b58; background: #e5f5ef; }
+    .phase-sidebar-style-button:disabled { opacity: .38; cursor: not-allowed; }
+    .phase-sidebar-style-button .phase-ui-icon { width: 16px; height: 16px; }
+
     .language-toggle-button {
       flex: 0 0 30px;
       width: 30px;

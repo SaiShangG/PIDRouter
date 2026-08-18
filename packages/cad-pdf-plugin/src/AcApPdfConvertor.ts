@@ -10,6 +10,14 @@ import { svg2pdf } from 'svg2pdf.js'
 const DEFAULT_PDF_SIZE_MM = { width: 297, height: 210 }
 const MAX_PDF_PAGE_SIDE_MM = 3360
 const ENTITY_BATCH_SIZE = 100
+export const PDF_STROKE_POINTS_PER_VIEWER_PIXEL = 0.75
+
+export interface PdfEntityStyleOverride {
+  entityIds: ReadonlySet<string>
+  strokeColor: number
+  strokeWidthPx: number
+  opacity: number
+}
 
 /**
  * Rectangular world-space bounds used as the export view frame for the PDF.
@@ -37,6 +45,8 @@ export interface AcApPdfConvertOptions {
   highlightedEntityIds?: ReadonlySet<string>
   /** RGB colour applied to highlighted entity strokes. */
   highlightColor?: number
+  /** Structured entity stroke styles. Takes precedence over legacy highlight options. */
+  entityStyleOverrides?: readonly PdfEntityStyleOverride[]
 }
 
 type PdfViewBox = { x: number; y: number; width: number; height: number }
@@ -84,13 +94,32 @@ export class AcApPdfConvertor {
         await new Promise<void>(resolve => setTimeout(resolve, 0))
       }
     }
-    if (options.highlightedEntityIds && options.highlightColor != null) {
-      renderer.overrideEntityStrokeColors(
-        options.highlightedEntityIds,
-        options.highlightColor
-      )
+    const styleOverrides = this.resolveEntityStyleOverrides(options)
+    if (styleOverrides.length > 0) {
+      renderer.overrideEntityStyles(styleOverrides)
     }
     return renderer.exportAsync()
+  }
+
+  private resolveEntityStyleOverrides(options: AcApPdfConvertOptions) {
+    if (options.entityStyleOverrides) {
+      return options.entityStyleOverrides.map(override => ({
+        ...override,
+        strokeWidthPx:
+          override.strokeWidthPx * PDF_STROKE_POINTS_PER_VIEWER_PIXEL
+      }))
+    }
+    if (options.highlightedEntityIds && options.highlightColor != null) {
+      return [
+        {
+          entityIds: options.highlightedEntityIds,
+          strokeColor: options.highlightColor,
+          strokeWidthPx: 1,
+          opacity: 1
+        }
+      ]
+    }
+    return []
   }
 
   /** Renders the active drawing as standalone PDF bytes without downloading. */

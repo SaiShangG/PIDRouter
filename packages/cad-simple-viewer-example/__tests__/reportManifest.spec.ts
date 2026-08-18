@@ -1,4 +1,5 @@
 import type { PhaseWorkspaceState } from '../src/phase/types'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import { ReportManifestStore } from '../src/report/reportManifest'
 
 const createWorkspace = (
@@ -9,12 +10,13 @@ const createWorkspace = (
     drawing: { id: 'drawing', kind: 'blank' as const, sourceName: 'Blank.dwg' }
   }
   return {
-    version: 3,
+    version: 4,
     drawingAssets,
     processes: [
       {
         id: 'process',
         name: 'CIP',
+        presentationProfile: createDefaultPresentationProfile(),
         createdAt: 'now',
         updatedAt: 'now',
         sequences: Array.from({ length: sequenceCount }, (_, sequenceIndex) => ({
@@ -32,7 +34,7 @@ const createWorkspace = (
               assetId: 'drawing',
               displayName: 'Blank.dwg'
             },
-            flowState: { openBoundaryHandleKeys: [] },
+            flowState: { flowPaths: [] },
             deviceStates: {},
             createdAt: 'now',
             updatedAt: 'now'
