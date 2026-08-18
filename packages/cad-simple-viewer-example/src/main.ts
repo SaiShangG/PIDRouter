@@ -59,6 +59,7 @@ import {
   toggleAppLocale,
   translate
 } from './locale'
+import { startProcessAssistantMock } from './mocks/process-assistant/start'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import { createPhaseIcon } from './phase/phaseIcons'
@@ -3990,20 +3991,18 @@ class CadViewerApp {
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    injectAppShellResponsiveStyles()
-    injectConfirmationModalStyles()
-    injectParsingDetailsStyles()
-    injectUiReferenceThemeStyles()
-    injectPhaseWorkspaceStyles()
-    new CadViewerApp()
-  })
-} else {
+async function bootstrap(): Promise<void> {
+  await startProcessAssistantMock()
   injectAppShellResponsiveStyles()
   injectConfirmationModalStyles()
   injectParsingDetailsStyles()
   injectUiReferenceThemeStyles()
   injectPhaseWorkspaceStyles()
   new CadViewerApp()
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => void bootstrap())
+} else {
+  void bootstrap()
 }
