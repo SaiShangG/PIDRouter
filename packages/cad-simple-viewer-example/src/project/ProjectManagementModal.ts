@@ -5,7 +5,10 @@ import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import type { ProjectRecord, ProjectRepository } from './types'
 
-const formatDateTime = (value: string) => new Date(value).toLocaleString()
+export interface ProjectManagementModalOptions {
+  onSelect?: (project: ProjectRecord) => void | Promise<void>
+  onDelete?: (projectId: number) => void | Promise<void>
+}
 
 const createIconButton = (
   title: string,
@@ -26,8 +29,9 @@ export class ProjectManagementModal {
   readonly element = document.createElement('div')
   private projects: ProjectRecord[] = []
   private drawings: DrawingRecord[] = []
-  private selectedProjectId?: string
+  private selectedProjectId?: number
   private name = ''
+  private description = ''
   private selectedDrawingIds = new Set<string>()
   private drawingQuery = ''
   private isEditing = true
@@ -37,7 +41,8 @@ export class ProjectManagementModal {
 
   constructor(
     private readonly repository: ProjectRepository,
-    private readonly drawingRepository: Pick<DrawingRepository, 'list'>
+    private readonly drawingRepository: Pick<DrawingRepository, 'list'>,
+    private readonly options: ProjectManagementModalOptions = {}
   ) {
     this.element.className = 'project-management-modal'
     this.element.hidden = true
@@ -144,13 +149,11 @@ export class ProjectManagementModal {
       name.textContent = project.name
       const details = document.createElement('span')
       details.className = 'project-list-item-details'
-      const owner = document.createElement('span')
-      owner.textContent = project.createdBy
       const count = document.createElement('span')
-      count.textContent = `${project.drawingIds.length} 张 PID`
-      const createdAt = document.createElement('span')
-      createdAt.textContent = `创建于 ${formatDateTime(project.createdAt)}`
-      details.append(owner, count, createdAt)
+      count.textContent = `${project.fileIds.length} 张 PID`
+      const id = document.createElement('span')
+      id.textContent = `ID ${project.id}`
+      details.append(count, id)
       button.append(name, details)
       button.addEventListener('click', () => this.selectProject(project))
       list.append(button)
@@ -220,6 +223,20 @@ export class ProjectManagementModal {
       this.message = ''
     })
     nameLabel.append(nameTitle, nameInput)
+
+    const descriptionLabel = document.createElement('label')
+    const descriptionTitle = document.createElement('span')
+    descriptionTitle.textContent = 'Project 描述'
+    const descriptionInput = document.createElement('textarea')
+    descriptionInput.placeholder = '输入 Project 描述'
+    descriptionInput.value = this.description
+    descriptionInput.readOnly = !this.isEditing
+    descriptionInput.disabled = this.busy
+    descriptionInput.addEventListener('input', () => {
+      this.description = descriptionInput.value
+      this.message = ''
+    })
+    descriptionLabel.append(descriptionTitle, descriptionInput)
 
     const drawingHeader = document.createElement('div')
     drawingHeader.className = 'project-drawing-header'
@@ -295,7 +312,13 @@ export class ProjectManagementModal {
     }
     panel.append(heading)
     if (projectDetails) panel.append(projectDetails)
-    panel.append(nameLabel, drawingHeader, searchLabel, drawingList)
+    panel.append(
+      nameLabel,
+      descriptionLabel,
+      drawingHeader,
+      searchLabel,
+      drawingList
+    )
     if (this.message) {
       const message = document.createElement('p')
       message.className = 'project-message'
@@ -310,11 +333,9 @@ export class ProjectManagementModal {
     const details = document.createElement('dl')
     details.className = 'project-details'
     const fields = [
-      ['创建人', project.createdBy],
-      ['创建时间', formatDateTime(project.createdAt)],
-      ['包含 PID', `${project.drawingIds.length} 张`],
-      ['最后更新', formatDateTime(project.updatedAt)],
-      ['Project ID', project.id]
+      ['描述', project.description || '无'],
+      ['包含 PID', `${project.fileIds.length} 张`],
+      ['Project ID', String(project.id)]
     ]
     fields.forEach(([label, value]) => {
       const field = document.createElement('div')
@@ -363,16 +384,19 @@ export class ProjectManagementModal {
   private selectProject(project: ProjectRecord) {
     this.selectedProjectId = project.id
     this.name = project.name
-    this.selectedDrawingIds = new Set(project.drawingIds)
+    this.description = project.description
+    this.selectedDrawingIds = new Set(project.fileIds.map(String))
     this.drawingQuery = ''
     this.isEditing = false
     this.message = ''
     this.render()
+    void this.options.onSelect?.(project)
   }
 
   private startNewProject() {
     this.selectedProjectId = undefined
     this.name = ''
+    this.description = ''
     this.selectedDrawingIds.clear()
     this.drawingQuery = ''
     this.isEditing = true
@@ -384,7 +408,8 @@ export class ProjectManagementModal {
     const project = this.projects.find(item => item.id === this.selectedProjectId)
     if (!project) return
     this.name = project.name
-    this.selectedDrawingIds = new Set(project.drawingIds)
+    this.description = project.description
+    this.selectedDrawingIds = new Set(project.fileIds.map(String))
     this.drawingQuery = ''
     this.isEditing = false
     this.message = ''
@@ -398,17 +423,22 @@ export class ProjectManagementModal {
     try {
       const input = {
         name: this.name,
-        drawingIds: [...this.selectedDrawingIds]
+        description: this.description,
+        fileIds: [...this.selectedDrawingIds]
+          .map(Number)
+          .filter(id => Number.isInteger(id) && id > 0)
       }
       const saved = this.selectedProjectId
         ? await this.repository.update(this.selectedProjectId, input)
         : await this.repository.create(input)
       this.selectedProjectId = saved.id
       this.name = saved.name
-      this.selectedDrawingIds = new Set(saved.drawingIds)
+      this.description = saved.description
+      this.selectedDrawingIds = new Set(saved.fileIds.map(String))
       this.drawingQuery = ''
       this.isEditing = false
       await this.refresh()
+      await this.options.onSelect?.(saved)
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error)
     } finally {
@@ -431,9 +461,12 @@ export class ProjectManagementModal {
     this.render()
     try {
       await this.repository.delete(project.id)
+      await this.options.onDelete?.(project.id)
       this.selectedProjectId = undefined
       this.name = ''
+      this.description = ''
       this.selectedDrawingIds.clear()
+      this.isEditing = true
       await this.refresh()
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error)

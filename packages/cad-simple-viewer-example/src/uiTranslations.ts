@@ -80,6 +80,7 @@ const pairs: TranslationPair[] = [
   ['此操作将永久删除该 Phase 及其已保存状态，无法撤销。', 'This permanently deletes the Phase and its saved state. This action cannot be undone.'],
   ['确认删除', 'Delete'], ['更换关联图纸', 'Replace assigned drawing'],
   ['关闭关联图纸对话框', 'Close drawing dialog'], ['图纸关联方式', 'Drawing source'],
+  ['使用 Project PID', 'Use Project PID'], ['请选择 Project PID', 'Select a Project PID'],
   ['使用任意已标记 Phase 的图纸', 'Use any marked Phase drawing'], ['使用本地图纸', 'Use local drawing'],
   ['使用图纸 URL', 'Use drawing URL'], ['使用空白图纸', 'Use blank drawing'],
   ['关联本地图纸', 'Local drawing'], ['关联图纸 URL', 'Drawing URL'], ['关联图纸显示名', 'Drawing display name'],

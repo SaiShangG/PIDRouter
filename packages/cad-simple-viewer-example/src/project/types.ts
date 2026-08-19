@@ -1,20 +1,19 @@
 export interface ProjectRecord {
-  id: string
+  id: number
   name: string
-  drawingIds: string[]
-  createdBy: string
-  createdAt: string
-  updatedAt: string
+  description: string
+  fileIds: number[]
 }
 
 export interface ProjectInput {
   name: string
-  drawingIds: string[]
+  description: string
+  fileIds: number[]
 }
 
 export interface ProjectRepository {
   list(): Promise<ProjectRecord[]>
   create(input: ProjectInput): Promise<ProjectRecord>
-  update(id: string, input: ProjectInput): Promise<ProjectRecord>
-  delete(id: string): Promise<void>
+  update(id: number, input: ProjectInput): Promise<ProjectRecord>
+  delete(id: number): Promise<void>
 }

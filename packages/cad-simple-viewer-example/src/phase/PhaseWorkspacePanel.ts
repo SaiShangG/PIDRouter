@@ -38,13 +38,12 @@ export interface DrawingAssociationRequest {
   processId: string
   sequenceId: string
   phaseId: string
-  sourceKind: 'marked' | 'local' | 'url' | 'blank'
+  sourceKind: 'project' | 'marked'
+  fileId?: number
   sourceProcessId?: string
   sourceSequenceId?: string
   sourcePhaseId?: string
   drawingDisplayName: string
-  file?: File
-  url?: string
 }
 
 export interface CopySequenceRequest extends NewSequenceRequest {
@@ -94,7 +93,8 @@ export class PhaseWorkspacePanel {
   constructor(
     private readonly getState: () => PhaseWorkspaceState,
     private readonly actions: PhaseWorkspacePanelActions,
-    private readonly getLocale: () => AppLocale = () => 'zh'
+    private readonly getLocale: () => AppLocale = () => 'zh',
+    private readonly getProjectFileIds: () => readonly number[] = () => []
   ) {
     this.element.className = 'phase-workspace'
     this.render()
@@ -163,6 +163,11 @@ export class PhaseWorkspacePanel {
     input.placeholder = '工艺名称，例如 CIP'
     input.setAttribute('aria-label', '工艺名称')
     const button = this.createButton('创建工艺', true)
+    const updateButtonState = () => {
+      button.disabled = !input.value.trim()
+    }
+    input.addEventListener('input', updateButtonState)
+    updateButtonState()
     button.addEventListener('click', () => {
       if (!input.value.trim()) return
       this.actions.createProcess(input.value)
@@ -1057,29 +1062,36 @@ export class PhaseWorkspacePanel {
     form.className = 'phase-workspace-modal-form phase-drawing-association-form'
     const source = document.createElement('select')
     source.setAttribute('aria-label', '图纸关联方式')
+    const state = this.getState()
+    const projectFileIds = new Set(this.getProjectFileIds())
+    const projectDrawings = Object.values(state.drawingAssets).flatMap(drawing => {
+      const match = /^file:(\d+)$/.exec(drawing.id)
+      const fileId = match ? Number(match[1]) : undefined
+      return fileId && projectFileIds.has(fileId) ? [{ fileId, drawing }] : []
+    })
     const markedSources = this.getState().processes.flatMap(process =>
       process.sequences.flatMap(sequence =>
         sequence.phases.flatMap(phase =>
-          phase.id !== phaseId && phase.drawing.kind === 'assigned'
+          phase.id !== phaseId &&
+          phase.drawing.kind === 'assigned' &&
+          projectFileIds.has(
+            Number(/^file:(\d+)$/.exec(phase.drawing.assetId)?.[1])
+          )
             ? [{ process, sequence, phase }]
             : []
         )
       )
     )
+    source.add(new Option('使用 Project PID', 'project'))
     if (markedSources.length > 0) {
       source.add(new Option('使用任意已标记 Phase 的图纸', 'marked'))
     }
-    source.add(new Option('使用本地图纸', 'local'))
-    source.add(new Option('使用图纸 URL', 'url'))
-    source.add(new Option('使用空白图纸', 'blank'))
-    const file = document.createElement('input')
-    file.type = 'file'
-    file.accept = '.dwg,.dxf'
-    file.setAttribute('aria-label', '关联本地图纸')
-    const url = document.createElement('input')
-    url.type = 'url'
-    url.placeholder = 'https://example.com/drawing.dxf'
-    url.setAttribute('aria-label', '关联图纸 URL')
+    const projectDrawing = document.createElement('select')
+    projectDrawing.setAttribute('aria-label', 'Project PID')
+    projectDrawing.add(new Option('请选择 Project PID', ''))
+    projectDrawings.forEach(({ fileId, drawing }) => {
+      projectDrawing.add(new Option(drawing.sourceName, String(fileId)))
+    })
     const displayName = document.createElement('input')
     displayName.value = currentDisplayName
     displayName.placeholder = '图纸显示名'
@@ -1099,9 +1111,8 @@ export class PhaseWorkspacePanel {
       )
     })
     const sourceField = this.createFormField('关联方式', source)
+    const projectDrawingField = this.createFormField('Project PID', projectDrawing)
     const markedPhaseField = this.createFormField('已标记 Phase', markedPhase)
-    const fileField = this.createFormField('本地图纸', file)
-    const urlField = this.createFormField('图纸 URL', url)
     const displayNameField = this.createFormField('图纸显示名', displayName)
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions'
@@ -1114,9 +1125,8 @@ export class PhaseWorkspacePanel {
     footer.append(cancel, submit)
     form.append(
       sourceField,
+      projectDrawingField,
       markedPhaseField,
-      fileField,
-      urlField,
       displayNameField,
       footer
     )
@@ -1140,20 +1150,32 @@ export class PhaseWorkspacePanel {
       if (event.key === 'Escape') closeModal()
     })
     const syncFields = () => {
+      projectDrawingField.hidden = source.value !== 'project'
       markedPhaseField.hidden = source.value !== 'marked'
-      fileField.hidden = source.value !== 'local'
-      urlField.hidden = source.value !== 'url'
-      displayNameField.hidden = source.value === 'marked'
-      if (source.value === 'blank' && !displayName.value) {
-        displayName.value = 'Blank.dwg'
+      if (source.value === 'marked') {
+        const markedSource = markedSources[Number(markedPhase.value)]
+        if (markedSource?.phase.drawing.kind === 'assigned') {
+          displayName.value = markedSource.phase.drawing.displayName
+        }
       }
+      submit.disabled =
+        source.value === 'project'
+          ? !projectDrawing.value
+          : markedSources.length === 0
     }
     source.addEventListener('change', syncFields)
-    file.addEventListener('change', () => {
-      if (file.files?.[0]) displayName.value = file.files[0].name
+    projectDrawing.addEventListener('change', () => {
+      const selected = projectDrawings.find(
+        item => item.fileId === Number(projectDrawing.value)
+      )
+      if (selected) displayName.value = selected.drawing.sourceName
+      syncFields()
     })
+    markedPhase.addEventListener('change', syncFields)
     form.addEventListener('submit', async event => {
       event.preventDefault()
+      if (source.value === 'project' && !projectDrawing.value) return
+      if (source.value === 'marked' && markedSources.length === 0) return
       submit.disabled = true
       try {
         const markedSource =
@@ -1165,15 +1187,15 @@ export class PhaseWorkspacePanel {
           sequenceId,
           phaseId,
           sourceKind: source.value as DrawingAssociationRequest['sourceKind'],
+          fileId:
+            source.value === 'project' ? Number(projectDrawing.value) : undefined,
           sourceProcessId: markedSource?.process.id,
           sourceSequenceId: markedSource?.sequence.id,
           sourcePhaseId: markedSource?.phase.id,
           drawingDisplayName:
             markedSource?.phase.drawing.kind === 'assigned'
               ? markedSource.phase.drawing.displayName
-              : displayName.value,
-          file: file.files?.[0],
-          url: url.value
+              : displayName.value
         })
         this.render()
       } finally {

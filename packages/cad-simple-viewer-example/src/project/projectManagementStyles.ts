@@ -16,7 +16,8 @@ export function injectProjectManagementStyles() {
     .project-management-shell h2 { font-size: 19px; }
     .project-management-shell h3 { font-size: 14px; }
     .project-management-shell .project-summary { color: #176b52; font-size: 12px; }
-    .project-management-modal button, .project-management-modal input { min-height: 36px; border: 1px solid #bcc9cc; border-radius: 5px; background: #fff; color: inherit; padding: 7px 10px; font: inherit; }
+    .project-management-modal button, .project-management-modal input, .project-management-modal textarea { min-height: 36px; border: 1px solid #bcc9cc; border-radius: 5px; background: #fff; color: inherit; padding: 7px 10px; font: inherit; }
+    .project-management-modal textarea { min-height: 64px; resize: vertical; }
     .project-management-modal button { cursor: pointer; }
     .project-management-modal button:hover:not(:disabled) { border-color: #188461; color: #075d43; background: #edf8f4; }
     .project-management-modal button:disabled { opacity: .46; cursor: not-allowed; }

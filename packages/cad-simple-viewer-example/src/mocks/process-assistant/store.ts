@@ -1,13 +1,16 @@
 import type {
+  AddProjectDto,
   OperationDto,
   PhaseDto,
   ProcedureDto,
+  ProjectDto,
   UploadFileDto
 } from '../../api/processAssistantTypes'
 import {
   operationFixtures,
   phaseFixtures,
   procedureFixtures,
+  projectFixtures,
   uploadFileFixtures
 } from './fixtures'
 
@@ -22,10 +25,12 @@ const nextId = (items: Array<{ id?: number }>): number =>
   Math.max(0, ...items.map(item => item.id ?? 0)) + 1
 
 export class ProcessAssistantMockStore {
+  private projects: ProjectDto[] = []
   private procedures: ProcedureDto[] = []
   private operations: OperationDto[] = []
   private phases: PhaseDto[] = []
   private files: MockFileRecord[] = []
+  private projectId = 1
   private procedureId = 1
   private operationId = 1
   private phaseId = 1
@@ -36,6 +41,8 @@ export class ProcessAssistantMockStore {
   }
 
   reset(): void {
+    this.projects = projectFixtures.map(copy)
+      this.projectId = nextId(this.projects)
     this.procedures = procedureFixtures.map(copy)
     this.operations = operationFixtures.map(copy)
     this.phases = phaseFixtures.map(copy)
@@ -47,6 +54,45 @@ export class ProcessAssistantMockStore {
     this.operationId = nextId(this.operations)
     this.phaseId = nextId(this.phases)
     this.fileId = nextId(this.files.map(file => file.metadata))
+  }
+
+  listProjects(): ProjectDto[] {
+    return this.projects.map(copy)
+  }
+
+  getProject(id: number): ProjectDto | undefined {
+    const project = this.projects.find(item => item.id === id)
+    return project && copy(project)
+  }
+
+  createProject(input: ProjectDto): number {
+    const id = this.projectId++
+    this.projects.push({ ...input, id })
+    return id
+  }
+
+  addProjectV2(input: AddProjectDto): number {
+    return this.createProject({
+      name: input.name,
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: input.description ?? '',
+        fileIds: input.fileIds ?? []
+      })
+    })
+  }
+
+  updateProject(id: number, input: ProjectDto): boolean {
+    const index = this.projects.findIndex(item => item.id === id)
+    if (index < 0) return false
+    this.projects[index] = { ...input, id }
+    return true
+  }
+
+  deleteProject(id: number): boolean {
+    if (!this.getProject(id)) return false
+    this.projects = this.projects.filter(item => item.id !== id)
+    return true
   }
 
   listProcedures(projectId: number): ProcedureDto[] {

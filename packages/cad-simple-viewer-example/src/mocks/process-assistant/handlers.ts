@@ -1,10 +1,11 @@
 import { http, HttpResponse } from 'msw'
 
 import type {
+  AddProjectDto,
   OperationDto,
   PhaseDto,
-  ProcedureDto
-} from '../../api/processAssistantTypes'
+  ProcedureDto,
+  ProjectDto} from '../../api/processAssistantTypes'
 import { processAssistantMockStore } from './store'
 
 const api = '*/api/v1'
@@ -16,7 +17,7 @@ const parseId = (value: string | readonly string[] | undefined): number =>
   Number(Array.isArray(value) ? value[0] : value)
 
 const isPositiveInteger = (value: number): boolean =>
-  Number.isInteger(value) && value > 0
+  Number.isInteger(value) && value > 0 && value <= 2147483647
 
 const parseQueryId = (request: Request, name: string): number =>
   Number(new URL(request.url).searchParams.get(name))
@@ -44,6 +45,50 @@ const readDto = async <T extends object>(request: Request): Promise<T | null> =>
 }
 
 export const processAssistantHandlers = [
+  http.get(`${api}/Project`, () =>
+    HttpResponse.json(processAssistantMockStore.listProjects())
+  ),
+
+  http.post(`${api}/Project/add-v2`, async ({ request }) => {
+    const project = await readDto<AddProjectDto>(request)
+    if (!project) return errorResponse(400, 'A valid project is required')
+    return HttpResponse.json(processAssistantMockStore.addProjectV2(project))
+  }),
+
+  http.post(`${api}/Project`, async ({ request }) => {
+    const project = await readDto<ProjectDto>(request)
+    if (!project) return errorResponse(400, 'A valid project is required')
+    return HttpResponse.json(processAssistantMockStore.createProject(project))
+  }),
+
+  http.get(`${api}/Project/:id`, ({ params }) => {
+    const id = parseId(params.id)
+    if (!isPositiveInteger(id)) return errorResponse(400, 'Invalid project ID')
+    const project = processAssistantMockStore.getProject(id)
+    return project
+      ? HttpResponse.json(project)
+      : errorResponse(404, 'Project not found')
+  }),
+
+  http.put(`${api}/Project/:id`, async ({ params, request }) => {
+    const id = parseId(params.id)
+    const project = await readDto<ProjectDto>(request)
+    if (!isPositiveInteger(id) || !project) {
+      return errorResponse(400, 'A valid project is required')
+    }
+    return processAssistantMockStore.updateProject(id, project)
+      ? new HttpResponse(null, { status: 204 })
+      : errorResponse(404, 'Project not found')
+  }),
+
+  http.delete(`${api}/Project/:id`, ({ params }) => {
+    const id = parseId(params.id)
+    if (!isPositiveInteger(id)) return errorResponse(400, 'Invalid project ID')
+    return processAssistantMockStore.deleteProject(id)
+      ? new HttpResponse(null, { status: 204 })
+      : errorResponse(404, 'Project not found')
+  }),
+
   http.get(`${api}/File`, () =>
     HttpResponse.json(processAssistantMockStore.listFiles())
   ),
@@ -143,8 +188,12 @@ export const processAssistantHandlers = [
 
   http.post(`${api}/Procedure`, async ({ request }) => {
     const procedure = await readDto<ProcedureDto>(request)
-    if (!procedure || !isPositiveInteger(procedure.projectId ?? 0)) {
+    const projectId = procedure?.projectId ?? 0
+    if (!procedure || !isPositiveInteger(projectId)) {
       return errorResponse(400, 'A valid procedure projectId is required')
+    }
+    if (!processAssistantMockStore.getProject(projectId)) {
+      return errorResponse(400, 'The parent project does not exist')
     }
     return HttpResponse.json(
       processAssistantMockStore.createProcedure(procedure),
@@ -170,6 +219,9 @@ export const processAssistantHandlers = [
       !isPositiveInteger(procedure.projectId ?? 0)
     ) {
       return errorResponse(400, 'A valid procedure is required')
+    }
+    if (!processAssistantMockStore.getProject(procedure.projectId!)) {
+      return errorResponse(400, 'The parent project does not exist')
     }
     return processAssistantMockStore.updateProcedure(id, procedure)
       ? new HttpResponse(null, { status: 204 })

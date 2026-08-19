@@ -2,8 +2,21 @@ import type {
   OperationDto,
   PhaseDto,
   ProcedureDto,
+  ProjectDto,
   UploadFileDto
 } from '../../api/processAssistantTypes'
+
+export const projectFixtures: ProjectDto[] = [
+  {
+    id: 1,
+    name: 'Mock PID Project',
+    jsonData: JSON.stringify({
+      schemaVersion: 1,
+      description: 'MSW Project fixture',
+      fileIds: [1]
+    })
+  }
+]
 
 export const procedureFixtures: ProcedureDto[] = [
   {

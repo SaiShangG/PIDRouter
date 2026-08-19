@@ -8,6 +8,18 @@ export interface UploadFileDto {
   uploadedAt?: string
 }
 
+export interface ProjectDto {
+  id?: number
+  name?: string | null
+  jsonData?: string | null
+}
+
+export interface AddProjectDto {
+  name?: string | null
+  description?: string | null
+  fileIds?: number[] | null
+}
+
 export interface ProcedureDto {
   id?: number
   name?: string | null

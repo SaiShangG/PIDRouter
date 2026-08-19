@@ -39,6 +39,7 @@ import { ProcessAssistantFileApi } from './api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
+import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
 import {
@@ -89,9 +90,10 @@ import {
   type ResolvedEntityPresentation,
   resolveEntityPresentation} from './presentation/presentationStyleResolver'
 import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
-import { IndexedDbProjectRepository } from './project/IndexedDbProjectRepository'
+import { ProcessAssistantProjectRepository } from './project/ProcessAssistantProjectRepository'
 import { ProjectManagementModal } from './project/ProjectManagementModal'
 import { injectProjectManagementStyles } from './project/projectManagementStyles'
+import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
 import {
   PhaseReportExporter,
@@ -109,6 +111,9 @@ const EXAMPLE_COMMAND_ALIASES = {
   CIRCLE: ['CI'],
   ZOOM: ['ZZ']
 }
+
+const ACTIVE_PROJECT_STORAGE_KEY =
+  'cad-simple-viewer-example-active-project-id'
 
 interface FlowConnectionEdge {
   From?: number
@@ -809,9 +814,21 @@ class CadViewerApp {
   private readonly processAssistantFileApi = new ProcessAssistantFileApi(
     this.processAssistantClient
   )
+  private readonly processAssistantProjectApi = new ProcessAssistantProjectApi(
+    this.processAssistantClient
+  )
+  private readonly processAssistantProcedureApi =
+    new ProcessAssistantProcedureApi(this.processAssistantClient)
+  private readonly processAssistantOperationApi =
+    new ProcessAssistantOperationApi(this.processAssistantClient)
+  private readonly processAssistantPhaseApi = new ProcessAssistantPhaseApi(
+    this.processAssistantClient
+  )
+  private readonly projectRepository = new ProcessAssistantProjectRepository(
+    this.processAssistantProjectApi
+  )
   private readonly drawingLibraryRepository =
     new ProcessAssistantDrawingRepository(this.processAssistantFileApi)
-  private readonly projectRepository = new IndexedDbProjectRepository()
   private phasePanel?: PhaseWorkspacePanel
   private drawingLibrary?: DrawingLibraryModal
   private projectManagement?: ProjectManagementModal
@@ -826,6 +843,9 @@ class CadViewerApp {
   }
   private readonly backendPhaseSaveTimers = new Map<string, number>()
   private phaseActivationToken = 0
+  private projectLoadToken = 0
+  private activeProject?: ProjectRecord
+  private activeProjectId?: number
   private lastCanvasPointer: { x: number; y: number } | null = null
   private lastPickedObjectId: AcDbObjectId | null = null
 
@@ -1013,7 +1033,11 @@ class CadViewerApp {
     injectProjectManagementStyles()
     this.projectManagement = new ProjectManagementModal(
       this.projectRepository,
-      this.drawingLibraryRepository
+      this.drawingLibraryRepository,
+      {
+        onSelect: project => this.switchProject(project),
+        onDelete: projectId => this.handleDeletedProject(projectId)
+      }
     )
     this.projectManagementButton.addEventListener('click', () => {
       void this.projectManagement?.open()
@@ -1685,23 +1709,103 @@ class CadViewerApp {
   private async loadProcessAssistantWorkspace(): Promise<void> {
     try {
       const config = getProcessAssistantConfig()
-      const client = new ProcessAssistantClient({ baseUrl: config.baseUrl })
-      const repository = new PhaseWorkspaceRepository({
-        baseUrl: config.baseUrl,
-        projectId: config.projectId,
-        files: new ProcessAssistantFileApi(client),
-        procedures: new ProcessAssistantProcedureApi(client),
-        operations: new ProcessAssistantOperationApi(client),
-        phases: new ProcessAssistantPhaseApi(client)
-      })
-      this.phaseRepository = repository
-      const workspace = await repository.load()
-      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      const projects = await this.projectRepository.list()
+      const storedProjectId = Number(
+        localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY)
+      )
+      const project =
+        projects.find(item => item.id === storedProjectId) ??
+        projects.find(item => item.id === config.projectId) ??
+        projects[0]
+      if (!project) {
+        this.clearProjectWorkspace()
+        this.showMessage('后台没有可用的 Project', 'info')
+        return
+      }
+      await this.loadProjectWorkspace(project)
       this.showMessage('已加载后台 Process 数据', 'success')
     } catch (error) {
       log.error('Failed to load ProcessAssistant workspace:', error)
       this.showMessage('后台 API 不可用，未加载本地测试数据', 'error')
     }
+  }
+
+  private async switchProject(project: ProjectRecord): Promise<void> {
+    if (project.id === this.activeProjectId) {
+      this.activeProject = project
+      this.projectManagementButton.title = project.name
+      this.phasePanel?.render()
+      return
+    }
+    try {
+      await this.loadProjectWorkspace(project, true)
+      this.showMessage(`已切换到 Project：${project.name}`, 'success')
+    } catch (error) {
+      log.error('Failed to switch Project:', error)
+      this.showMessage('切换 Project 失败', 'error')
+    }
+  }
+
+  private async loadProjectWorkspace(
+    project: ProjectRecord,
+    restorePhase = false
+  ): Promise<void> {
+    const token = ++this.projectLoadToken
+    this.cancelAllBackendPhaseSaves()
+    this.invalidateLoadedPhaseBinding()
+    const config = getProcessAssistantConfig()
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: config.baseUrl,
+      projectId: project.id,
+      files: this.processAssistantFileApi,
+      procedures: this.processAssistantProcedureApi,
+      operations: this.processAssistantOperationApi,
+      phases: this.processAssistantPhaseApi
+    })
+    const workspace = await repository.load()
+    if (token !== this.projectLoadToken) return
+    this.phaseRepository = repository
+    this.phaseStore = new PhaseWorkspaceStore(workspace)
+    this.activeProject = project
+    this.activeProjectId = project.id
+    localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(project.id))
+    this.projectManagementButton.title = project.name
+    this.phasePanel?.render()
+    this.syncPhaseContextBar()
+    if (restorePhase && this.isInitialized) {
+      await this.restoreActiveWorkspacePhase()
+    }
+  }
+
+  private async handleDeletedProject(projectId: number): Promise<void> {
+    if (projectId !== this.activeProjectId) return
+    const replacement = (await this.projectRepository.list())[0]
+    if (replacement) {
+      await this.loadProjectWorkspace(replacement, true)
+      return
+    }
+    this.clearProjectWorkspace()
+  }
+
+  private clearProjectWorkspace(): void {
+    this.projectLoadToken++
+    this.cancelAllBackendPhaseSaves()
+    this.invalidateLoadedPhaseBinding()
+    this.phaseRepository = undefined
+    this.phaseStore = new PhaseWorkspaceStore()
+    this.activeProject = undefined
+    this.activeProjectId = undefined
+    localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY)
+    this.projectManagementButton.removeAttribute('title')
+    this.phasePanel?.render()
+    this.syncPhaseContextBar()
+  }
+
+  private cancelAllBackendPhaseSaves(): void {
+    for (const timer of this.backendPhaseSaveTimers.values()) {
+      window.clearTimeout(timer)
+    }
+    this.backendPhaseSaveTimers.clear()
   }
 
   private setupPhaseWorkspace() {
@@ -1812,7 +1916,8 @@ class CadViewerApp {
           if (isLoaded) document.title = name
         }
       },
-      () => this.appLocale
+      () => this.appLocale,
+      () => this.activeProject?.fileIds ?? []
     )
     const mount = document.getElementById('phaseWorkspaceMount')
     if (!mount) throw new Error('Phase workspace mount was not found')
@@ -2654,7 +2759,6 @@ class CadViewerApp {
   private async associateWorkspaceDrawing(
     request: DrawingAssociationRequest
   ) {
-    let drawing: DrawingAssetRef | undefined
     try {
       this.captureLoadedPhaseState()
       if (this.phaseRepository) {
@@ -2679,14 +2783,7 @@ class CadViewerApp {
           request.sourcePhaseId
         )
       } else {
-        drawing = await this.createDrawingAsset(request)
-        removed = this.phaseStore.associateDrawing(
-          request.processId,
-          request.sequenceId,
-          request.phaseId,
-          drawing,
-          request.drawingDisplayName
-        )
+        throw new Error('Project PID association requires a backend Project')
       }
       this.phaseStore.persist()
       if (removed?.kind === 'local') {
@@ -2702,10 +2799,6 @@ class CadViewerApp {
       )
       this.showMessage('阶段图纸已关联', 'success')
     } catch (error) {
-      if (drawing?.kind === 'local') {
-        const registered = this.phaseStore.snapshot().drawingAssets[drawing.id]
-        if (!registered) await this.drawingAssetStore.delete(drawing.id)
-      }
       log.error('Failed to associate phase drawing:', error)
       this.showMessage(String(error), 'error')
       throw error
@@ -2730,13 +2823,17 @@ class CadViewerApp {
         : undefined
     if (!phase) throw new Error('Phase was not found')
 
+    const projectFileIds = new Set(this.activeProject?.fileIds ?? [])
     let fileId: number
     let displayName: string
-    if (request.sourceKind === 'local') {
-      if (!request.file) throw new Error('请选择 DWG 文件')
-      const uploaded = await repository.uploadDrawing(request.file)
-      fileId = uploaded.fileId
-      displayName = request.drawingDisplayName.trim() || uploaded.displayName
+    if (request.sourceKind === 'project') {
+      if (!Number.isInteger(request.fileId) || (request.fileId ?? 0) < 1) {
+        throw new Error('请选择 Project PID')
+      }
+      fileId = request.fileId!
+      const drawing = state.drawingAssets[`file:${fileId}`]
+      if (!drawing) throw new Error('所选 Project PID 不存在')
+      displayName = request.drawingDisplayName.trim() || drawing.sourceName
     } else if (request.sourceKind === 'marked') {
       const source = state.processes
         .find(process => process.id === request.sourceProcessId)
@@ -2751,7 +2848,10 @@ class CadViewerApp {
       displayName =
         request.drawingDisplayName.trim() || source.drawing.displayName
     } else {
-      throw new Error('实际后台仅支持上传文件或复用已标记 Phase 图纸')
+      throw new Error('不支持的图纸关联方式')
+    }
+    if (!projectFileIds.has(fileId)) {
+      throw new Error('所选图纸不属于当前 Project')
     }
 
     this.cancelBackendPhaseSave(request.phaseId)

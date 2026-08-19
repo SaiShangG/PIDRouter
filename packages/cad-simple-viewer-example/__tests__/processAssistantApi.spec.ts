@@ -2,6 +2,7 @@ import { ProcessAssistantClient } from '../src/api/processAssistantClient'
 import { ProcessAssistantFileApi } from '../src/api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from '../src/api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from '../src/api/processAssistantPhaseApi'
+import { ProcessAssistantProjectApi } from '../src/api/processAssistantProjectApi'
 import { ProcessAssistantProcedureApi } from '../src/api/processAssistantProcedureApi'
 
 const createClient = (fetchMock: jest.MockedFunction<typeof fetch>) =>
@@ -114,5 +115,63 @@ describe('ProcessAssistant endpoint services', () => {
       'http://api.example.test/api/v1/Phase?operationId=9',
       'http://api.example.test/api/v1/File/download/stored%20file.dwg'
     ])
+  })
+
+  it('implements the complete Project endpoint contract', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('[]', {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response('11', {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 11, name: 'Project 11' }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response('12', {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      ) as jest.MockedFunction<typeof fetch>
+    const api = new ProcessAssistantProjectApi(createClient(fetchMock))
+
+    await expect(api.list()).resolves.toEqual([])
+    await expect(
+      api.create({ name: 'Project 11', jsonData: '{"schemaVersion":1}' })
+    ).resolves.toBe(11)
+    await expect(api.get(11)).resolves.toEqual({ id: 11, name: 'Project 11' })
+    await expect(api.update(11, { id: 11, name: 'Updated' })).resolves.toBeUndefined()
+    await expect(api.delete(11)).resolves.toBeUndefined()
+    await expect(
+      api.addV2({ name: 'Project 12', description: 'CIP', fileIds: [3, 4] })
+    ).resolves.toBe(12)
+
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['http://api.example.test/api/v1/Project', 'GET'],
+      ['http://api.example.test/api/v1/Project', 'POST'],
+      ['http://api.example.test/api/v1/Project/11', 'GET'],
+      ['http://api.example.test/api/v1/Project/11', 'PUT'],
+      ['http://api.example.test/api/v1/Project/11', 'DELETE'],
+      ['http://api.example.test/api/v1/Project/add-v2', 'POST']
+    ])
+    expect(fetchMock.mock.calls[1][1]?.body).toBe(
+      JSON.stringify({ name: 'Project 11', jsonData: '{"schemaVersion":1}' })
+    )
+    expect(fetchMock.mock.calls[5][1]?.body).toBe(
+      JSON.stringify({
+        name: 'Project 12',
+        description: 'CIP',
+        fileIds: [3, 4]
+      })
+    )
   })
 })

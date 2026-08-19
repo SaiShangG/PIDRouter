@@ -6,7 +6,10 @@ import {
 } from '../src/phase/PhaseWorkspacePanel'
 import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 
-const createHarness = (locale: 'en' | 'zh' = 'zh') => {
+const createHarness = (
+  locale: 'en' | 'zh' = 'zh',
+  projectFileIds: readonly number[] = [5]
+) => {
   let id = 0
   const store = new PhaseWorkspaceStore(
     undefined,
@@ -58,7 +61,8 @@ const createHarness = (locale: 'en' | 'zh' = 'zh') => {
   const panel = new PhaseWorkspacePanel(
     () => store.snapshot(),
     actions,
-    () => locale
+    () => locale,
+    () => projectFileIds
   )
   document.body.append(panel.element)
   return { store, panel, actions }
@@ -74,11 +78,18 @@ describe('PhaseWorkspacePanel', () => {
     )
     const button = [...panel.element.querySelectorAll('button')].find(
       item => item.textContent === '创建工艺'
-    )
+    ) as HTMLButtonElement
     expect(panel.element.textContent).toContain('工作区当前为空')
+    expect(button.disabled).toBe(true)
+
+    name!.value = '   '
+    name!.dispatchEvent(new Event('input'))
+    expect(button.disabled).toBe(true)
 
     name!.value = 'CIP'
-    button!.click()
+    name!.dispatchEvent(new Event('input'))
+    expect(button.disabled).toBe(false)
+    button.click()
 
     expect(store.snapshot().processes[0].name).toBe('CIP')
     expect(panel.element.textContent).toContain('此工艺尚无阶段')
@@ -449,7 +460,7 @@ describe('PhaseWorkspacePanel', () => {
     })
   })
 
-  it('creates a Phase without a drawing and later opens the association flow', () => {
+  it('creates a Phase without a drawing and later assigns a Project PID', () => {
     const { store, panel, actions } = createHarness()
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
@@ -478,6 +489,23 @@ describe('PhaseWorkspacePanel', () => {
       name: '待关联阶段',
       source: { kind: 'unassigned' }
     })
+    store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: 'PID source',
+      source: {
+        kind: 'new',
+        drawing: {
+          id: 'file:5',
+          kind: 'url',
+          sourceName: 'PID-later.dwg',
+          url: '/pid-later.dwg'
+        },
+        displayName: 'PID-later.dwg'
+      }
+    })
+    store.activate(process.id, sequence.id, phase.id)
     panel.render()
 
     expect(panel.element.textContent).toContain('未关联图纸')
@@ -492,11 +520,18 @@ describe('PhaseWorkspacePanel', () => {
     const source = modal.querySelector<HTMLSelectElement>(
       '[aria-label="图纸关联方式"]'
     )!
-    source.value = 'blank'
-    source.dispatchEvent(new Event('change'))
-    modal.querySelector<HTMLInputElement>(
-      '[aria-label="关联图纸显示名"]'
-    )!.value = 'PID-later.dwg'
+    expect([...source.options].map(option => option.value)).toEqual([
+      'project',
+      'marked'
+    ])
+    const projectDrawing = modal.querySelector<HTMLSelectElement>(
+      '[aria-label="Project PID"]'
+    )!
+    const submit = modal.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    expect(submit.disabled).toBe(true)
+    projectDrawing.value = '5'
+    projectDrawing.dispatchEvent(new Event('change'))
+    expect(submit.disabled).toBe(false)
     modal.querySelector<HTMLFormElement>('form')!.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     )
@@ -505,10 +540,9 @@ describe('PhaseWorkspacePanel', () => {
       processId: process.id,
       sequenceId: sequence.id,
       phaseId: phase.id,
-      sourceKind: 'blank',
-      drawingDisplayName: 'PID-later.dwg',
-      file: undefined,
-      url: ''
+      sourceKind: 'project',
+      fileId: 5,
+      drawingDisplayName: 'PID-later.dwg'
     })
   })
 
@@ -523,7 +557,12 @@ describe('PhaseWorkspacePanel', () => {
       name: '已标记冲洗',
       source: {
         kind: 'new',
-        drawing: { id: 'drawing-marked', kind: 'blank', sourceName: 'PID.dwg' },
+        drawing: {
+          id: 'file:5',
+          kind: 'url',
+          sourceName: 'PID.dwg',
+          url: '/pid.dwg'
+        },
         displayName: 'PID-marked.dwg'
       }
     })
@@ -547,6 +586,8 @@ describe('PhaseWorkspacePanel', () => {
       '[aria-label="图纸关联方式"]'
     )!
     expect([...source.options].map(option => option.value)).toContain('marked')
+    source.value = 'marked'
+    source.dispatchEvent(new Event('change'))
     expect(
       modal.querySelector<HTMLSelectElement>('[aria-label="已标记 Phase"]')!
         .options[0].textContent
@@ -568,6 +609,46 @@ describe('PhaseWorkspacePanel', () => {
         drawingDisplayName: 'PID-marked.dwg'
       })
     )
+  })
+
+  it('excludes marked Phase drawings outside the active Project', () => {
+    const { store, panel } = createHarness('zh', [5])
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: '其他 Project 图纸',
+      source: {
+        kind: 'new',
+        drawing: {
+          id: 'file:9',
+          kind: 'url',
+          sourceName: 'Other.dwg',
+          url: '/other.dwg'
+        },
+        displayName: 'Other.dwg'
+      }
+    })
+    const target = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: '待关联阶段',
+      source: { kind: 'unassigned' }
+    })
+    store.activate(process.id, sequence.id, target.id)
+    panel.render()
+
+    ;[...panel.element.querySelectorAll('button')]
+      .find(button => button.textContent === '关联图纸')!
+      .click()
+    const source = panel.element.querySelector<HTMLSelectElement>(
+      '.phase-drawing-association-modal [aria-label="图纸关联方式"]'
+    )!
+
+    expect([...source.options].map(option => option.value)).toEqual(['project'])
   })
 
   it('exposes accessible controls for changing Phase order', () => {

@@ -9,7 +9,7 @@ import type {
 
 const drawings: DrawingRecord[] = [
   {
-    id: 'drawing-1',
+    id: '1',
     drawingNumber: 'PID-1001',
     name: 'CIP Supply',
     originalFileName: 'cip-supply.dwg',
@@ -20,7 +20,7 @@ const drawings: DrawingRecord[] = [
     progress: 100
   },
   {
-    id: 'drawing-2',
+    id: '2',
     drawingNumber: 'PID-1002',
     name: 'CIP Return',
     originalFileName: 'cip-return.dwg',
@@ -33,42 +33,45 @@ const drawings: DrawingRecord[] = [
 ]
 
 const existingProject: ProjectRecord = {
-  id: 'project-1',
+  id: 1,
   name: 'Existing Project',
-  drawingIds: ['drawing-1'],
-  createdBy: 'Local User',
-  createdAt: '2026-08-18T08:00:00Z',
-  updatedAt: '2026-08-18T08:00:00Z'
+  description: 'Existing description',
+  fileIds: [1]
 }
 
 const createHarness = (projects: ProjectRecord[] = []) => {
+  const onSelect = jest.fn()
+  const onDelete = jest.fn()
   const repository: jest.Mocked<ProjectRepository> = {
     list: jest.fn(async () => projects.map(project => ({ ...project }))),
     create: jest.fn(async input => ({
       ...existingProject,
-      id: 'created-project',
+      id: 2,
       name: input.name,
-      drawingIds: input.drawingIds
+      description: input.description,
+      fileIds: input.fileIds
     })),
     update: jest.fn(async (id, input) => ({
       ...existingProject,
       id,
       name: input.name,
-      drawingIds: input.drawingIds
+      description: input.description,
+      fileIds: input.fileIds
     })),
-    delete: jest.fn(async (_id: string) => undefined)
+    delete: jest.fn(async (_id: number) => undefined)
   }
   const drawingRepository = {
     list: jest.fn(async () => drawings.map(drawing => ({ ...drawing })))
   }
-  const modal = new ProjectManagementModal(repository, drawingRepository)
-  return { modal, repository, drawingRepository }
+  const modal = new ProjectManagementModal(repository, drawingRepository, {
+    onSelect,
+    onDelete
+  })
+  return { modal, repository, drawingRepository, onSelect, onDelete }
 }
 
 const flushPromises = async () => {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let index = 0; index < 10; index++) await Promise.resolve()
 }
 
 describe('ProjectManagementModal', () => {
@@ -85,26 +88,24 @@ describe('ProjectManagementModal', () => {
 
     expect(document.body.textContent).toContain('Existing Project')
     expect(document.body.textContent).toContain('1 张 PID')
-    expect(document.body.textContent).toContain('Local User')
-    expect(document.body.textContent).toContain('创建于')
+    expect(document.body.textContent).toContain('ID 1')
   })
 
   it('shows detailed metadata for the selected project', async () => {
-    const { modal } = createHarness([existingProject])
+    const { modal, onSelect } = createHarness([existingProject])
     await modal.open()
 
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
 
     const details = document.querySelector('.project-details')
-    expect(details?.textContent).toContain('创建人')
-    expect(details?.textContent).toContain('Local User')
-    expect(details?.textContent).toContain('创建时间')
+    expect(details?.textContent).toContain('描述')
+    expect(details?.textContent).toContain('Existing description')
     expect(details?.textContent).toContain('包含 PID')
-    expect(details?.textContent).toContain('最后更新')
-    expect(details?.textContent).toContain('project-1')
+    expect(details?.textContent).toContain('1')
     expect(document.body.textContent).toContain('Project 详情')
     expect(document.querySelector('.project-drawing-option input')).toBeNull()
     expect(document.body.textContent).toContain('编辑')
+    expect(onSelect).toHaveBeenCalledWith(existingProject)
   })
 
   it('filters PID drawings by name, number, or file name', async () => {
@@ -122,13 +123,18 @@ describe('ProjectManagementModal', () => {
   })
 
   it('creates a project with multiple selected PID drawings', async () => {
-    const { modal, repository } = createHarness()
+    const { modal, repository, onSelect } = createHarness()
     await modal.open()
     const name = document.querySelector<HTMLInputElement>(
       'input[placeholder="例如：2026-03CA-PC"]'
     )!
     name.value = '2026-03CA-PC'
     name.dispatchEvent(new Event('input'))
+    const description = document.querySelector<HTMLTextAreaElement>(
+      'textarea[placeholder="输入 Project 描述"]'
+    )!
+    description.value = 'CIP Project'
+    description.dispatchEvent(new Event('input'))
 
     document
       .querySelector<HTMLInputElement>('.project-drawing-option input')!
@@ -143,8 +149,12 @@ describe('ProjectManagementModal', () => {
 
     expect(repository.create).toHaveBeenCalledWith({
       name: '2026-03CA-PC',
-      drawingIds: ['drawing-1', 'drawing-2']
+      description: 'CIP Project',
+      fileIds: [1, 2]
     })
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 2, name: '2026-03CA-PC' })
+    )
   })
 
   it('updates PID associations for an existing project', async () => {
@@ -162,14 +172,15 @@ describe('ProjectManagementModal', () => {
       ?.click()
     await flushPromises()
 
-    expect(repository.update).toHaveBeenCalledWith('project-1', {
+    expect(repository.update).toHaveBeenCalledWith(1, {
       name: 'Existing Project',
-      drawingIds: ['drawing-1', 'drawing-2']
+      description: 'Existing description',
+      fileIds: [1, 2]
     })
   })
 
   it('deletes only the selected project after confirmation', async () => {
-    const { modal, repository, drawingRepository } = createHarness([
+    const { modal, repository, drawingRepository, onDelete } = createHarness([
       existingProject
     ])
     await modal.open()
@@ -187,7 +198,14 @@ describe('ProjectManagementModal', () => {
       ?.click()
     await flushPromises()
 
-    expect(repository.delete).toHaveBeenCalledWith('project-1')
+    expect(repository.delete).toHaveBeenCalledWith(1)
+    expect(onDelete).toHaveBeenCalledWith(1)
     expect(drawingRepository.list).toHaveBeenCalled()
+    expect(document.body.textContent).toContain('创建 Project')
+    expect(document.body.textContent).toContain('CIP Supply')
+    expect(document.body.textContent).toContain('CIP Return')
+    expect(
+      document.querySelectorAll('.project-drawing-option input')
+    ).toHaveLength(2)
   })
 })

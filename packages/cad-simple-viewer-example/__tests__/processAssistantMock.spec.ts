@@ -4,6 +4,7 @@ import { ProcessAssistantClient } from '../src/api/processAssistantClient'
 import { ProcessAssistantFileApi } from '../src/api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from '../src/api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from '../src/api/processAssistantPhaseApi'
+import { ProcessAssistantProjectApi } from '../src/api/processAssistantProjectApi'
 import { ProcessAssistantProcedureApi } from '../src/api/processAssistantProcedureApi'
 import { processAssistantHandlers } from '../src/mocks/process-assistant/handlers'
 import { processAssistantMockStore } from '../src/mocks/process-assistant/store'
@@ -13,6 +14,7 @@ let files: ProcessAssistantFileApi
 let procedures: ProcessAssistantProcedureApi
 let operations: ProcessAssistantOperationApi
 let phases: ProcessAssistantPhaseApi
+let projects: ProcessAssistantProjectApi
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
@@ -23,12 +25,57 @@ beforeAll(() => {
   procedures = new ProcessAssistantProcedureApi(client)
   operations = new ProcessAssistantOperationApi(client)
   phases = new ProcessAssistantPhaseApi(client)
+  projects = new ProcessAssistantProjectApi(client)
 })
 beforeEach(() => processAssistantMockStore.reset())
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 describe('Process Assistant mock hierarchy', () => {
+  it('supports the complete Project contract and add-v2 mapping', async () => {
+    await expect(projects.list()).resolves.toEqual([
+      expect.objectContaining({ id: 1, name: 'Mock PID Project' })
+    ])
+
+    const standardId = await projects.create({
+      name: 'Standard Project',
+      jsonData: JSON.stringify({ schemaVersion: 1 })
+    })
+    expect(standardId).toBe(2)
+
+    const v2Id = await projects.addV2({
+      name: 'V2 Project',
+      description: 'Created through add-v2',
+      fileIds: [1]
+    })
+    expect(v2Id).toBe(3)
+    await expect(projects.get(v2Id)).resolves.toEqual({
+      id: v2Id,
+      name: 'V2 Project',
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: 'Created through add-v2',
+        fileIds: [1]
+      })
+    })
+
+    await projects.update(v2Id, {
+      id: v2Id,
+      name: 'Updated V2 Project',
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: 'Updated',
+        fileIds: []
+      })
+    })
+    await expect(projects.get(v2Id)).resolves.toEqual(
+      expect.objectContaining({ name: 'Updated V2 Project' })
+    )
+
+    await projects.delete(v2Id)
+    await expect(projects.get(v2Id)).rejects.toMatchObject({ status: 404 })
+  })
+
   it('loads fixtures and supports a complete hierarchy CRUD flow', async () => {
     await expect(procedures.list(1)).resolves.toEqual([
       expect.objectContaining({ id: 1, name: 'Mock CIP Procedure' })
@@ -100,6 +147,12 @@ describe('Process Assistant mock hierarchy', () => {
   })
 
   it('returns typed 400 and 404 API errors', async () => {
+    await expect(
+      procedures.create({ name: 'Orphan', projectId: 999 })
+    ).rejects.toMatchObject({
+      name: 'ProcessAssistantApiError',
+      status: 400
+    })
     await expect(
       operations.create({ name: 'Orphan', procedureId: 999 })
     ).rejects.toMatchObject({
