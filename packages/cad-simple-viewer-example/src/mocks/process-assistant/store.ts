@@ -16,7 +16,7 @@ import {
 
 interface MockFileRecord {
   metadata: UploadFileDto
-  content: Blob
+  content: Blob | { assetUrl: string; contentType: string }
 }
 
 const copy = <T extends object>(value: T): T => ({ ...value })
@@ -48,7 +48,9 @@ export class ProcessAssistantMockStore {
     this.phases = phaseFixtures.map(copy)
     this.files = uploadFileFixtures.map(fixture => ({
       metadata: copy(fixture.metadata),
-      content: new Blob([fixture.content], { type: fixture.contentType })
+      content: fixture.assetUrl
+        ? { assetUrl: fixture.assetUrl, contentType: fixture.contentType }
+        : new Blob([fixture.content ?? ''], { type: fixture.contentType })
     }))
     this.procedureId = nextId(this.procedures)
     this.operationId = nextId(this.operations)
@@ -203,10 +205,14 @@ export class ProcessAssistantMockStore {
     return file && copy(file.metadata)
   }
 
-  getFileContent(storedFileName: string): Blob | undefined {
-    return this.files.find(
+  async getFileContent(storedFileName: string): Promise<Blob | undefined> {
+    const content = this.files.find(
       item => item.metadata.storedFileName === storedFileName
     )?.content
+    if (!content || content instanceof Blob) return content
+    const response = await fetch(content.assetUrl)
+    if (!response.ok) return undefined
+    return new Blob([await response.arrayBuffer()], { type: content.contentType })
   }
 
   createFile(file: File, comment?: string): UploadFileDto {

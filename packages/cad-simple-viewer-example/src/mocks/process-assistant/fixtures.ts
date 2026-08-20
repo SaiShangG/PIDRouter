@@ -13,7 +13,7 @@ export const projectFixtures: ProjectDto[] = [
     jsonData: JSON.stringify({
       schemaVersion: 1,
       description: 'MSW Project fixture',
-      fileIds: [1]
+      fileIds: [1, 2]
     })
   }
 ]
@@ -56,7 +56,8 @@ export const phaseFixtures: PhaseDto[] = [
 
 export interface UploadFileFixture {
   metadata: UploadFileDto
-  content: string
+  content?: string
+  assetUrl?: string
   contentType: string
 }
 
@@ -76,5 +77,21 @@ export const uploadFileFixtures: UploadFileFixture[] = [
     },
     content: '0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n',
     contentType: 'application/dxf'
+  },
+  {
+    metadata: {
+      id: 2,
+      originalFileName: 'Standard_Part_PID.dwg',
+      storedFileName: '2-Standard_Part_PID.dwg',
+      url: '/api/v1/File/download/2-Standard_Part_PID.dwg',
+      comment: JSON.stringify({
+        name: 'Standard Part PID',
+        drawingNumber: 'STANDARD-PART-PID'
+      }),
+      fileSize: 549461,
+      uploadedAt: '2026-01-01T00:00:00.000Z'
+    },
+    assetUrl: '/mock-assets/Standard_Part_PID.dwg',
+    contentType: 'application/acad'
   }
 ]

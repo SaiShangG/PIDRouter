@@ -93,9 +93,9 @@ export const processAssistantHandlers = [
     HttpResponse.json(processAssistantMockStore.listFiles())
   ),
 
-  http.get(`${api}/File/download/:storedFileName`, ({ params }) => {
+  http.get(`${api}/File/download/:storedFileName`, async ({ params }) => {
     const storedFileName = parseStoredFileName(params.storedFileName)
-    const content = processAssistantMockStore.getFileContent(storedFileName)
+    const content = await processAssistantMockStore.getFileContent(storedFileName)
     if (!content) return errorResponse(404, 'File not found')
     return new HttpResponse(content, {
       headers: {

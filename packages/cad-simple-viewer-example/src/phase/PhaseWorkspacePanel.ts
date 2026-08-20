@@ -21,8 +21,16 @@ export interface NewPhaseRequest {
   sequenceId: string
   number: number
   name: string
-  sourceKind: 'unassigned' | 'previous' | 'history' | 'local' | 'url' | 'blank'
+  sourceKind:
+    | 'unassigned'
+    | 'previous'
+    | 'history'
+    | 'project'
+    | 'local'
+    | 'url'
+    | 'blank'
   sourcePhaseId?: string
+  fileId?: number
   drawingDisplayName: string
   file?: File
   url?: string
@@ -1251,14 +1259,25 @@ export class PhaseWorkspacePanel {
     name.setAttribute('aria-label', '阶段名称')
     const source = document.createElement('select')
     source.setAttribute('aria-label', '阶段创建方式')
+    const state = this.getState()
+    const projectFileIds = new Set(this.getProjectFileIds())
+    const projectDrawings = Object.values(state.drawingAssets).flatMap(drawing => {
+      const match = /^file:(\d+)$/.exec(drawing.id)
+      const fileId = match ? Number(match[1]) : undefined
+      return fileId && projectFileIds.has(fileId) ? [{ fileId, drawing }] : []
+    })
     if (sequence.phases.length > 0) {
       source.add(new Option('使用上一阶段的已标记图纸', 'previous'))
       source.add(new Option('使用任意历史阶段的已标记图纸', 'history'))
     }
     source.add(new Option('稍后关联图纸', 'unassigned'))
-    source.add(new Option('使用本地图纸', 'local'))
-    source.add(new Option('使用图纸 URL', 'url'))
-    source.add(new Option('使用空白图纸', 'blank'))
+    source.add(new Option('使用 Project PID', 'project'))
+    const projectDrawing = document.createElement('select')
+    projectDrawing.setAttribute('aria-label', 'Project PID')
+    projectDrawing.add(new Option('请选择 Project PID', ''))
+    projectDrawings.forEach(({ fileId, drawing }) => {
+      projectDrawing.add(new Option(drawing.sourceName, String(fileId)))
+    })
     const history = document.createElement('select')
     history.setAttribute('aria-label', '历史阶段')
     sequence.phases.forEach(phase => {
@@ -1291,6 +1310,7 @@ export class PhaseWorkspacePanel {
       this.createFormField('阶段名称', name)
     )
     const sourceField = this.createFormField('创建方式', source)
+    const projectDrawingField = this.createFormField('Project PID', projectDrawing)
     const historyField = this.createFormField('历史阶段', history)
     const fileField = this.createFormField('本地图纸', file)
     const urlField = this.createFormField('图纸 URL', url)
@@ -1318,6 +1338,7 @@ export class PhaseWorkspacePanel {
       if (event.key === 'Escape') closeModal()
     })
     const syncSourceFields = () => {
+      projectDrawingField.hidden = source.value !== 'project'
       historyField.hidden = source.value !== 'history'
       fileField.hidden = source.value !== 'local'
       urlField.hidden = source.value !== 'url'
@@ -1337,14 +1358,23 @@ export class PhaseWorkspacePanel {
       } else if (source.value === 'blank' && !displayName.value) {
         displayName.value = `Drawing-Phase-${number.value}.dwg`
       }
+      submit.disabled = source.value === 'project' && !projectDrawing.value
     }
     source.addEventListener('change', syncSourceFields)
+    projectDrawing.addEventListener('change', () => {
+      const selected = projectDrawings.find(
+        item => item.fileId === Number(projectDrawing.value)
+      )
+      if (selected) displayName.value = selected.drawing.sourceName
+      syncSourceFields()
+    })
     history.addEventListener('change', syncSourceFields)
     file.addEventListener('change', () => {
       if (file.files?.[0]) displayName.value = file.files[0].name
     })
     form.addEventListener('submit', async event => {
       event.preventDefault()
+      if (source.value === 'project' && !projectDrawing.value) return
       submit.disabled = true
       try {
         await this.actions.createPhase({
@@ -1353,7 +1383,10 @@ export class PhaseWorkspacePanel {
           number: Number(number.value),
           name: name.value,
           sourceKind: source.value as NewPhaseRequest['sourceKind'],
-          sourcePhaseId: history.value || undefined,
+          sourcePhaseId:
+            source.value === 'history' ? history.value || undefined : undefined,
+          fileId:
+            source.value === 'project' ? Number(projectDrawing.value) : undefined,
           drawingDisplayName: displayName.value,
           file: file.files?.[0],
           url: url.value
@@ -1367,6 +1400,7 @@ export class PhaseWorkspacePanel {
     form.append(
       identityFields,
       sourceField,
+      projectDrawingField,
       historyField,
       fileField,
       urlField,

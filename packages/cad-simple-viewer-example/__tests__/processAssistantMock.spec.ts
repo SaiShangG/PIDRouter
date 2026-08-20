@@ -169,7 +169,11 @@ describe('Process Assistant mock hierarchy', () => {
 describe('Process Assistant mock files', () => {
   it('uploads, downloads, updates, and deletes files', async () => {
     await expect(files.list()).resolves.toEqual([
-      expect.objectContaining({ storedFileName: '1-mock-pid.dxf' })
+      expect.objectContaining({ storedFileName: '1-mock-pid.dxf' }),
+      expect.objectContaining({
+        id: 2,
+        storedFileName: '2-Standard_Part_PID.dwg'
+      })
     ])
 
     const content = 'mock drawing content'
@@ -181,7 +185,7 @@ describe('Process Assistant mock files', () => {
     })
     expect(uploaded).toEqual(
       expect.objectContaining({
-        id: 2,
+        id: 3,
         originalFileName: 'drawing one.dwg',
         comment: JSON.stringify({
           name: 'Drawing One',

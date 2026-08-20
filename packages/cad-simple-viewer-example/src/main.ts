@@ -2501,6 +2501,8 @@ class CadViewerApp {
         }
       } else if (request.sourceKind === 'unassigned') {
         source = { kind: 'unassigned' }
+      } else if (request.sourceKind === 'project') {
+        throw new Error('Project PID requires a backend Project')
       } else {
         const drawing = await this.createDrawingAsset(request)
         source = {
@@ -2557,6 +2559,21 @@ class CadViewerApp {
       drawing = await repository.uploadDrawing(request.file)
       if (request.drawingDisplayName.trim()) {
         drawing.displayName = request.drawingDisplayName.trim()
+      }
+    } else if (request.sourceKind === 'project') {
+      if (!Number.isInteger(request.fileId) || (request.fileId ?? 0) < 1) {
+        throw new Error('请选择 Project PID')
+      }
+      const projectFileIds = new Set(this.activeProject?.fileIds ?? [])
+      if (!projectFileIds.has(request.fileId!)) {
+        throw new Error('所选图纸不属于当前 Project')
+      }
+      const projectDrawing = state.drawingAssets[`file:${request.fileId}`]
+      if (!projectDrawing) throw new Error('所选 Project PID 不存在')
+      drawing = {
+        fileId: request.fileId!,
+        displayName:
+          request.drawingDisplayName.trim() || projectDrawing.sourceName
       }
     } else if (request.sourceKind === 'url' || request.sourceKind === 'blank') {
       throw new Error('实际后台仅支持上传文件，暂不支持 URL 或空白图纸')

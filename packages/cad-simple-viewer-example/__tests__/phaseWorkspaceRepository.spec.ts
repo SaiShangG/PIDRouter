@@ -135,7 +135,7 @@ describe('PhaseWorkspaceRepository', () => {
       mode: 'open'
     })
     expect(workspace.drawingAssets['file:5'].url).toBe(
-      '/api/v1/File/download/stored%20drawing.dwg'
+      'http://localhost/api/v1/File/download/stored%20drawing.dwg'
     )
     expect(workspace.processes[0].sequences[1].phases[0].flowState).toEqual({
       flowPaths: []

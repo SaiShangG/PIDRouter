@@ -392,7 +392,11 @@ export class PhaseWorkspaceRepository {
 
   private resolveUrl(path: string): string {
     if (/^https?:\/\//i.test(path)) return path
-    return `${this.options.baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
+    const baseUrl =
+      this.options.baseUrl.trim() ||
+      globalThis.location?.href ||
+      'http://localhost/'
+    return new URL(path, `${baseUrl.replace(/\/$/, '')}/`).href
   }
 
   private readPresentationProfile(data: JsonRecord): PresentationProfile {

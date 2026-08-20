@@ -182,9 +182,7 @@ describe('PhaseWorkspacePanel', () => {
     )!
     expect([...source.options].map(option => option.value)).toEqual([
       'unassigned',
-      'local',
-      'url',
-      'blank'
+      'project'
     ])
 
     store.createPhase({
@@ -213,10 +211,67 @@ describe('PhaseWorkspacePanel', () => {
       'previous',
       'history',
       'unassigned',
-      'local',
-      'url',
-      'blank'
+      'project'
     ])
+  })
+
+  it('creates a Phase from a Project PID drawing', () => {
+    const { store, panel, actions } = createHarness()
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'PID source',
+      source: {
+        kind: 'new',
+        drawing: {
+          id: 'file:5',
+          kind: 'url',
+          sourceName: 'Project-PID.dwg',
+          url: '/project-pid.dwg'
+        },
+        displayName: 'Project-PID.dwg'
+      }
+    })
+    panel.render()
+    ;[...panel.element.querySelectorAll('button')]
+      .find(item => item.textContent === '创建 Phase')!
+      .click()
+
+    const form = panel.element.querySelector<HTMLFormElement>('.phase-create-form')!
+    const source = form.querySelector<HTMLSelectElement>(
+      '[aria-label="阶段创建方式"]'
+    )!
+    const projectDrawing = form.querySelector<HTMLSelectElement>(
+      '[aria-label="Project PID"]'
+    )!
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    source.value = 'project'
+    source.dispatchEvent(new Event('change'))
+    expect(projectDrawing.parentElement?.hidden).toBe(false)
+    expect(submit.disabled).toBe(true)
+
+    projectDrawing.value = '5'
+    projectDrawing.dispatchEvent(new Event('change'))
+    expect(submit.disabled).toBe(false)
+    form.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true })
+    )
+
+    expect(actions.createPhase).toHaveBeenCalledWith({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: '',
+      sourceKind: 'project',
+      sourcePhaseId: undefined,
+      fileId: 5,
+      drawingDisplayName: 'Project-PID.dwg',
+      file: undefined,
+      url: ''
+    })
   })
 
   it('renders phases as a collapsible tree with structured overview', () => {
@@ -385,8 +440,7 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="阶段编号"]')!.value)
       .toBe('5')
     panel.element.querySelector<HTMLInputElement>('[aria-label="阶段名称"]')!.value = '碱洗'
-    panel.element.querySelector<HTMLInputElement>('[aria-label="新图纸显示名"]')!.value = 'PID-2.dwg'
-    panel.element.querySelector<HTMLSelectElement>('[aria-label="阶段创建方式"]')!.value = 'blank'
+    panel.element.querySelector<HTMLSelectElement>('[aria-label="阶段创建方式"]')!.value = 'unassigned'
     panel.element.querySelector<HTMLFormElement>('.phase-create-form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 

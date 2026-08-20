@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
   assertViewerRuntimeExists()
   const env = loadEnv(mode, __dirname, '')
   const processAssistantTarget =
-    env.VITE_PROCESS_ASSISTANT_API_URL || 'http://192.168.1.100:5153'
+    env.VITE_PROCESS_ASSISTANT_API_URL || 'http://localhost:5153'
 
   return {
     base: './',
@@ -58,6 +58,10 @@ export default defineConfig(({ mode }) => {
           {
             src: VIEWER_RUNTIME_SRC,
             dest: ''
+          },
+          {
+            src: './src/mocks/process-assistant/mockdata/Standard_Part_PID.dwg',
+            dest: 'mock-assets'
           }
         ]
       })

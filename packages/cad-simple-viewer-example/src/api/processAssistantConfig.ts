@@ -5,7 +5,7 @@ export interface ProcessAssistantConfig {
 
 export const PROCESS_ASSISTANT_TARGET_URL =
   import.meta.env.VITE_PROCESS_ASSISTANT_API_URL?.trim() ||
-  'http://192.168.1.100:5153'
+  'http://localhost:5153'
 
 export const PROCESS_ASSISTANT_API_URL =
   import.meta.env.DEV &&
