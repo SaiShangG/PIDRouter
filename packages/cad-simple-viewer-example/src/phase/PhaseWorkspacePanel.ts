@@ -96,6 +96,7 @@ export class PhaseWorkspacePanel {
   readonly element = document.createElement('section')
   private readonly expandedSequenceIds = new Set<string>()
   private readonly initializedSequenceIds = new Set<string>()
+  private readonly drawingAssociationModals = new Set<HTMLElement>()
   private processCreatorExpanded = false
 
   constructor(
@@ -109,6 +110,8 @@ export class PhaseWorkspacePanel {
   }
 
   render() {
+    this.drawingAssociationModals.forEach(modal => modal.remove())
+    this.drawingAssociationModals.clear()
     this.element.replaceChildren()
     const state = this.getState()
     const activeProcess = state.processes.find(
@@ -1029,14 +1032,14 @@ export class PhaseWorkspacePanel {
         cancelDelete.disabled = false
       }
     })
-    const associationModal = this.createDrawingAssociationModal(
+    this.createDrawingAssociationModal(
       processId,
       sequence.id,
       phase.id,
       phase.drawing.kind === 'assigned' ? phase.drawing.displayName : '',
       associate
     )
-    block.append(identity, details, deleteModal, associationModal)
+    block.append(identity, details, deleteModal)
     return block
   }
 
@@ -1054,7 +1057,8 @@ export class PhaseWorkspacePanel {
     modal.setAttribute('aria-modal', 'true')
     modal.setAttribute('aria-labelledby', `phaseDrawingModalTitle-${phaseId}`)
     const dialog = document.createElement('section')
-    dialog.className = 'phase-workspace-modal-dialog'
+    dialog.className =
+      'phase-workspace-modal-dialog phase-drawing-association-dialog'
     const header = document.createElement('header')
     const title = document.createElement('h2')
     title.id = `phaseDrawingModalTitle-${phaseId}`
@@ -1122,6 +1126,8 @@ export class PhaseWorkspacePanel {
     const projectDrawingField = this.createFormField('Project PID', projectDrawing)
     const markedPhaseField = this.createFormField('已标记 Phase', markedPhase)
     const displayNameField = this.createFormField('图纸显示名', displayName)
+    sourceField.classList.add('phase-drawing-source-field')
+    displayNameField.classList.add('phase-drawing-name-field')
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions'
     const cancel = this.createButton('取消', false)
@@ -1211,7 +1217,9 @@ export class PhaseWorkspacePanel {
       }
     })
     syncFields()
-    return modal
+    this.drawingAssociationModals.add(modal)
+    document.body.append(modal)
+    localizeDom(modal, this.getLocale())
   }
 
   private createPhaseControls(

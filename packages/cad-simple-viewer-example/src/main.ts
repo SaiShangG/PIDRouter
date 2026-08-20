@@ -25,7 +25,7 @@ import {
   AcGeBox2d,
   log
 } from '@mlightcad/data-model'
-import { Languages, Palette } from 'lucide'
+import { Languages, Palette, Save } from 'lucide'
 import type { Object3D } from 'three'
 
 import { setupAgentIntegration } from './agentIntegration'
@@ -981,6 +981,8 @@ class CadViewerApp {
     setLabel('#phaseContextProcess', 'selectProcess')
     setLabel('#phaseContextSequence', 'selectSequence')
     setLabel('#phaseContextPhase', 'selectPhase')
+    setText('#phaseContextSave span', 'savePhase')
+    setLabel('#phaseContextSave', 'savePhase')
     const button = document.getElementById('languageToggleButton')
     const buttonLabel = translate(this.appLocale, 'languageButton')
     button?.setAttribute('aria-label', buttonLabel)
@@ -1056,6 +1058,7 @@ class CadViewerApp {
         content,
         {
           minimumChunkSize: 1000,
+          progressiveRendering: true,
           mode: AcEdOpenMode.Write,
           openViewMode: AcApOpenViewMode.Extents,
           sysVars: { lwdisplay: false }
@@ -1630,12 +1633,13 @@ class CadViewerApp {
 
       AcApDocManager.createInstance({
         container: this.container,
-        busyIndicatorHost: this.viewerPane,
+        busyIndicatorHost: this.container,
         autoResize: true,
         baseUrl: 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/',
         commandAliases: EXAMPLE_COMMAND_ALIASES,
         openDocumentDefaults: {
           minimumChunkSize: 1000,
+          progressiveRendering: true,
           mode: AcEdOpenMode.Write,
           openViewMode: AcApOpenViewMode.Extents,
           sysVars: {
@@ -1973,9 +1977,17 @@ class CadViewerApp {
     const phaseSelect = document.getElementById(
       'phaseContextPhase'
     ) as HTMLSelectElement | null
-    if (!processSelect || !sequenceSelect || !phaseSelect) {
+    const saveButton = document.getElementById(
+      'phaseContextSave'
+    ) as HTMLButtonElement | null
+    if (!processSelect || !sequenceSelect || !phaseSelect || !saveButton) {
       throw new Error('Phase context controls were not found')
     }
+    saveButton.prepend(createPhaseIcon(Save))
+    saveButton.addEventListener('click', () => {
+      this.captureLoadedPhaseState()
+      this.showMessage(translate(this.appLocale, 'phaseSaved'), 'success')
+    })
     processSelect.addEventListener('change', () => {
       if (processSelect.value) {
         void this.activateWorkspaceProcess(processSelect.value)
@@ -2017,6 +2029,9 @@ class CadViewerApp {
     ) as HTMLSelectElement | null
     const summary = document.getElementById('phaseContextSummary')
     const status = document.querySelector('#phaseContextStatus span')
+    const saveButton = document.getElementById(
+      'phaseContextSave'
+    ) as HTMLButtonElement | null
     const styleButton = document.getElementById(
       'phaseHighlightStyleButton'
     ) as HTMLButtonElement | null
@@ -2058,6 +2073,7 @@ class CadViewerApp {
     )
     phaseSelect.disabled = !sequence || sequence.phases.length === 0
     phaseSelect.value = sequence?.activePhaseId ?? ''
+    if (saveButton) saveButton.disabled = !sequence?.activePhaseId
     if (styleButton) {
       styleButton.disabled = !process
       styleButton.setAttribute('aria-haspopup', 'dialog')
@@ -2995,6 +3011,7 @@ class CadViewerApp {
     await this.initialize()
     const options: AcApOpenDatabaseOptions = {
       minimumChunkSize: 1000,
+      progressiveRendering: true,
       mode: AcEdOpenMode.Write,
       openViewMode: AcApOpenViewMode.Extents,
       sysVars: { lwdisplay: false }
@@ -3960,6 +3977,7 @@ class CadViewerApp {
       const fileContent = await this.readFile(file)
       const options: AcApOpenDatabaseOptions = {
         minimumChunkSize: 1000,
+        progressiveRendering: true,
         mode: AcEdOpenMode.Write,
         openViewMode: AcApOpenViewMode.Extents,
         sysVars: {
@@ -3997,6 +4015,7 @@ class CadViewerApp {
     try {
       const options: AcApOpenDatabaseOptions = {
         minimumChunkSize: 1000,
+        progressiveRendering: true,
         mode: AcEdOpenMode.Write,
         openViewMode: AcApOpenViewMode.Extents
       }

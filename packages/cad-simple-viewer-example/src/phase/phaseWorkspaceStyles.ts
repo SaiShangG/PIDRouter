@@ -12,16 +12,16 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace-block h3 { margin: 0; color: #34474e; font-size: 11px; font-weight: 750; text-transform: uppercase; }
     .phase-workspace-block p { margin: 0; color: var(--reference-muted, #64747c); font-size: 12px; line-height: 1.5; }
     .phase-workspace form { display: grid; gap: 8px; }
-    .phase-workspace input, .phase-workspace select, .phase-workspace button { min-height: 34px; border: 1px solid #c4cfd2; border-radius: 5px; background: #ffffff; color: inherit; padding: 6px 9px; font: inherit; }
-    .phase-workspace button { cursor: pointer; }
-    .phase-workspace button:hover:not(:disabled) { border-color: #7ebda9; color: #075d43; background: #edf8f4; }
-    .phase-workspace button:disabled { opacity: .55; cursor: wait; }
-    .phase-workspace .phase-workspace-primary { border-color: #087b58; background: #087b58; color: #fff; font-weight: 650; }
-    .phase-workspace .phase-workspace-primary:hover:not(:disabled) { border-color: #075f46; background: #075f46; color: #fff; }
+    .phase-workspace input, .phase-workspace select, .phase-workspace button, .phase-workspace-modal input, .phase-workspace-modal select, .phase-workspace-modal button { min-height: 34px; border: 1px solid #c4cfd2; border-radius: 5px; background: #ffffff; color: inherit; padding: 6px 9px; font: inherit; }
+    .phase-workspace button, .phase-workspace-modal button { cursor: pointer; }
+    .phase-workspace button:hover:not(:disabled), .phase-workspace-modal button:hover:not(:disabled) { border-color: #7ebda9; color: #075d43; background: #edf8f4; }
+    .phase-workspace button:disabled, .phase-workspace-modal button:disabled { opacity: .55; cursor: wait; }
+    .phase-workspace .phase-workspace-primary, .phase-workspace-modal .phase-workspace-primary { border-color: #087b58; background: #087b58; color: #fff; font-weight: 650; }
+    .phase-workspace .phase-workspace-primary:hover:not(:disabled), .phase-workspace-modal .phase-workspace-primary:hover:not(:disabled) { border-color: #075f46; background: #075f46; color: #fff; }
     .phase-ui-icon { display: block; flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; }
     .phase-process-selector { display: grid; grid-template-columns: minmax(0, 1fr) 34px 34px; gap: 7px; }
     .phase-process-creator { display: grid; grid-template-columns: minmax(0, 1fr) auto 34px; gap: 7px; padding: 9px; border: 1px solid #d8e2e4; border-radius: 6px; background: #fff; }
-    .phase-workspace .phase-icon-button { display: inline-grid; place-items: center; min-width: 28px; width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: #c4cfd2; color: #087b58; background: #fff; }
+    .phase-workspace .phase-icon-button, .phase-workspace-modal .phase-icon-button { display: inline-grid; place-items: center; min-width: 28px; width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: #c4cfd2; color: #087b58; background: #fff; }
     .phase-process-selector > .phase-icon-button, .phase-workspace .phase-process-cancel { min-width: 34px; width: 34px; min-height: 34px; height: 34px; }
     .phase-workspace .phase-process-delete { border-color: #cf7d75; color: #a7352d; background: #fff8f7; }
     .phase-workspace .phase-process-delete:hover { border-color: #a7352d; color: #8f2d26; background: #fdecea; }
@@ -84,12 +84,20 @@ export function injectPhaseWorkspaceStyles() {
     .phase-overview-rename { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; }
     .phase-create-section { flex: 0 0 auto; z-index: 2; padding: 12px 14px 14px; border-top: 1px solid #d3dfe1; border-bottom: 0; background: rgba(245, 248, 248, .96); box-shadow: 0 -8px 18px rgba(40, 65, 73, .06); backdrop-filter: blur(8px); }
     .phase-create-section .phase-workspace-primary { width: 100%; }
-    .phase-workspace-modal { position: fixed; z-index: 500; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15, 32, 38, .48); }
+    .phase-workspace-modal { position: fixed; z-index: 950; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15, 32, 38, .48); }
+    .phase-workspace-modal[hidden] { display: none; }
     .phase-workspace-modal-dialog { width: min(520px, 100%); max-height: min(720px, calc(100vh - 40px)); overflow: auto; border: 1px solid #b9c7ca; border-radius: 6px; background: #ffffff; box-shadow: 0 18px 48px rgba(15, 32, 38, .28); }
     .phase-workspace-modal-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 10px 16px; border-bottom: 1px solid var(--reference-line, #d4dde0); }
     .phase-workspace-modal-dialog h2 { margin: 0; font-size: 16px; }
-    .phase-workspace .phase-workspace-modal-close { min-width: 30px; width: 30px; min-height: 30px; height: 30px; }
+    .phase-workspace .phase-workspace-modal-close, .phase-workspace-modal .phase-workspace-modal-close { min-width: 30px; width: 30px; min-height: 30px; height: 30px; }
     .phase-workspace-modal-form { display: grid; gap: 10px; padding: 16px; }
+    .phase-drawing-association-dialog { width: min(560px, 100%); overflow: hidden; }
+    .phase-drawing-association-form { gap: 14px; padding: 18px; }
+    .phase-drawing-association-form .phase-modal-field { gap: 6px; }
+    .phase-drawing-association-form .phase-modal-field > input, .phase-drawing-association-form .phase-modal-field > select { min-height: 38px; }
+    .phase-drawing-association-form .phase-drawing-source-field { padding-bottom: 14px; border-bottom: 1px solid #e1e7e8; }
+    .phase-drawing-association-form .phase-drawing-name-field { margin-top: 2px; }
+    .phase-drawing-association-form .phase-workspace-modal-actions { margin: 2px -18px -18px; padding: 12px 18px; border-top: 1px solid #dbe3e5; background: #f5f8f8; }
     .phase-operation-dialog { width: min(440px, 100%); }
     .phase-sequence-modal-form { gap: 14px; }
     .phase-modal-field-grid { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 10px; }

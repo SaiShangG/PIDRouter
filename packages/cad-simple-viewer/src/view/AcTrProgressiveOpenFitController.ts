@@ -23,7 +23,7 @@ export class AcTrProgressiveOpenFitController {
   private static readonly SMALL_ENTITY_THRESHOLD = 500
   private static readonly BBOX_GROWTH_RATIO = 1.5
   private static readonly FIT_INTERVAL_MS = 500
-  private static readonly YIELD_EVERY = 32
+  private static readonly FRAME_BUDGET_MS = 8
 
   private active = false
   private userAdjusted = false
@@ -32,6 +32,7 @@ export class AcTrProgressiveOpenFitController {
   private initialPendingCount = 0
   private lastFittedBox?: AcGeBox2d
   private lastZoomAt = 0
+  private lastYieldAt = 0
 
   constructor(private readonly zoomTo: AcTrProgressiveOpenFitZoomFn) {}
 
@@ -46,6 +47,7 @@ export class AcTrProgressiveOpenFitController {
     this.active = true
     this.userAdjusted = false
     this.lastZoomAt = 0
+    this.lastYieldAt = performance.now()
     this.initialPendingCount = pendingEntityCount
     this.lastFittedBox = undefined
     this.incrementalEnabled = this.shouldEnableIncrementalFit()
@@ -56,6 +58,7 @@ export class AcTrProgressiveOpenFitController {
     this.active = false
     this.incrementalEnabled = false
     this.lastFittedBox = undefined
+    this.lastYieldAt = 0
   }
 
   /**
@@ -100,13 +103,15 @@ export class AcTrProgressiveOpenFitController {
   }
 
   /**
-   * Yields to {@link requestAnimationFrame} periodically so the render loop can
-   * paint converted geometry during document open.
+   * Yields to {@link requestAnimationFrame} when conversion consumes the frame
+   * budget so the render loop and non-viewer UI can process pending work.
    */
-  async yieldForRender(entityIndex: number) {
+  async yieldForRender(_entityIndex: number) {
+    const now = performance.now()
     if (
       !this.active ||
-      entityIndex % AcTrProgressiveOpenFitController.YIELD_EVERY !== 0
+      now - this.lastYieldAt <
+        AcTrProgressiveOpenFitController.FRAME_BUDGET_MS
     ) {
       return
     }
@@ -114,6 +119,7 @@ export class AcTrProgressiveOpenFitController {
     await new Promise<void>(resolve => {
       requestAnimationFrame(() => resolve())
     })
+    this.lastYieldAt = performance.now()
   }
 
   private maybeIncrementalFit(resolveFitBox: () => AcGeBox2d | undefined) {

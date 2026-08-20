@@ -566,10 +566,12 @@ describe('PhaseWorkspacePanel', () => {
     const associate = [...panel.element.querySelectorAll('button')].find(
       button => button.textContent === '关联图纸'
     )!
-    associate.click()
-    const modal = panel.element.querySelector<HTMLElement>(
+    const modal = document.body.querySelector<HTMLElement>(
       '.phase-drawing-association-modal'
     )!
+    expect(panel.element.contains(modal)).toBe(false)
+    expect(modal.hidden).toBe(true)
+    associate.click()
     expect(modal.hidden).toBe(false)
     const source = modal.querySelector<HTMLSelectElement>(
       '[aria-label="图纸关联方式"]'
@@ -633,7 +635,7 @@ describe('PhaseWorkspacePanel', () => {
     ;[...panel.element.querySelectorAll('button')]
       .find(button => button.textContent === '关联图纸')!
       .click()
-    const modal = panel.element.querySelector<HTMLElement>(
+    const modal = document.body.querySelector<HTMLElement>(
       '.phase-drawing-association-modal'
     )!
     const source = modal.querySelector<HTMLSelectElement>(
@@ -698,7 +700,7 @@ describe('PhaseWorkspacePanel', () => {
     ;[...panel.element.querySelectorAll('button')]
       .find(button => button.textContent === '关联图纸')!
       .click()
-    const source = panel.element.querySelector<HTMLSelectElement>(
+    const source = document.body.querySelector<HTMLSelectElement>(
       '.phase-drawing-association-modal [aria-label="图纸关联方式"]'
     )!
 

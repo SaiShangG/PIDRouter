@@ -40,6 +40,7 @@ export function injectAppShellResponsiveStyles() {
       }
 
       .phase-context-summary,
+      .phase-context-save,
       .phase-context-status {
         flex: 0 0 auto;
       }

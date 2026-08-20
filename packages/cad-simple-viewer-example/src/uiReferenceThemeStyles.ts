@@ -187,6 +187,27 @@ export function injectUiReferenceThemeStyles() {
 
     .phase-context-spacer { flex: 1; }
 
+    .phase-context-save {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid #087a5a;
+      border-radius: 4px;
+      color: #ffffff;
+      background: var(--reference-green);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .phase-context-save:hover:not(:disabled) { background: #087052; }
+    .phase-context-save:disabled { border-color: #bdc8ca; color: #7d8b90; background: #e3e8e9; cursor: default; }
+    .phase-context-save svg { width: 14px; height: 14px; }
+
     .phase-context-status {
       display: flex;
       align-items: center;
@@ -425,6 +446,7 @@ export function injectUiReferenceThemeStyles() {
       .phase-context-summary { order: 3; }
       .phase-context-spacer { display: none; }
       .phase-context-status { order: 4; margin-left: auto; }
+      .phase-context-save { order: 5; }
 
       .file-sidebar,
       .file-sidebar-toggle,
