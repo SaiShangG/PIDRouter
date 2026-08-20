@@ -3494,69 +3494,10 @@ class CadViewerApp {
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
-      onPreview: draft => this.applyHighlightStyleDraft(draft),
-      onCancel: draft => this.applyHighlightStyleDraft(draft),
-      onApply: draft => {
-        if (this.phaseRepository) {
-          void this.saveBackendPresentationProfile(processId, draft)
-          return
-        }
-        this.phaseStore.updatePresentationProfile(
-          processId,
-          draft.presentationProfile
-        )
-        this.phaseStore.persist()
-        if (this.loadedPhase?.processId === processId) {
-          this.applyHighlightStyleDraft(draft)
-        }
-        this.phasePanel?.render()
-      },
       onClose: () => undefined
     })
     this.phasePanel.element.append(dialog.element)
     dialog.element.querySelector<HTMLElement>('[role="tab"]')?.focus()
-  }
-
-  private async saveBackendPresentationProfile(
-    processId: string,
-    draft: HighlightStyleDraft
-  ): Promise<void> {
-    const repository = this.phaseRepository
-    if (!repository) return
-    try {
-      const process = this.phaseStore
-        .snapshot()
-        .processes.find(item => item.id === processId)
-      if (!process) throw new Error('Process was not found')
-      await repository.updateProcess({
-        ...process,
-        presentationProfile: draft.presentationProfile
-      })
-      this.phaseStore.updatePresentationProfile(
-        processId,
-        draft.presentationProfile
-      )
-      this.phaseStore.persist()
-      if (this.loadedPhase?.processId === processId) {
-        this.applyHighlightStyleDraft(draft)
-      }
-      this.phasePanel?.render()
-      this.showMessage('Process 展示配置已保存', 'success')
-    } catch (error) {
-      log.error('Failed to save backend Process profile:', error)
-      this.showMessage('Process 展示配置保存失败', 'error')
-    }
-  }
-
-  private applyHighlightStyleDraft(draft: HighlightStyleDraft) {
-    this.openHighlightRoots.forEach((root, objectId) => {
-      this.phasePresentationController.apply(
-        root as unknown as Parameters<PhasePresentationController['apply']>[0],
-        this.resolvePresentationForObjectId(objectId, draft)
-      )
-    })
-    const view = AcApDocManager.instance.curView
-    if (view) view.isDirty = true
   }
 
   private captureFlowPaths(): FlowStateSnapshot['flowPaths'] {

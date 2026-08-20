@@ -10,15 +10,11 @@ const value = () => ({
 describe('HighlightStyleDialog', () => {
   afterEach(() => document.body.replaceChildren())
 
-  it('previews draft edits and restores the original value on cancel', () => {
-    const onPreview = jest.fn()
-    const onCancel = jest.fn()
+  it('keeps edits local and closes without applying them', () => {
+    const onClose = jest.fn()
     const dialog = new HighlightStyleDialog({
       value: value(),
-      onPreview,
-      onApply: jest.fn(),
-      onCancel,
-      onClose: jest.fn()
+      onClose
     })
     document.body.append(dialog.element)
 
@@ -30,27 +26,18 @@ describe('HighlightStyleDialog', () => {
     )!
     color.value = '#123456'
     color.dispatchEvent(new Event('input'))
-    expect(onPreview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        presentationProfile: expect.any(Object)
-      })
-    )
     ;[...dialog.element.querySelectorAll('button')]
       .find(button => button.textContent === '取消')!
       .click()
-    expect(onCancel.mock.calls[0][0].presentationProfile.defaultFlowStyle.color)
-      .toBe(0x00c853)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('switches tabs and applies utility changes', () => {
-    const onApply = jest.fn()
+  it('switches tabs and keeps utility changes inside the dialog', () => {
+    const onClose = jest.fn()
     const dialog = new HighlightStyleDialog({
       value: value(),
       createId: () => 'utility-1',
-      onPreview: jest.fn(),
-      onApply,
-      onCancel: jest.fn(),
-      onClose: jest.fn()
+      onClose
     })
     document.body.append(dialog.element)
 
@@ -66,19 +53,16 @@ describe('HighlightStyleDialog', () => {
       .find(button => button.textContent === '应用')!
       .click()
 
-    expect(onApply.mock.calls[0][0].presentationProfile.utilities).toHaveLength(1)
-    expect(onApply.mock.calls[0][0].presentationProfile.utilities[0].id).toBe(
-      'utility-1'
-    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(
+      dialog.element.querySelector<HTMLInputElement>('input[aria-label="Utility 名称"]')
+        ?.value
+    ).toBe('Utility 1')
   })
 
   it('starts with null device styles and lets the user add one', () => {
-    const onApply = jest.fn()
     const dialog = new HighlightStyleDialog({
       value: value(),
-      onPreview: jest.fn(),
-      onApply,
-      onCancel: jest.fn(),
       onClose: jest.fn()
     })
     document.body.append(dialog.element)
@@ -97,7 +81,6 @@ describe('HighlightStyleDialog', () => {
     ;[...dialog.element.querySelectorAll('button')]
       .find(button => button.textContent === '应用')!
       .click()
-    expect(onApply.mock.calls[0][0].presentationProfile.deviceStyles.valve.open)
-      .not.toBeNull()
+    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(1)
   })
 })

@@ -13,9 +13,6 @@ export interface HighlightStyleDialogOptions {
   value: HighlightStyleDraft
   getLocale?: () => AppLocale
   createId?: () => string
-  onPreview(value: HighlightStyleDraft): void
-  onApply(value: HighlightStyleDraft): void
-  onCancel(value: HighlightStyleDraft): void
   onClose(): void
 }
 
@@ -30,13 +27,10 @@ const parseHex = (value: string) =>
 
 export class HighlightStyleDialog {
   readonly element = document.createElement('div')
-  private readonly original: HighlightStyleDraft
   private draft: HighlightStyleDraft
   private activeTab: 'flow' | 'device' | 'utility' | 'defaults' = 'flow'
-  private dirty = false
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
-    this.original = cloneDraft(options.value)
     this.draft = cloneDraft(options.value)
     this.element.className = 'phase-workspace-modal highlight-style-modal'
     this.element.setAttribute('role', 'dialog')
@@ -44,13 +38,9 @@ export class HighlightStyleDialog {
     this.render()
   }
 
-  private emitPreview() {
-    this.dirty = true
-    this.options.onPreview(cloneDraft(this.draft))
-  }
+  private emitPreview() {}
 
-  private close(cancel: boolean) {
-    if (cancel && this.dirty) this.options.onCancel(cloneDraft(this.original))
+  private close() {
     this.element.remove()
     this.options.onClose()
   }
@@ -62,7 +52,7 @@ export class HighlightStyleDialog {
     const header = document.createElement('header')
     const title = document.createElement('h2')
     title.textContent = '高亮样式设置'
-    const close = this.iconButton('关闭对话框', X, () => this.close(true))
+    const close = this.iconButton('关闭对话框', X, () => this.close())
     header.append(title, close)
 
     const tabs = document.createElement('div')
@@ -96,27 +86,19 @@ export class HighlightStyleDialog {
 
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions highlight-style-actions'
-    const cancel = this.button('取消', () => this.close(true))
-    const apply = this.button('应用', () => {
-      this.options.onApply(cloneDraft(this.draft))
-      this.original.presentationProfile = cloneDraft(this.draft).presentationProfile
-      this.dirty = false
-    })
-    const applyClose = this.button('应用并关闭', () => {
-      this.options.onApply(cloneDraft(this.draft))
-      this.dirty = false
-      this.close(false)
-    })
+    const cancel = this.button('取消', () => this.close())
+    const apply = this.button('应用', () => undefined)
+    const applyClose = this.button('应用并关闭', () => this.close())
     apply.classList.add('phase-workspace-primary')
     applyClose.classList.add('phase-workspace-primary')
     footer.append(cancel, apply, applyClose)
     dialog.append(header, tabs, content, footer)
     this.element.append(dialog)
     this.element.addEventListener('click', event => {
-      if (event.target === this.element) this.close(true)
+      if (event.target === this.element) this.close()
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') this.close(true)
+      if (event.key === 'Escape') this.close()
     })
     localizeDom(this.element, this.options.getLocale?.() ?? 'zh')
   }
