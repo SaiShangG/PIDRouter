@@ -53,32 +53,6 @@ pnpm dev
 
 Vite prints the local URL (default `http://localhost:5173`).
 
-### Mock backend
-
-When the Process Assistant API is unavailable, start the example with its
-in-memory MSW backend:
-
-```bash
-pnpm --filter @mlightcad/cad-simple-viewer-example dev:mock
-```
-
-This mode implements the Project, File, Procedure, Operation, and Phase API
-contracts. Project creation uses `/api/v1/Project/add-v2`, and selecting a
-Project reloads its Procedure/Operation/Phase workspace using the returned
-numeric Project ID.
-Changes remain in memory and reset to the fixtures whenever the page reloads.
-The regular `pnpm dev` command and production builds do not enable the mock.
-
-Project management always uses the HTTP API. The selected Project ID is kept in
-localStorage; mock mode only intercepts those requests and does not replace the
-Project repository with a separate local implementation.
-
-The integration is intentionally removable. Delete
-`src/mocks/process-assistant/`, `public/mockServiceWorker.js`, `.env.mock`, and
-`__tests__/processAssistantMock.spec.ts`; remove the mock import and startup call
-from `src/main.ts`; then remove `dev:mock`, the `msw` dependency, and the `msw`
-metadata from `package.json`. Run `pnpm install` and rebuild afterward.
-
 ### Production
 
 ```bash
@@ -162,7 +136,6 @@ The document manager initializes at page load so the process/phase dock is avail
 
 ```bash
 pnpm dev          # Vite dev server
-pnpm dev:mock     # Vite dev server with the in-memory Process Assistant API
 pnpm build        # Typecheck + production build
 pnpm preview      # Serve `dist/`
 pnpm clean        # Remove `dist/`, `lib/`, tsbuildinfo

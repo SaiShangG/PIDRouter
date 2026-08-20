@@ -58,10 +58,6 @@ export default defineConfig(({ mode }) => {
           {
             src: VIEWER_RUNTIME_SRC,
             dest: ''
-          },
-          {
-            src: './src/mocks/process-assistant/mockdata/Standard_Part_PID.dwg',
-            dest: 'mock-assets'
           }
         ]
       })

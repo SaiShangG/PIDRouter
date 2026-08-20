@@ -18,7 +18,6 @@
     "build": "nx run-many -t build",
     "clean": "nx run-many -t clean",
     "dev:simple": "nx run @mlightcad/cad-simple-viewer-example:dev",
-    "dev:simple:mock": "pnpm --filter @mlightcad/cad-simple-viewer-example dev:mock",
     "doc": "typedoc",
     "export:html": "nx run @mlightcad/cad-html-exporter-cli:build && node packages/cad-html-exporter-cli/dist/cli.js packages/cad-viewer-example/e2e/fixtures/minimal-line.dxf -o tmp/minimal-line.html",
     "export:html:run": "node packages/cad-html-exporter-cli/dist/cli.js",
