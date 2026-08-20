@@ -519,6 +519,7 @@
       </header>
       <div class="phase-sidebar-content" id="phaseWorkspaceMount"></div>
     </aside>
+    <button class="phase-sidebar-scrim" id="phaseSidebarScrim" type="button" aria-label="关闭工艺与阶段面板" hidden></button>
     <div class="phase-sidebar-resize-handle" id="phaseSidebarResizeHandle" role="separator" aria-label="调整工艺侧栏宽度"
       aria-orientation="vertical" aria-valuemin="240" aria-valuemax="520" tabindex="0"></div>
     <main class="viewer-pane" id="viewerPane">
@@ -542,19 +543,41 @@
           <span>保存</span>
         </button>
       </section>
-      <div class="dev-toolbar is-disabled" id="devToolbar" role="toolbar" aria-label="Viewer demo controls">
+      <div class="dev-toolbar is-disabled" id="appToolbar" role="toolbar" aria-label="PID Viewer application toolbar">
+        <div class="app-toolbar-identity" aria-label="PID Viewer Lite">
+          <span class="app-toolbar-mark" aria-hidden="true">PID</span>
+          <span class="app-toolbar-title-group">
+            <strong>PID Viewer Lite</strong>
+            <span id="appToolbarSubtitle">工业 P&amp;ID 工作台</span>
+          </span>
+        </div>
+        <div class="app-toolbar-context" id="appToolbarContext" aria-live="polite">
+          <span class="app-toolbar-context-item">
+            <small id="appToolbarProjectLabel">Project</small>
+            <strong id="appToolbarProjectValue">未选择 Project</strong>
+          </span>
+          <span class="app-toolbar-context-divider" aria-hidden="true"></span>
+          <span class="app-toolbar-context-item">
+            <small id="appToolbarDrawingLabel">图纸</small>
+            <strong id="appToolbarDrawingValue">未打开图纸</strong>
+          </span>
+        </div>
+        <button class="phase-sidebar-toggle-button" id="phaseSidebarToggleButton" type="button"
+          aria-controls="phaseWorkspaceMount" aria-expanded="false" hidden>
+          <span id="phaseSidebarToggleLabel">工艺与阶段</span>
+        </button>
         <div class="dev-toolbar-menu-wrap" hidden>
-          <button type="button" id="devDockButton" disabled aria-haspopup="menu" aria-expanded="false">
+          <button type="button" id="devDockButton" disabled aria-haspopup="dialog" aria-expanded="false">
             Dock
           </button>
-          <div id="devDockMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Dock panel controls">
+          <div id="devDockMenu" class="dev-toolbar-menu" hidden role="dialog" aria-label="Dock panel controls">
             <div class="dev-toolbar-menu-section">
-              <button type="button" id="devDockOpenToggle" class="dev-toolbar-menu-toggle" role="menuitem">
+              <button type="button" id="devDockOpenToggle" class="dev-toolbar-menu-toggle">
                 Open Dock
               </button>
             </div>
             <div class="dev-toolbar-menu-section">
-              <button type="button" id="devDockAddTab" class="dev-toolbar-menu-toggle" role="menuitem">
+              <button type="button" id="devDockAddTab" class="dev-toolbar-menu-toggle">
                 Add Dock Tab
               </button>
             </div>
@@ -567,10 +590,10 @@
           </div>
         </div>
         <div class="dev-toolbar-menu-wrap" hidden>
-          <button type="button" id="devViewerToolbarButton" disabled aria-haspopup="menu" aria-expanded="false">
+          <button type="button" id="devViewerToolbarButton" disabled aria-haspopup="dialog" aria-expanded="false">
             Toolbar
           </button>
-          <div id="devViewerToolbarMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Toolbar controls">
+          <div id="devViewerToolbarMenu" class="dev-toolbar-menu" hidden role="dialog" aria-label="Toolbar controls">
             <div class="dev-toolbar-menu-section">
               <label class="dev-toolbar-menu-field" for="devToolbarLayoutSelect">
                 <span class="dev-toolbar-menu-label">Items layout</span>
@@ -582,10 +605,10 @@
             <div class="dev-toolbar-menu-section">
               <span class="dev-toolbar-menu-label">Position</span>
               <div class="dev-toolbar-menu-actions" role="group" aria-label="Toolbar position">
-                <button type="button" data-viewer-toolbar-placement="top" role="menuitem">Top</button>
-                <button type="button" data-viewer-toolbar-placement="bottom" role="menuitem">Bottom</button>
-                <button type="button" data-viewer-toolbar-placement="left" role="menuitem">Left</button>
-                <button type="button" data-viewer-toolbar-placement="right" role="menuitem">Right</button>
+                <button type="button" data-viewer-toolbar-placement="top">Top</button>
+                <button type="button" data-viewer-toolbar-placement="bottom">Bottom</button>
+                <button type="button" data-viewer-toolbar-placement="left">Left</button>
+                <button type="button" data-viewer-toolbar-placement="right">Right</button>
               </div>
             </div>
             <div class="dev-toolbar-menu-section">
@@ -595,18 +618,18 @@
               </label>
             </div>
             <div class="dev-toolbar-menu-section">
-              <button type="button" id="devViewerToolbarVisibilityToggle" class="dev-toolbar-menu-toggle"
-                role="menuitem">
+              <button type="button" id="devViewerToolbarVisibilityToggle" class="dev-toolbar-menu-toggle">
                 Hide Toolbar
               </button>
             </div>
             <div class="dev-toolbar-menu-section">
-              <button type="button" id="devViewerToolbarCollapseToggle" class="dev-toolbar-menu-toggle" role="menuitem">
+              <button type="button" id="devViewerToolbarCollapseToggle" class="dev-toolbar-menu-toggle">
                 Collapse Toolbar
               </button>
             </div>
           </div>
         </div>
+        <span class="app-toolbar-spacer"></span>
         <button type="button" id="pidDrawingLibraryButton" aria-haspopup="dialog">
           PID 图纸
         </button>

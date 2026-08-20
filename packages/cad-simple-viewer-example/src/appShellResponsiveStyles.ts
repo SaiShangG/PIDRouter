@@ -15,18 +15,49 @@ export function injectAppShellResponsiveStyles() {
   style.textContent = `
     @media (max-width: ${ML_UI_COMPACT_MAX_WIDTH}px) {
       .app-shell {
-        flex-direction: column;
+        flex-direction: row;
         min-height: 0;
       }
 
       .phase-sidebar {
-        flex: 0 0 min(42vh, 320px);
-        width: 100%;
+        position: fixed;
+        z-index: 280;
+        top: var(--app-toolbar-height, 56px);
+        bottom: 0;
+        left: 0;
+        width: min(360px, calc(100vw - 32px));
+        height: auto;
         min-width: 0;
+        transform: translateX(-100%);
+        transition: transform 180ms ease;
+        box-shadow: 12px 0 30px rgba(9, 30, 35, .18);
+      }
+
+      .phase-sidebar.is-compact-open {
+        transform: translateX(0);
       }
 
       .phase-sidebar-resize-handle {
         display: none;
+      }
+
+      .phase-sidebar-scrim {
+        position: fixed;
+        z-index: 270;
+        inset: var(--app-toolbar-height, 56px) 0 0;
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        background: rgba(9, 30, 35, .42);
+        cursor: default;
+      }
+
+      .phase-sidebar-scrim[hidden] { display: none; }
+
+      .phase-sidebar-toggle-button:not([hidden]) {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .phase-contextbar {

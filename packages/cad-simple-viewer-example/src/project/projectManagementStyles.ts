@@ -6,20 +6,20 @@ export function injectProjectManagementStyles() {
   style.id = STYLE_ID
   style.textContent = `
     body.project-management-open { overflow: hidden; }
-    .project-management-modal { position: fixed; z-index: 930; inset: 0; padding: 24px; color: #17262b; background: rgba(12, 28, 34, .72); }
+    .project-management-modal { position: fixed; z-index: 930; inset: 0; padding: 24px; color: var(--app-text, #17262b); background: var(--app-overlay-scrim-strong, rgba(12, 28, 34, .72)); }
     .project-management-modal[hidden] { display: none; }
-    .project-management-shell { display: grid; grid-template-rows: 68px minmax(0, 1fr); width: min(1040px, 100%); height: min(720px, 100%); margin: auto; overflow: hidden; border: 1px solid #aebdc1; border-radius: 6px; background: #edf2f2; box-shadow: 0 24px 70px rgba(3, 18, 23, .42); }
-    .project-management-shell > header { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 16px; padding: 9px 18px; border-bottom: 1px solid #bdc9cc; background: #f8fafa; }
+    .project-management-shell { display: grid; grid-template-rows: 68px minmax(0, 1fr); width: min(1040px, 100%); height: min(720px, 100%); margin: auto; overflow: hidden; border: 1px solid var(--app-border-strong, #aebdc1); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface, #edf2f2); box-shadow: var(--app-shadow-modal, 0 24px 70px rgba(3, 18, 23, .42)); }
+    .project-management-shell > header { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 16px; padding: 9px 18px; border-bottom: 1px solid var(--app-border-strong, #bdc9cc); background: var(--app-surface-panel, #f8fafa); }
     .project-management-shell > header > div { display: grid; gap: 2px; }
     .project-management-shell > header span { color: #64777d; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .project-management-shell h2, .project-management-shell h3, .project-management-shell p { margin: 0; }
     .project-management-shell h2 { font-size: 19px; }
     .project-management-shell h3 { font-size: 14px; }
     .project-management-shell .project-summary { color: #176b52; font-size: 12px; }
-    .project-management-modal button, .project-management-modal input, .project-management-modal textarea { min-height: 36px; border: 1px solid #bcc9cc; border-radius: 5px; background: #fff; color: inherit; padding: 7px 10px; font: inherit; }
+    .project-management-modal button, .project-management-modal input, .project-management-modal textarea { min-height: 36px; border: 1px solid var(--app-border-strong, #bcc9cc); border-radius: var(--app-radius-control, 4px); background: var(--app-surface-elevated, #fff); color: inherit; padding: 7px 10px; font: inherit; }
     .project-management-modal textarea { min-height: 64px; resize: vertical; }
     .project-management-modal button { cursor: pointer; }
-    .project-management-modal button:hover:not(:disabled) { border-color: #188461; color: #075d43; background: #edf8f4; }
+    .project-management-modal button:hover:not(:disabled) { border-color: var(--app-accent, #188461); color: var(--app-success-text, #075d43); background: var(--app-success-surface, #edf8f4); }
     .project-management-modal button:disabled { opacity: .46; cursor: not-allowed; }
     .project-icon-button { display: grid; place-items: center; width: 36px; padding: 0 !important; }
     .project-icon-button svg, .project-primary-button svg, .project-danger-button svg, .project-secondary-button svg, .project-drawing-search svg { width: 15px; height: 15px; }
@@ -32,7 +32,7 @@ export function injectProjectManagementStyles() {
     .project-list-item span { color: #718287; font-size: 10px; }
     .project-list-item-details { display: flex; flex-wrap: wrap; gap: 4px 10px; }
     .project-list-item-details span:last-child { flex-basis: 100%; color: #8a989c; font-size: 9px; }
-    .project-list-item.is-selected { color: #075d43; background: #e3f5ee; box-shadow: inset 3px 0 #087b58; }
+    .project-list-item.is-selected { color: var(--app-success-text, #075d43); background: var(--app-success-surface, #e3f5ee); box-shadow: inset 3px 0 var(--app-accent, #087b58); }
     .project-editor-panel { display: grid; gap: 14px; min-width: 0; min-height: 0; padding: 20px; }
     .project-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .project-editor-heading > div { display: grid; gap: 6px; }
@@ -67,10 +67,10 @@ export function injectProjectManagementStyles() {
     .project-management-modal .project-primary-button, .project-management-modal .project-danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; }
     .project-management-modal .project-primary-button, .project-management-modal .project-danger-button, .project-management-modal .project-secondary-button { min-height: 34px; padding: 5px 11px; font-size: 11px; }
     .project-management-modal .project-secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-    .project-management-modal .project-primary-button { border-color: #087b58; color: #fff; background: #087b58; }
-    .project-management-modal .project-primary-button:hover:not(:disabled) { color: #fff; background: #066c4e; }
+    .project-management-modal .project-primary-button { border-color: var(--app-accent, #087b58); color: #fff; background: var(--app-accent, #087b58); }
+    .project-management-modal .project-primary-button:hover:not(:disabled) { color: #fff; background: var(--app-accent-hover, #066c4e); }
     .project-management-modal .project-danger-button { border-color: #b55a50; color: #9c352d; }
-    .project-message { padding: 9px 10px; border: 1px solid #dec5c2; color: #8a312a; background: #fff7f5; font-size: 11px; }
+    .project-message { padding: 9px 10px; border: 1px solid var(--app-danger-border, #dec5c2); color: var(--app-danger-text, #8a312a); background: var(--app-danger-surface, #fff7f5); font-size: 11px; }
     .project-empty { display: grid; place-items: center; min-height: 180px; padding: 20px; color: #708186; font-size: 12px; text-align: center; }
     @media (max-width: 720px) {
       .project-management-modal { padding: 8px; }

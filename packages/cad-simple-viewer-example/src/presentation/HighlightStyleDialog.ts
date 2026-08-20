@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import type { HighlightStyle, PresentationProfile } from '../phase/types'
+import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
 
 export interface HighlightStyleDraft {
@@ -29,18 +30,44 @@ export class HighlightStyleDialog {
   readonly element = document.createElement('div')
   private draft: HighlightStyleDraft
   private activeTab: 'flow' | 'device' | 'utility' | 'defaults' = 'flow'
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
     this.draft = cloneDraft(options.value)
     this.element.className = 'phase-workspace-modal highlight-style-modal'
+    this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
     this.element.setAttribute('aria-modal', 'true')
+    this.element.setAttribute('aria-labelledby', 'highlightStyleDialogTitle')
+    this.element.addEventListener('click', event => {
+      if (event.target === this.element) this.close()
+    })
+    this.element.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        this.close()
+      }
+    })
+    document.body.append(this.element)
     this.render()
   }
 
   private emitPreview() {}
 
+  open() {
+    if (!this.element.isConnected) document.body.append(this.element)
+    this.element.hidden = false
+    document.body.classList.add('highlight-style-open')
+    this.focusController.activate(
+      this.element.querySelector<HTMLElement>('[role="tab"]')
+    )
+  }
+
   private close() {
+    if (this.element.hidden) return
+    this.element.hidden = true
+    document.body.classList.remove('highlight-style-open')
+    this.focusController.deactivate()
     this.element.remove()
     this.options.onClose()
   }
@@ -51,6 +78,7 @@ export class HighlightStyleDialog {
     dialog.className = 'phase-workspace-modal-dialog highlight-style-dialog'
     const header = document.createElement('header')
     const title = document.createElement('h2')
+    title.id = 'highlightStyleDialogTitle'
     title.textContent = '高亮样式设置'
     const close = this.iconButton('关闭对话框', X, () => this.close())
     header.append(title, close)
@@ -94,12 +122,6 @@ export class HighlightStyleDialog {
     footer.append(cancel, apply, applyClose)
     dialog.append(header, tabs, content, footer)
     this.element.append(dialog)
-    this.element.addEventListener('click', event => {
-      if (event.target === this.element) this.close()
-    })
-    this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') this.close()
-    })
     localizeDom(this.element, this.options.getLocale?.() ?? 'zh')
   }
 

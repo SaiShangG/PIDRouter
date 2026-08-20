@@ -1,10 +1,12 @@
 import { FileJson, X } from 'lucide'
 
 import { createPhaseIcon } from '../phase/phaseIcons'
+import { createModalFocusController } from '../ui/modalFocus'
 import type { DrawingRecord } from './types'
 
 export class ParsingDetailsModal {
   readonly element = document.createElement('div')
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor() {
     this.element.className = 'parsing-details-modal'
@@ -16,7 +18,10 @@ export class ParsingDetailsModal {
       if (event.target === this.element) this.close()
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') this.close()
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        this.close()
+      }
     })
     document.body.append(this.element)
   }
@@ -91,11 +96,12 @@ export class ParsingDetailsModal {
     this.element.append(shell)
     this.element.hidden = false
     document.body.classList.add('parsing-details-open')
-    close.focus()
+    this.focusController.activate(close)
   }
 
   close() {
     this.element.hidden = true
     document.body.classList.remove('parsing-details-open')
+    this.focusController.deactivate()
   }
 }

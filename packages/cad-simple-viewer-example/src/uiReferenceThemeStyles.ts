@@ -1,38 +1,18 @@
+import { injectBrandThemeTokens } from './brandThemeTokens'
+
 const STYLE_ID = 'ui-reference-theme-styles'
 
 export function injectUiReferenceThemeStyles() {
+  injectBrandThemeTokens()
   if (document.getElementById(STYLE_ID)) return
 
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = `
-    :root {
-      --reference-ink: #152026;
-      --reference-muted: #64747c;
-      --reference-line: #d4dde0;
-      --reference-soft: #edf2f3;
-      --reference-panel: #f7f9f9;
-      --reference-white: #ffffff;
-      --reference-nav: #16353d;
-      --reference-nav-2: #214951;
-      --reference-green: #00a870;
-      --reference-green-dark: #087b58;
-      --reference-amber: #e69a20;
-      --reference-blue: #287eae;
-      --ml-ui-bg: var(--reference-white);
-      --ml-ui-bg-secondary: var(--reference-panel);
-      --ml-ui-surface: var(--reference-white);
-      --ml-ui-text: var(--reference-ink);
-      --ml-ui-text-muted: var(--reference-muted);
-      --ml-ui-muted-text: var(--reference-muted);
-      --ml-ui-border: var(--reference-line);
-      --ml-ui-accent: var(--reference-green-dark);
-    }
-
     body {
       color: var(--reference-ink);
-      background: #dfe7e9;
-      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      background: var(--app-surface);
+      font-family: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei UI", sans-serif;
     }
 
     .app-shell,
@@ -42,7 +22,7 @@ export function injectUiReferenceThemeStyles() {
     }
 
     .app-shell {
-      padding-top: 46px;
+      padding-top: var(--app-toolbar-height);
     }
 
     .phase-sidebar {
@@ -194,17 +174,17 @@ export function injectUiReferenceThemeStyles() {
       gap: 6px;
       height: 32px;
       padding: 0 12px;
-      border: 1px solid #087a5a;
+      border: 1px solid var(--app-accent);
       border-radius: 4px;
       color: #ffffff;
-      background: var(--reference-green);
+      background: var(--app-accent);
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       white-space: nowrap;
     }
 
-    .phase-context-save:hover:not(:disabled) { background: #087052; }
+    .phase-context-save:hover:not(:disabled) { background: var(--app-accent-hover); }
     .phase-context-save:disabled { border-color: #bdc8ca; color: #7d8b90; background: #e3e8e9; cursor: default; }
     .phase-context-save svg { width: 14px; height: 14px; }
 
@@ -230,7 +210,7 @@ export function injectUiReferenceThemeStyles() {
       background: var(--reference-green);
     }
 
-    .viewer-canvas-area { background: #e7ecee; }
+    .viewer-canvas-area { background: var(--app-surface-canvas); }
 
     .dev-toolbar {
       position: fixed;
@@ -239,22 +219,124 @@ export function injectUiReferenceThemeStyles() {
       left: 0;
       right: 0;
       width: 100%;
+      flex-wrap: nowrap;
       overflow-x: auto;
       overflow-y: visible;
-      min-height: 46px;
+      height: var(--app-toolbar-height);
+      min-height: var(--app-toolbar-height);
       gap: 7px;
       padding: 6px 10px;
-      border-color: #0d2930;
-      background: #16353d;
+      border-color: #0b252b;
+      background: var(--app-surface-nav);
     }
 
     .dev-toolbar.is-disabled { opacity: 1; }
 
+    .app-toolbar-identity {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      gap: 9px;
+      min-width: 0;
+      margin-right: 8px;
+      color: var(--app-text-on-dark);
+    }
+
+    .app-toolbar-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid #3a646c;
+      border-radius: var(--app-radius-control);
+      color: #a8e6d1;
+      background: #0c282f;
+      font: 700 10px/1 "IBM Plex Mono", "Cascadia Mono", monospace;
+      letter-spacing: 0;
+    }
+
+    .app-toolbar-title-group {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      line-height: 1.15;
+    }
+
+    .app-toolbar-title-group strong {
+      overflow: hidden;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app-toolbar-title-group span {
+      overflow: hidden;
+      color: #9fb3b7;
+      font-size: 10px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app-toolbar-spacer { flex: 1 1 auto; min-width: 8px; }
+
+    .app-toolbar-context {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 1 420px;
+      min-width: 0;
+      gap: 12px;
+      padding-left: 14px;
+      border-left: 1px solid #35545b;
+    }
+
+    .app-toolbar-context-item {
+      display: grid;
+      min-width: 0;
+      gap: 1px;
+    }
+
+    .app-toolbar-context-item small {
+      color: #8fa5a9;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .app-toolbar-context-item strong {
+      overflow: hidden;
+      max-width: 180px;
+      color: var(--app-text-on-dark);
+      font-size: 11px;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app-toolbar-context-divider {
+      flex: 0 0 1px;
+      align-self: stretch;
+      background: #35545b;
+    }
+
+    .phase-sidebar-toggle-button { display: none; }
+
+    @media (max-width: 480px) {
+      .app-toolbar-title-group span { display: none; }
+    }
+
+    @media (max-width: 1100px) {
+      .app-toolbar-context { display: none; }
+    }
+
     .dev-toolbar button {
       border-color: #42636a;
-      border-radius: 4px;
+      border-radius: var(--app-radius-control);
       color: #eaf2f3;
-      background: #214951;
+      background: var(--app-surface-nav-hover);
     }
 
     .dev-toolbar button:hover:not(:disabled),
@@ -262,7 +344,7 @@ export function injectUiReferenceThemeStyles() {
     .dev-toolbar-menu-actions button.is-selected {
       border-color: var(--reference-green);
       color: #ffffff;
-      background: var(--reference-green-dark);
+      background: var(--app-accent);
     }
 
     .dev-toolbar-menu {
@@ -337,13 +419,13 @@ export function injectUiReferenceThemeStyles() {
       border-radius: 4px;
       color: var(--reference-ink);
       background: var(--reference-white);
-      box-shadow: 0 3px 13px rgba(18, 44, 52, .12);
+      box-shadow: var(--app-shadow-overlay);
     }
 
     .ml-ex-ui-toolbar-btn,
     .ml-ex-ui-toolbar-collapse-btn {
       border-radius: 3px;
-      color: #40545b;
+      color: var(--app-text-muted);
       background: transparent;
     }
 
@@ -352,7 +434,13 @@ export function injectUiReferenceThemeStyles() {
     .ml-ex-ui-toolbar-btn[aria-pressed='true'],
     .ml-ex-ui-toolbar-collapse-btn:hover {
       color: #ffffff;
-      background: #2d626c;
+      background: var(--app-accent);
+    }
+
+    .ml-ex-ui-toolbar-btn:focus-visible,
+    .ml-ex-ui-toolbar-collapse-btn:focus-visible {
+      outline: 2px solid var(--app-focus);
+      outline-offset: 1px;
     }
 
     .ml-ex-ui-toolbar-separator { background: var(--reference-line); }
@@ -362,7 +450,7 @@ export function injectUiReferenceThemeStyles() {
       border-radius: 4px;
       color: var(--reference-ink);
       background: var(--reference-white);
-      box-shadow: 0 3px 13px rgba(18, 44, 52, .12);
+      box-shadow: var(--app-shadow-overlay);
     }
 
     .ml-cli-text {
@@ -372,12 +460,12 @@ export function injectUiReferenceThemeStyles() {
 
     .ml-cli-text::placeholder { color: var(--reference-muted); }
 
-    .ml-cli-text:focus { outline-color: var(--reference-green); }
+    .ml-cli-text:focus { outline-color: var(--app-focus); }
 
     .ml-cli-close-btn,
     .ml-cli-up,
     .ml-cli-down {
-      color: #40545b;
+      color: var(--app-text-muted);
       background: var(--reference-soft);
       border-color: var(--reference-line);
     }
@@ -385,8 +473,15 @@ export function injectUiReferenceThemeStyles() {
     .ml-cli-close-btn:hover,
     .ml-cli-up:hover,
     .ml-cli-down:hover {
-      color: #075d43;
-      background: #dff4eb;
+      color: var(--app-success-text);
+      background: var(--app-success-surface);
+    }
+
+    .ml-cli-close-btn:focus-visible,
+    .ml-cli-up:focus-visible,
+    .ml-cli-down:focus-visible {
+      outline: 2px solid var(--app-focus);
+      outline-offset: 1px;
     }
 
     .open-main-button {

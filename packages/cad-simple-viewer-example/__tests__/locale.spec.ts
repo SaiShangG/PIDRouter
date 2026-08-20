@@ -27,6 +27,12 @@ describe('app locale', () => {
     expect(toggleAppLocale('en')).toBe('zh')
     expect(translate('zh', 'workspaceTitle')).toBe('工艺与阶段')
     expect(translate('en', 'workspaceTitle')).toBe('Processes & Phases')
+    expect(translate('zh', 'appToolbarSubtitle')).toBe('工业 P&ID 工作台')
+    expect(translate('en', 'appToolbarSubtitle')).toBe('Industrial P&ID workspace')
+    expect(translate('zh', 'phasePanelToggle')).toBe('工艺与阶段')
+    expect(translate('en', 'phasePanelToggle')).toBe('Processes & Phases')
+    expect(translate('zh', 'noDrawingOpen')).toBe('未打开图纸')
+    expect(translate('en', 'noDrawingOpen')).toBe('No drawing open')
   })
 
   it('localizes hidden text, tooltips, accessibility labels, and placeholders', () => {

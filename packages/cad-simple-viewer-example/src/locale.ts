@@ -16,6 +16,14 @@ export const toggleAppLocale = (locale: AppLocale): AppLocale =>
 
 const messages = {
   zh: {
+    appToolbarAria: 'PID Viewer 应用工具栏',
+    appToolbarSubtitle: '工业 P&ID 工作台',
+    projectLabel: 'Project',
+    drawingLabel: '图纸',
+    noProjectSelected: '未选择 Project',
+    noDrawingOpen: '未打开图纸',
+    phasePanelToggle: '工艺与阶段',
+    phasePanelClose: '关闭工艺与阶段面板',
     workspaceTitle: '工艺与阶段',
     workspaceAria: '工艺与阶段',
     resizeAria: '调整工艺侧栏宽度',
@@ -36,6 +44,14 @@ const messages = {
     languageButton: '切换为英文'
   },
   en: {
+    appToolbarAria: 'PID Viewer application toolbar',
+    appToolbarSubtitle: 'Industrial P&ID workspace',
+    projectLabel: 'Project',
+    drawingLabel: 'Drawing',
+    noProjectSelected: 'No project selected',
+    noDrawingOpen: 'No drawing open',
+    phasePanelToggle: 'Processes & Phases',
+    phasePanelClose: 'Close processes and phases panel',
     workspaceTitle: 'Processes & Phases',
     workspaceAria: 'Processes and phases',
     resizeAria: 'Resize process sidebar',

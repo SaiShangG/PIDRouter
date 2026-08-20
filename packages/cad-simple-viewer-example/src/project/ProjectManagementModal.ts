@@ -3,6 +3,7 @@ import { FolderPlus, Pencil, Save, Search, Trash2, X } from 'lucide'
 import type { DrawingRecord, DrawingRepository } from '../drawing-library/types'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
+import { createModalFocusController } from '../ui/modalFocus'
 import type { ProjectRecord, ProjectRepository } from './types'
 
 export interface ProjectManagementModalOptions {
@@ -38,6 +39,7 @@ export class ProjectManagementModal {
   private busy = false
   private message = ''
   private readonly confirmationModal = new ConfirmationModal()
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor(
     private readonly repository: ProjectRepository,
@@ -53,7 +55,10 @@ export class ProjectManagementModal {
       if (event.target === this.element && !this.busy) this.close()
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !this.busy) this.close()
+      if (event.key === 'Escape' && !this.busy) {
+        event.stopPropagation()
+        this.close()
+      }
     })
     document.body.append(this.element)
   }
@@ -62,12 +67,17 @@ export class ProjectManagementModal {
     this.element.hidden = false
     document.body.classList.add('project-management-open')
     await this.refresh()
+    if (this.element.hidden) return
+    this.focusController.activate(
+      this.element.querySelector<HTMLInputElement>('input[type="search"], input')
+    )
   }
 
   close() {
     if (this.busy) return
     this.element.hidden = true
     document.body.classList.remove('project-management-open')
+    this.focusController.deactivate()
   }
 
   private async refresh() {

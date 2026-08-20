@@ -8,7 +8,29 @@ const value = () => ({
 })
 
 describe('HighlightStyleDialog', () => {
-  afterEach(() => document.body.replaceChildren())
+  afterEach(() => {
+    document.body.replaceChildren()
+    document.body.classList.remove('highlight-style-open')
+  })
+
+  it('opens independently, closes with Escape, and restores focus', () => {
+    const trigger = document.createElement('button')
+    document.body.append(trigger)
+    trigger.focus()
+    const onClose = jest.fn()
+    const dialog = new HighlightStyleDialog({ value: value(), onClose })
+
+    dialog.open()
+    expect(dialog.element.parentElement).toBe(document.body)
+    expect(dialog.element.hidden).toBe(false)
+    dialog.element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    )
+
+    expect(dialog.element.isConnected).toBe(false)
+    expect(document.activeElement).toBe(trigger)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 
   it('keeps edits local and closes without applying them', () => {
     const onClose = jest.fn()
@@ -16,7 +38,7 @@ describe('HighlightStyleDialog', () => {
       value: value(),
       onClose
     })
-    document.body.append(dialog.element)
+    dialog.open()
 
     expect(dialog.element.textContent).toContain('所有 Phase 的默认流路')
     expect(dialog.element.querySelector('[aria-label="流路名称"]')).toBeNull()
@@ -39,7 +61,7 @@ describe('HighlightStyleDialog', () => {
       createId: () => 'utility-1',
       onClose
     })
-    document.body.append(dialog.element)
+    dialog.open()
 
     const utilityTab = [...dialog.element.querySelectorAll('button')].find(
       button => button.textContent === 'Utility'
@@ -65,7 +87,7 @@ describe('HighlightStyleDialog', () => {
       value: value(),
       onClose: jest.fn()
     })
-    document.body.append(dialog.element)
+    dialog.open()
 
     ;[...dialog.element.querySelectorAll('button')]
       .find(button => button.textContent === '设备')!

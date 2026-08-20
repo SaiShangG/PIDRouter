@@ -2,6 +2,7 @@ import { Eye, FileJson, RotateCcw, Search, Trash2, Upload, X } from 'lucide'
 
 import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
+import { createModalFocusController } from '../ui/modalFocus'
 import { ParsingDetailsModal } from './ParsingDetailsModal'
 import type { DrawingRecord, DrawingRepository } from './types'
 
@@ -48,6 +49,7 @@ export class DrawingLibraryModal {
   private message = ''
   private readonly confirmationModal = new ConfirmationModal()
   private readonly parsingDetailsModal = new ParsingDetailsModal()
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor(
     private readonly repository: DrawingRepository,
@@ -62,7 +64,10 @@ export class DrawingLibraryModal {
       if (event.target === this.element && !this.busy) this.close()
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !this.busy) this.close()
+      if (event.key === 'Escape' && !this.busy) {
+        event.stopPropagation()
+        this.close()
+      }
     })
     document.body.append(this.element)
   }
@@ -71,12 +76,16 @@ export class DrawingLibraryModal {
     this.element.hidden = false
     document.body.classList.add('drawing-library-open')
     await this.refresh()
+    this.focusController.activate(
+      this.element.querySelector<HTMLInputElement>('input[type="search"], input')
+    )
   }
 
   close() {
     if (this.busy) return
     this.element.hidden = true
     document.body.classList.remove('drawing-library-open')
+    this.focusController.deactivate()
   }
 
   private async refresh() {

@@ -15,8 +15,8 @@ import {
   type AcTrView2d,
   applyUiTheme,
   isCompactUiLayout,
-  layoutBackgroundSysVar
-} from '@mlightcad/cad-simple-viewer'
+  layoutBackgroundSysVar,
+  ML_UI_COMPACT_MAX_WIDTH} from '@mlightcad/cad-simple-viewer'
 import {
   AcCmColor,
   AcCmColorMethod,
@@ -25,7 +25,7 @@ import {
   AcGeBox2d,
   log
 } from '@mlightcad/data-model'
-import { Languages, Palette, Save } from 'lucide'
+import { Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
 
 import { setupAgentIntegration } from './agentIntegration'
@@ -41,6 +41,7 @@ import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
+import { setupCompactPhaseSidebar } from './compactPhaseSidebar'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
 import {
   applyDemoToolbarLayout,
@@ -102,6 +103,8 @@ import { ReportManifestStore } from './report/reportManifest'
 import { ReportWorkspaceModal } from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
 import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
+import { Toast, type ToastTone } from './ui/Toast'
+import { injectToastStyles } from './ui/toastStyles'
 import { injectUiReferenceThemeStyles } from './uiReferenceThemeStyles'
 import { localizeDom, translateUiText } from './uiTranslations'
 
@@ -792,6 +795,9 @@ class CadViewerApp {
   private demoDockTabCount = 0
   private viewerToolbarMenuOpen = false
   private appLocale: AppLocale = loadAppLocale()
+  private readonly toast = new Toast(() =>
+    translateUiText(this.appLocale, 'Close')
+  )
   private isInitialized = false
   private hasOpenedFile = false
   private isLoadingFile = false
@@ -800,6 +806,7 @@ class CadViewerApp {
   private selectedObjectIds: AcDbObjectId[] = []
   private openHighlightRoots = new Map<AcDbObjectId, PreviewRoot>()
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
+  private openHighlightConnections = new Map<AcDbObjectId, Set<number>>()
   private openFlowBoundaryHandleKeys = new Set<string>()
   private readonly phasePresentationController = new PhasePresentationController()
   private runtimeDeviceStates: Record<string, DeviceState> = {}
@@ -925,7 +932,7 @@ class CadViewerApp {
     this.viewerToolbarPlacementButtons = document.querySelectorAll(
       '[data-viewer-toolbar-placement]'
     ) as NodeListOf<HTMLButtonElement>
-    this.devToolbar = document.getElementById('devToolbar') as HTMLElement
+    this.devToolbar = document.getElementById('appToolbar') as HTMLElement
     this.setupLanguageToggle()
     this.setupFileHandling()
     this.setupPredefinedFileActions()
@@ -953,6 +960,10 @@ class CadViewerApp {
     ) as HTMLButtonElement | null
     if (!button) throw new Error('Language toggle button was not found')
     button.replaceChildren(createPhaseIcon(Languages))
+    const phaseToggle = document.getElementById(
+      'phaseSidebarToggleButton'
+    ) as HTMLButtonElement | null
+    phaseToggle?.prepend(createPhaseIcon(PanelLeft))
     button.addEventListener('click', () => {
       this.appLocale = toggleAppLocale(this.appLocale)
       saveAppLocale(this.appLocale)
@@ -971,6 +982,13 @@ class CadViewerApp {
       const element = document.querySelector<HTMLElement>(selector)
       if (element) element.setAttribute('aria-label', translate(this.appLocale, key))
     }
+    setLabel('#appToolbar', 'appToolbarAria')
+    setText('#appToolbarSubtitle', 'appToolbarSubtitle')
+    setText('#appToolbarProjectLabel', 'projectLabel')
+    setText('#appToolbarDrawingLabel', 'drawingLabel')
+    setText('#phaseSidebarToggleLabel', 'phasePanelToggle')
+    setLabel('#phaseSidebarToggleButton', 'phasePanelToggle')
+    setLabel('#phaseSidebarScrim', 'phasePanelClose')
     setText('#phaseSidebarTitle', 'workspaceTitle')
     setLabel('.phase-sidebar', 'workspaceAria')
     setLabel('#phaseSidebarResizeHandle', 'resizeAria')
@@ -1684,6 +1702,7 @@ class CadViewerApp {
         args => {
           document.title = args.doc.docTitle
           this.onFileOpened()
+          this.syncAppToolbarContext()
           if (!this.applyPendingPhaseState()) {
             this.invalidateLoadedPhaseBinding()
           }
@@ -1738,6 +1757,7 @@ class CadViewerApp {
       this.activeProject = project
       this.projectManagementButton.title = project.name
       this.phasePanel?.render()
+      this.syncAppToolbarContext()
       return
     }
     try {
@@ -1939,10 +1959,20 @@ class CadViewerApp {
     })
     const sidebar = document.querySelector<HTMLElement>('.phase-sidebar')
     const resizeHandle = document.getElementById('phaseSidebarResizeHandle')
-    if (!sidebar || !resizeHandle) {
+    const compactToggle = document.getElementById(
+      'phaseSidebarToggleButton'
+    ) as HTMLButtonElement | null
+    const compactScrim = document.getElementById('phaseSidebarScrim')
+    if (!sidebar || !resizeHandle || !compactToggle || !compactScrim) {
       throw new Error('Phase sidebar resize controls were not found')
     }
     setupPhaseSidebarResize(sidebar, resizeHandle)
+    setupCompactPhaseSidebar(
+      sidebar,
+      compactToggle,
+      compactScrim,
+      ML_UI_COMPACT_MAX_WIDTH
+    )
     this.setupPhaseContextBar()
     this.syncPhaseContextBar()
   }
@@ -2086,6 +2116,32 @@ class CadViewerApp {
       : process
         ? translate(this.appLocale, 'noPhase')
         : translate(this.appLocale, 'waitingProcess')
+    this.syncAppToolbarContext()
+  }
+
+  private syncAppToolbarContext() {
+    const projectValue = document.getElementById('appToolbarProjectValue')
+    const drawingValue = document.getElementById('appToolbarDrawingValue')
+    if (!projectValue || !drawingValue) return
+    projectValue.textContent =
+      this.activeProject?.name ?? translate(this.appLocale, 'noProjectSelected')
+
+    const state = this.phaseStore.snapshot()
+    const process = state.processes.find(
+      item => item.id === state.activeProcessId
+    )
+    const sequence = process?.sequences.find(
+      item => item.id === process.activeSequenceId
+    )
+    const phase = sequence?.phases.find(
+      item => item.id === sequence.activePhaseId
+    )
+    drawingValue.textContent =
+      phase?.drawing.kind === 'assigned'
+        ? phase.drawing.displayName
+        : this.hasOpenedFile
+          ? document.title.split(' · ')[0]
+          : translate(this.appLocale, 'noDrawingOpen')
   }
 
   private async activateWorkspaceProcess(processId: string) {
@@ -3202,8 +3258,13 @@ class CadViewerApp {
     this.runtimeDeviceStates = {}
     this.openFlowBoundary(ownerId)
     this.setDeviceState(ownerId, 'open')
-    this.logOpenFlowConnection(ownerId)
-    this.openHighlightGroups.set(ownerId, this.getOpenHighlightObjectIds(ownerId))
+    const traversal = this.getFlowConnectionTraversal(ownerId)
+    this.logOpenFlowConnection(ownerId, traversal)
+    this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
+    this.openHighlightGroups.set(
+      ownerId,
+      this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+    )
 
     this.recomputeOpenHighlightGroups()
     this.clearViewerSelection()
@@ -3216,6 +3277,7 @@ class CadViewerApp {
       this.closeFlowBoundary(ownerId)
       this.setDeviceState(ownerId, 'closed')
       this.openHighlightGroups.delete(ownerId)
+      this.openHighlightConnections.delete(ownerId)
     })
     this.recomputeOpenHighlightGroups()
     this.clearViewerSelection()
@@ -3236,12 +3298,25 @@ class CadViewerApp {
     return ownerIds
   }
 
-  private getOpenHighlightObjectIds(objectId: AcDbObjectId) {
-    return new Set<AcDbObjectId>([objectId])
+  private getOpenHighlightObjectIds(
+    objectId: AcDbObjectId,
+    connectedHandles: Set<number> = new Set()
+  ) {
+    const objectIds = new Set<AcDbObjectId>([objectId])
+    connectedHandles.forEach(handleId => {
+      handleKeysFromNumber(handleId).forEach(handleKey => {
+        const connectedObjectId = this.resolveObjectIdByHandleKey(handleKey)
+        if (connectedObjectId) objectIds.add(connectedObjectId)
+      })
+    })
+    return objectIds
   }
 
-  private logOpenFlowConnection(objectId: AcDbObjectId) {
-    const { traversalEdges } = this.getFlowConnectionTraversal(objectId)
+  private logOpenFlowConnection(
+    objectId: AcDbObjectId,
+    traversal = this.getFlowConnectionTraversal(objectId)
+  ) {
+    const { traversalEdges } = traversal
     const fromHandles = [...new Set(traversalEdges.map(edge => edge.from))]
     const toHandles = [...new Set(traversalEdges.flatMap(edge => edge.to))]
 
@@ -3363,7 +3438,13 @@ class CadViewerApp {
 
   private recomputeOpenHighlightGroups() {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
-      this.openHighlightGroups.set(ownerId, this.getOpenHighlightObjectIds(ownerId))
+      this.openHighlightGroups.set(
+        ownerId,
+        this.getOpenHighlightObjectIds(
+          ownerId,
+          this.openHighlightConnections.get(ownerId)
+        )
+      )
     })
     this.syncOpenHighlightRoots()
   }
@@ -3489,15 +3570,14 @@ class CadViewerApp {
 
   private openHighlightStyleDialog(processId: string) {
     const value = this.getHighlightStyleDraft(processId)
-    if (!value || !this.phasePanel) return
-    this.phasePanel.element.querySelector('.highlight-style-modal')?.remove()
+    if (!value) return
+    document.querySelector('.highlight-style-modal')?.remove()
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
       onClose: () => undefined
     })
-    this.phasePanel.element.append(dialog.element)
-    dialog.element.querySelector<HTMLElement>('[role="tab"]')?.focus()
+    dialog.open()
   }
 
   private captureFlowPaths(): FlowStateSnapshot['flowPaths'] {
@@ -3577,6 +3657,7 @@ class CadViewerApp {
 
     if (!ids) {
       this.openHighlightGroups.clear()
+      this.openHighlightConnections.clear()
       this.openFlowBoundaryHandleKeys.clear()
     }
 
@@ -3993,6 +4074,7 @@ class CadViewerApp {
     if (preserveHighlightRoots) {
       this.openFlowBoundaryHandleKeys.clear()
       this.openHighlightGroups.clear()
+      this.openHighlightConnections.clear()
     } else {
       this.removeOpenHighlight()
     }
@@ -4040,57 +4122,20 @@ class CadViewerApp {
 
   private showMessage(
     message: string,
-    type: 'success' | 'error' | 'info' = 'info'
+    type: ToastTone = 'info'
   ) {
-    this.clearMessages()
-
-    const popup = document.createElement('div')
-    popup.className = `popup-message ${type}`
-    popup.textContent = translateUiText(this.appLocale, message)
-    popup.style.position = 'fixed'
-    popup.style.top = '1rem'
-    popup.style.left = '50%'
-    popup.style.transform = 'translateX(-50%)'
-    popup.style.zIndex = '1000'
-    popup.style.padding = '0.75rem 1.25rem'
-    popup.style.borderRadius = '8px'
-    popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)'
-    popup.style.fontSize = '0.95rem'
-    popup.style.opacity = '0.98'
-    popup.style.transition = 'opacity 0.2s'
-
-    if (type === 'error') {
-      popup.style.background = '#fee2e2'
-      popup.style.color = '#b91c1c'
-      popup.style.border = '1px solid #fecaca'
-    } else if (type === 'success') {
-      popup.style.background = '#dcfce7'
-      popup.style.color = '#166534'
-      popup.style.border = '1px solid #bbf7d0'
-    } else {
-      popup.style.background = '#e5e7eb'
-      popup.style.color = '#111827'
-      popup.style.border = '1px solid #d1d5db'
-    }
-
-    document.body.appendChild(popup)
-
-    setTimeout(() => {
-      popup.style.opacity = '0'
-      setTimeout(() => {
-        popup.remove()
-      }, 200)
-    }, 1200)
+    this.toast.show(translateUiText(this.appLocale, message), type)
   }
 
   private clearMessages() {
-    document.querySelectorAll('.popup-message').forEach(el => el.remove())
+    this.toast.clear()
   }
 }
 
 async function bootstrap(): Promise<void> {
   injectAppShellResponsiveStyles()
   injectConfirmationModalStyles()
+  injectToastStyles()
   injectParsingDetailsStyles()
   injectUiReferenceThemeStyles()
   injectPhaseWorkspaceStyles()

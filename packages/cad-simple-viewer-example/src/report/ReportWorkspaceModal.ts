@@ -8,6 +8,7 @@ import type {
   ProcessDefinition,
   SequenceDefinition
 } from '../phase/types'
+import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
 import type {
   PhaseReportExportResult,
@@ -57,6 +58,7 @@ export class ReportWorkspaceModal {
   private exportMessage = ''
   private failedExport?: Extract<PhaseReportExportResult, { status: 'failed' }>
   private pendingWarningMode?: PhaseReportOutputMode
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor(
     private readonly getWorkspace: () => PhaseWorkspaceState,
@@ -74,7 +76,10 @@ export class ReportWorkspaceModal {
       if (event.target === this.element) this.close()
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') this.close()
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        this.close()
+      }
     })
     document.body.append(this.element)
   }
@@ -88,13 +93,16 @@ export class ReportWorkspaceModal {
     this.element.hidden = false
     document.body.classList.add('report-workspace-open')
     this.render()
-    this.element.querySelector<HTMLButtonElement>('.report-icon-button')?.focus()
+    this.focusController.activate(
+      this.element.querySelector<HTMLButtonElement>('.report-icon-button')
+    )
   }
 
   close() {
     if (this.exportController) return
     this.element.hidden = true
     document.body.classList.remove('report-workspace-open')
+    this.focusController.deactivate()
   }
 
   refreshLocale() {

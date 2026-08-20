@@ -38,7 +38,7 @@ export class AcEdCommandLine {
   private recentPanel!: HTMLDivElement
   private bar!: HTMLDivElement
   private leftGroup!: HTMLDivElement
-  private closeBtn!: HTMLDivElement // renamed from termGlyph
+  private closeBtn!: HTMLButtonElement
   private downBtn!: HTMLButtonElement
   private centerEl!: HTMLDivElement
   private promptEl!: HTMLDivElement
@@ -315,6 +315,7 @@ export class AcEdCommandLine {
         color: var(--ml-ui-text, #222);
         font-size: 12px;
         background: transparent;
+        border: 0;
         cursor: pointer;
         padding: 0;
       }
@@ -564,9 +565,15 @@ export class AcEdCommandLine {
     this.leftGroup.className = 'ml-cli-left'
     this.bar.appendChild(this.leftGroup)
 
-    this.closeBtn = document.createElement('div')
+    this.closeBtn = document.createElement('button')
+    this.closeBtn.type = 'button'
     this.closeBtn.className = 'ml-cli-close-btn'
     this.closeBtn.innerHTML = '&#10005;'
+    this.closeBtn.title = this.localize('main.commandLine.close')
+    this.closeBtn.setAttribute(
+      'aria-label',
+      this.localize('main.commandLine.close')
+    )
     this.leftGroup.appendChild(this.closeBtn)
 
     this.downBtn = document.createElement('button')

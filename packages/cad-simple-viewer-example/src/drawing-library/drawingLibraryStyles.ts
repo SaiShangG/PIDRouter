@@ -6,19 +6,19 @@ export function injectDrawingLibraryStyles() {
   style.id = STYLE_ID
   style.textContent = `
     body.drawing-library-open { overflow: hidden; }
-    .drawing-library-modal { position: fixed; z-index: 920; inset: 0; padding: 24px; color: #17262b; background: rgba(12, 28, 34, .72); }
+    .drawing-library-modal { position: fixed; z-index: 920; inset: 0; padding: 24px; color: var(--app-text, #17262b); background: var(--app-overlay-scrim-strong, rgba(12, 28, 34, .72)); }
     .drawing-library-modal[hidden] { display: none; }
-    .drawing-library-shell { display: grid; grid-template-rows: 68px minmax(0, 1fr); width: min(1180px, 100%); height: min(760px, 100%); margin: auto; overflow: hidden; border: 1px solid #aebdc1; border-radius: 6px; background: #edf2f2; box-shadow: 0 24px 70px rgba(3, 18, 23, .42); }
-    .drawing-library-shell > header { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 16px; padding: 9px 18px; border-bottom: 1px solid #bdc9cc; background: #f8fafa; }
+    .drawing-library-shell { display: grid; grid-template-rows: 68px minmax(0, 1fr); width: min(1180px, 100%); height: min(760px, 100%); margin: auto; overflow: hidden; border: 1px solid var(--app-border-strong, #aebdc1); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface, #edf2f2); box-shadow: var(--app-shadow-modal, 0 24px 70px rgba(3, 18, 23, .42)); }
+    .drawing-library-shell > header { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 16px; padding: 9px 18px; border-bottom: 1px solid var(--app-border-strong, #bdc9cc); background: var(--app-surface-panel, #f8fafa); }
     .drawing-library-shell > header > div { display: grid; gap: 2px; }
     .drawing-library-shell > header span { color: #64777d; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .drawing-library-shell h2, .drawing-library-shell h3, .drawing-library-shell p { margin: 0; }
     .drawing-library-shell h2 { font-size: 19px; }
     .drawing-library-shell h3 { font-size: 14px; }
     .drawing-library-shell .drawing-library-summary { color: #176b52; font-size: 12px; }
-    .drawing-library-modal button, .drawing-library-modal input { min-height: 36px; border: 1px solid #bcc9cc; border-radius: 5px; background: #fff; color: inherit; padding: 7px 10px; font: inherit; }
+    .drawing-library-modal button, .drawing-library-modal input { min-height: 36px; border: 1px solid var(--app-border-strong, #bcc9cc); border-radius: var(--app-radius-control, 4px); background: var(--app-surface-elevated, #fff); color: inherit; padding: 7px 10px; font: inherit; }
     .drawing-library-modal button { cursor: pointer; }
-    .drawing-library-modal button:hover:not(:disabled) { border-color: #188461; color: #075d43; background: #edf8f4; }
+    .drawing-library-modal button:hover:not(:disabled) { border-color: var(--app-accent, #188461); color: var(--app-success-text, #075d43); background: var(--app-success-surface, #edf8f4); }
     .drawing-library-modal button:disabled { opacity: .46; cursor: not-allowed; }
     .drawing-library-icon-button { display: grid; place-items: center; width: 36px; padding: 0 !important; }
     .drawing-library-icon-button svg, .drawing-library-primary-button svg, .drawing-list-toolbar svg { width: 16px; height: 16px; }
@@ -31,9 +31,9 @@ export function injectDrawingLibraryStyles() {
     .drawing-upload-panel input { width: 100%; font-size: 12px; font-weight: 400; }
     .drawing-upload-file { padding: 12px; border: 1px dashed #a9b9bc; background: #fff; }
     .drawing-upload-file small { overflow-wrap: anywhere; color: #64777d; font-weight: 400; }
-    .drawing-library-modal .drawing-library-primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-color: #087b58; color: #fff; background: #087b58; font-weight: 700; }
-    .drawing-library-modal .drawing-library-primary-button:hover:not(:disabled) { color: #fff; background: #066c4e; }
-    .drawing-library-message { padding: 9px 10px; border: 1px solid #dec5c2; color: #8a312a !important; background: #fff7f5; }
+    .drawing-library-modal .drawing-library-primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-color: var(--app-accent, #087b58); color: #fff; background: var(--app-accent, #087b58); font-weight: 700; }
+    .drawing-library-modal .drawing-library-primary-button:hover:not(:disabled) { color: #fff; background: var(--app-accent-hover, #066c4e); }
+    .drawing-library-message { padding: 9px 10px; border: 1px solid var(--app-danger-border, #dec5c2); color: var(--app-danger-text, #8a312a) !important; background: var(--app-danger-surface, #fff7f5); }
     .drawing-list-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; padding: 18px; background: #edf2f2; }
     .drawing-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; }
     .drawing-list-toolbar label { display: flex; align-items: center; gap: 7px; min-width: min(330px, 55%); padding-left: 10px; border: 1px solid #bcc9cc; border-radius: 5px; background: #fff; color: #64777d; }
@@ -46,11 +46,11 @@ export function injectDrawingLibraryStyles() {
     .drawing-row-identity strong { font-size: 12px; }
     .drawing-row-identity span, .drawing-row-meta span { color: #718287; font-size: 10px; }
     .drawing-row-meta strong { font-size: 10px; font-weight: 650; }
-    .drawing-row-status strong { width: fit-content; padding: 3px 7px; border-radius: 3px; color: #176b52; background: #e4f4ee; font-size: 9px; text-transform: uppercase; }
-    .drawing-row-status.is-failed strong { color: #9c352d; background: #fbe8e5; }
-    .drawing-row-status.is-uploading strong, .drawing-row-status.is-parsing strong { color: #75590f; background: #fff4ce; }
-    .drawing-row-status span { color: #9c352d; font-size: 9px; }
-    .drawing-row-status progress { width: 100%; height: 5px; accent-color: #087b58; }
+    .drawing-row-status strong { width: fit-content; padding: 3px 7px; border-radius: 3px; color: var(--app-success-text, #176b52); background: var(--app-success-surface, #e4f4ee); font-size: 9px; text-transform: uppercase; }
+    .drawing-row-status.is-failed strong { color: var(--app-danger-text, #9c352d); background: var(--app-danger-surface, #fbe8e5); }
+    .drawing-row-status.is-uploading strong, .drawing-row-status.is-parsing strong { color: var(--app-warning-text, #75590f); background: var(--app-warning-surface, #fff4ce); }
+    .drawing-row-status span { color: var(--app-danger-text, #9c352d); font-size: 9px; }
+    .drawing-row-status progress { width: 100%; height: 5px; accent-color: var(--app-accent, #087b58); }
     .drawing-row-actions { display: flex; gap: 5px; }
     .drawing-library-empty { display: grid; place-items: center; min-height: 240px; border: 1px dashed #b8c5c7; color: #708186; background: #f8fafa; font-size: 12px; }
     @media (max-width: 900px) {

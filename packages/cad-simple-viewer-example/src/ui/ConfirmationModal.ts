@@ -1,6 +1,7 @@
 import { AlertTriangle, X } from 'lucide'
 
 import { createPhaseIcon } from '../phase/phaseIcons'
+import { createModalFocusController } from './modalFocus'
 
 export interface ConfirmationModalOptions {
   title: string
@@ -13,6 +14,7 @@ export interface ConfirmationModalOptions {
 export class ConfirmationModal {
   readonly element = document.createElement('div')
   private resolve?: (confirmed: boolean) => void
+  private readonly focusController = createModalFocusController(this.element)
 
   constructor() {
     this.element.className = 'confirmation-modal'
@@ -23,7 +25,10 @@ export class ConfirmationModal {
       if (event.target === this.element) this.close(false)
     })
     this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') this.close(false)
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        this.close(false)
+      }
     })
     document.body.append(this.element)
   }
@@ -33,7 +38,9 @@ export class ConfirmationModal {
     this.render(options)
     this.element.hidden = false
     document.body.classList.add('confirmation-modal-open')
-    this.element.querySelector<HTMLButtonElement>('.confirmation-modal-cancel')?.focus()
+    this.focusController.activate(
+      this.element.querySelector<HTMLButtonElement>('.confirmation-modal-cancel')
+    )
     return new Promise(resolve => {
       this.resolve = resolve
     })
@@ -86,6 +93,7 @@ export class ConfirmationModal {
     if (this.element.hidden) return
     this.element.hidden = true
     document.body.classList.remove('confirmation-modal-open')
+    this.focusController.deactivate()
     const resolve = this.resolve
     this.resolve = undefined
     resolve?.(confirmed)
