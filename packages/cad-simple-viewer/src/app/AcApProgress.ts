@@ -48,6 +48,12 @@ export interface AcApProgressOptions {
    * @defaultValue `""`
    */
   message?: string
+
+  /** Optional heading displayed above the dynamic message. */
+  title?: string
+
+  /** Optional supporting text displayed below the dynamic message. */
+  description?: string
 }
 
 /**
@@ -119,7 +125,9 @@ export class AcApProgress {
       overlay: options.overlay ?? true,
       overlayColor:
         options.overlayColor ?? 'var(--ml-ui-overlay, rgba(0,0,0,0.5))',
-      message: options.message ?? ''
+      message: options.message ?? '',
+      title: options.title ?? '',
+      description: options.description ?? ''
     }
 
     if (!AcApProgress.stylesInjected) {
@@ -187,6 +195,9 @@ export class AcApProgress {
 
     const root = document.createElement('div')
     root.className = 'ml-ccl-overlay'
+    root.setAttribute('role', 'status')
+    root.setAttribute('aria-live', 'polite')
+    root.setAttribute('aria-atomic', 'true')
     root.style.display = 'flex'
     root.style.background = this.options.overlay
       ? this.options.overlayColor
@@ -206,8 +217,15 @@ export class AcApProgress {
 
     const wrapper = document.createElement('div')
     wrapper.className = 'ml-ccl-wrapper'
-    wrapper.appendChild(spinner)
-    wrapper.appendChild(message)
+    const title = document.createElement('strong')
+    title.className = 'ml-ccl-title'
+    title.textContent = this.options.title
+    title.style.display = this.options.title ? 'block' : 'none'
+    const description = document.createElement('div')
+    description.className = 'ml-ccl-description'
+    description.textContent = this.options.description
+    description.style.display = this.options.description ? 'block' : 'none'
+    wrapper.append(spinner, title, message, description)
 
     root.appendChild(wrapper)
     host.appendChild(root)
@@ -243,6 +261,13 @@ export class AcApProgress {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: min(360px, calc(100% - 32px));
+    padding: 24px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 6px;
+    background: rgba(18,31,37,0.88);
+    box-shadow: 0 16px 44px rgba(0,0,0,0.28);
+    box-sizing: border-box;
   }
   
   .ml-ccl-spinner {
@@ -255,11 +280,28 @@ export class AcApProgress {
   }
   
   .ml-ccl-message {
-    margin-top: 12px;
-    font-size: 14px;
+    margin-top: 8px;
+    font-size: 13px;
     color: var(--ml-ui-text, #FFF);
     text-align: center;
     user-select: none;
+  }
+
+  .ml-ccl-title {
+    margin-top: 16px;
+    color: var(--ml-ui-text, #FFF);
+    font-size: 16px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .ml-ccl-description {
+    max-width: 300px;
+    margin-top: 8px;
+    color: rgba(255,255,255,0.72);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
   }
   
   @keyframes ml-ccl-rotate {

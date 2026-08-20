@@ -26,6 +26,9 @@ export default {
     fontCacheFailed: '缓存字体失败'
   },
   progress: {
+    loadingDrawing: '图纸正在加载',
+    viewerOnlyNotice: '请耐心等待',
+    finalizingDrawing: '正在完成图纸显示...',
     start: '开始解析文件...',
     parse: '正在解析文件 ...',
     font: '正在下载图纸所需字体...',

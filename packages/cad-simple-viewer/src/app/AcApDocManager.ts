@@ -478,7 +478,10 @@ export class AcApDocManager {
       this._commandManager
     )
     const busyHost = options.busyIndicatorHost ?? view.container
-    this._openFileProgress = new AcApOpenFileProgressController(busyHost)
+    this._openFileProgress = new AcApOpenFileProgressController(
+      busyHost,
+      () => !view.isProcessingEntities
+    )
     this._busyIndicator = new AcApBusyIndicator(busyHost)
 
     this.events.documentToBeOpened.addEventListener(() => {

@@ -16,12 +16,20 @@ export class AcApOpenFileProgressController {
   private readonly _progress: AcApProgress
   private _peak = 0
   private _stage?: AcDbProgressdEventArgs['stage']
+  private _completionToken = 0
 
   /**
    * @param host - Canvas container that receives the progress overlay
    */
-  constructor(host: HTMLElement) {
-    this._progress = new AcApProgress({ host })
+  constructor(
+    host: HTMLElement,
+    private readonly _isViewerReady: () => boolean = () => true
+  ) {
+    this._progress = new AcApProgress({
+      host,
+      title: AcApI18n.t('main.progress.loadingDrawing'),
+      description: AcApI18n.t('main.progress.viewerOnlyNotice')
+    })
     this._progress.hide()
   }
 
@@ -29,6 +37,7 @@ export class AcApOpenFileProgressController {
    * Resets tracked progress for a new open operation.
    */
   reset(): void {
+    this._completionToken++
     this._peak = 0
     this._stage = undefined
   }
@@ -113,10 +122,28 @@ export class AcApOpenFileProgressController {
     }
 
     if (isOpenFileProgressComplete(data)) {
-      this._progress.hide()
-      this.reset()
+      if (this._isViewerReady()) {
+        this._progress.hide()
+        this.reset()
+      } else {
+        this._progress.setMessage(
+          AcApI18n.t('main.progress.finalizingDrawing')
+        )
+        this._progress.show()
+        void this.hideWhenViewerIsReady(++this._completionToken)
+      }
     } else {
       this._progress.show()
+    }
+  }
+
+  private async hideWhenViewerIsReady(token: number): Promise<void> {
+    while (token === this._completionToken && !this._isViewerReady()) {
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    }
+    if (token === this._completionToken) {
+      this._progress.hide()
+      this.reset()
     }
   }
 }

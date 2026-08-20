@@ -24,6 +24,10 @@ export default {
     fontCacheFailed: 'Yazı tipi önbelleğe alınamadı'
   },
   progress: {
+    loadingDrawing: 'Çizim yükleniyor',
+    viewerOnlyNotice:
+      'Yükleme sırasında Viewer dışındaki özellikleri kullanmaya devam edebilirsiniz.',
+    finalizingDrawing: 'Çizim görünümü tamamlanıyor ...',
     start: 'Dosya ayrıştırma başlatılıyor ...',
     parse: 'Dosya ayrıştırılıyor ...',
     font: 'Bu çizim için gerekli yazı tipleri indiriliyor ...',

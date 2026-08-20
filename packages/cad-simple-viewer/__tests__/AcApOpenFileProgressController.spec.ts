@@ -32,6 +32,7 @@ jest.mock('../src/i18n', () => ({
 }))
 
 import { AcApOpenFileProgressController } from '../src/app/AcApOpenFileProgressController'
+import { AcApProgress } from '../src/app/AcApProgress'
 
 describe('AcApOpenFileProgressController', () => {
   let controller: AcApOpenFileProgressController
@@ -44,11 +45,20 @@ describe('AcApOpenFileProgressController', () => {
   beforeEach(() => {
     mockProgressInstances.length = 0
     mockEventBusEmit.mockClear()
+    ;(AcApProgress as jest.Mock).mockClear()
     controller = new AcApOpenFileProgressController({} as HTMLElement)
     progress = mockProgressInstances[0]
     progress.hide.mockClear()
     progress.show.mockClear()
     progress.setMessage.mockClear()
+  })
+
+  it('configures a Viewer-scoped loading message', () => {
+    expect(AcApProgress).toHaveBeenCalledWith({
+      host: expect.anything(),
+      title: 'main.progress.loadingDrawing',
+      description: 'main.progress.viewerOnlyNotice'
+    })
   })
 
   it('emits normalized monotonic open-file progress', () => {
@@ -107,6 +117,42 @@ describe('AcApOpenFileProgressController', () => {
     })
 
     expect(progress.hide).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the overlay visible until Viewer entity processing completes', async () => {
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    let nextFrame: FrameRequestCallback | undefined
+    globalThis.requestAnimationFrame = jest.fn(callback => {
+      nextFrame = callback
+      return 1
+    })
+    let viewerReady = false
+    const waitingController = new AcApOpenFileProgressController(
+      {} as HTMLElement,
+      () => viewerReady
+    )
+    const waitingProgress = mockProgressInstances[1]
+    waitingProgress.hide.mockClear()
+
+    waitingController.handle({
+      database: {},
+      percentage: 100,
+      stage: 'CONVERSION',
+      subStage: 'END',
+      subStageStatus: 'END'
+    })
+
+    expect(waitingProgress.setMessage).toHaveBeenCalledWith(
+      'main.progress.finalizingDrawing'
+    )
+    expect(waitingProgress.hide).not.toHaveBeenCalled()
+
+    viewerReady = true
+    nextFrame?.(0)
+    await Promise.resolve()
+
+    expect(waitingProgress.hide).toHaveBeenCalledTimes(1)
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame
   })
 
   it('reset clears tracked progress state', () => {

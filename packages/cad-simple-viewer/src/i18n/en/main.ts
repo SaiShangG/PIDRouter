@@ -26,6 +26,9 @@ export default {
     fontCacheFailed: 'Failed to cache font'
   },
   progress: {
+    loadingDrawing: 'Loading drawing',
+    viewerOnlyNotice: 'Please wait patiently',
+    finalizingDrawing: 'Finalizing drawing display ...',
     start: 'Start parsing file ...',
     parse: 'Parsing file ...',
     font: 'Downloading fonts needed by this drawing ...',

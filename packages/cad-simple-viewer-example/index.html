@@ -184,6 +184,10 @@
       display: inline-flex;
     }
 
+    .dev-toolbar-menu-wrap[hidden] {
+      display: none;
+    }
+
     .dev-toolbar-menu {
       position: absolute;
       z-index: 120;
@@ -539,7 +543,7 @@
         </button>
       </section>
       <div class="dev-toolbar is-disabled" id="devToolbar" role="toolbar" aria-label="Viewer demo controls">
-        <div class="dev-toolbar-menu-wrap">
+        <div class="dev-toolbar-menu-wrap" hidden>
           <button type="button" id="devDockButton" disabled aria-haspopup="menu" aria-expanded="false">
             Dock
           </button>
@@ -562,7 +566,7 @@
             </div>
           </div>
         </div>
-        <div class="dev-toolbar-menu-wrap">
+        <div class="dev-toolbar-menu-wrap" hidden>
           <button type="button" id="devViewerToolbarButton" disabled aria-haspopup="menu" aria-expanded="false">
             Toolbar
           </button>
