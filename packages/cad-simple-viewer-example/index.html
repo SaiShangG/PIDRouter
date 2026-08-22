@@ -1,631 +1,912 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PID Optimizer</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html {
-      height: 100%;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #dfe7e9;
-      color: #e5e7eb;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    body.app-booting .app-shell {
-      visibility: hidden;
-    }
-
-    .app-shell {
-      display: flex;
-      width: 100%;
-      height: 100%;
-      max-width: 100%;
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    .file-sidebar-column {
-      flex: 0 0 auto;
-      display: flex;
-      flex-direction: row;
-      min-width: 0;
-      width: 180px;
-    }
-
-    .file-sidebar-column.is-hidden {
-      display: none;
-    }
-
-    .file-sidebar {
-      flex: 1 1 auto;
-      min-width: 0;
-      background: #0f172a;
-      border-right: none;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.8rem;
-      overflow: auto;
-    }
-
-    .file-sidebar-resize-handle {
-      flex: 0 0 6px;
-      width: 6px;
-      cursor: ew-resize;
-      background: transparent;
-      touch-action: none;
-      border-right: 1px solid #1f2937;
-    }
-
-    .file-sidebar-resize-handle:hover,
-    .file-sidebar-resize-handle:active {
-      background: #374151;
-    }
-
-    .file-sidebar-toggle {
-      display: none;
-    }
-
-    .sidebar-title {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #93c5fd;
-    }
-
-    .sidebar-help {
-      font-size: 0.82rem;
-      color: #9ca3af;
-      line-height: 1.4;
-      margin-bottom: 0.75rem;
-    }
-
-    .file-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .file-list-item {
-      width: 100%;
-      border: 1px solid #374151;
-      border-radius: 8px;
-      background: #1f2937;
-      color: #e5e7eb;
-      text-align: left;
-      padding: 0.65rem 0.7rem;
-      font-size: 0.88rem;
-      cursor: pointer;
-      transition: background 0.2s ease, border-color 0.2s ease;
-    }
-
-    .file-list-item:hover {
-      background: #273447;
-      border-color: #60a5fa;
-    }
-
-    .file-list-item.active {
-      border-color: #60a5fa;
-      background: #1d4f91;
-    }
-
-    .viewer-pane {
-      position: relative;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-      background: #111827;
-    }
-
-    .dev-toolbar {
-      flex: 0 0 auto;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.45rem 0.65rem;
-      border-bottom: 1px solid #374151;
-      background: #1f2937;
-    }
-
-    .dev-toolbar.is-disabled {
-      opacity: 0.55;
-    }
-
-    .dev-toolbar.is-disabled .dev-toolbar-primary {
-      opacity: 1;
-    }
-
-    .dev-toolbar button {
-      border: 1px solid #4b5563;
-      border-radius: 6px;
-      background: #111827;
-      color: #e5e7eb;
-      font-size: 0.82rem;
-      padding: 0.35rem 0.65rem;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .dev-toolbar button:hover:not(:disabled) {
-      border-color: #60a5fa;
-      background: #1d4f91;
-    }
-
-    .dev-toolbar button.is-active {
-      border-color: #60a5fa;
-      background: #2563eb;
-      color: #ffffff;
-    }
-
-    .dev-toolbar button:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .dev-toolbar-menu-wrap {
-      position: relative;
-      display: inline-flex;
-    }
-
-    .dev-toolbar-menu {
-      position: absolute;
-      z-index: 120;
-      top: calc(100% + 4px);
-      left: 0;
-      min-width: 220px;
-      padding: 0.5rem;
-      border: 1px solid #4b5563;
-      border-radius: 8px;
-      background: #111827;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    }
-
-    .dev-toolbar-menu[hidden] {
-      display: none;
-    }
-
-    .dev-toolbar-menu-section+.dev-toolbar-menu-section {
-      margin-top: 0.55rem;
-      padding-top: 0.55rem;
-      border-top: 1px solid #374151;
-    }
-
-    .dev-toolbar-menu-label {
-      display: block;
-      margin-bottom: 0.35rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #9ca3af;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-
-    .dev-toolbar-menu-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.35rem;
-    }
-
-    .dev-toolbar-menu-actions button.is-selected {
-      border-color: #60a5fa;
-      background: #2563eb;
-      color: #ffffff;
-    }
-
-    .dev-toolbar-menu-toggle {
-      width: 100%;
-    }
-
-    .dev-toolbar-menu-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .dev-toolbar-menu-field input[type='number'] {
-      border: 1px solid #4b5563;
-      border-radius: 6px;
-      background: #111827;
-      color: #e5e7eb;
-      font-size: 0.82rem;
-      padding: 0.35rem 0.5rem;
-      width: 100%;
-    }
-
-    .dev-toolbar-menu-field input[type='number']:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .dev-toolbar-menu-field select {
-      border: 1px solid #4b5563;
-      border-radius: 6px;
-      background: #111827;
-      color: #e5e7eb;
-      font-size: 0.82rem;
-      padding: 0.35rem 0.5rem;
-      width: 100%;
-      cursor: pointer;
-    }
-
-    .dev-toolbar-menu-field select:hover:not(:disabled) {
-      border-color: #60a5fa;
-    }
-
-    .dev-toolbar-menu-field select:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .dev-toolbar-menu-check {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.82rem;
-      color: #e5e7eb;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .dev-toolbar-menu-check input[type='checkbox'] {
-      width: 1rem;
-      height: 1rem;
-      accent-color: #2563eb;
-      cursor: pointer;
-    }
-
-    .dev-toolbar-menu-check input[type='checkbox']:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .demo-dock-tab-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      padding: 12px;
-      font-size: 12px;
-      color: var(--ml-ui-text, #e5e7eb);
-    }
-
-    .demo-dock-tab-header {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .demo-dock-tab-title {
-      margin: 0;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--ml-ui-text, #f3f4f6);
-    }
-
-    .demo-dock-tab-description {
-      margin: 0;
-      color: var(--ml-ui-text-muted, #9ca3af);
-      line-height: 1.45;
-    }
-
-    .demo-dock-tab-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-
-    .demo-dock-tab-field-inline {
-      flex-direction: row;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .demo-dock-tab-label {
-      font-size: 0.78rem;
-      font-weight: 500;
-      color: var(--ml-ui-text-muted, #9ca3af);
-    }
-
-    .demo-dock-tab-control {
-      border: 1px solid var(--ml-ui-border, #4b5563);
-      border-radius: 6px;
-      background: var(--ml-ui-bg, #111827);
-      color: var(--ml-ui-text, #e5e7eb);
-      font: inherit;
-      padding: 0.4rem 0.55rem;
-    }
-
-    .demo-dock-tab-control[type='checkbox'] {
-      width: 1rem;
-      height: 1rem;
-      padding: 0;
-    }
-
-    .demo-dock-tab-control[type='range'] {
-      padding: 0;
-      border: none;
-      background: transparent;
-    }
-
-    .demo-dock-tab-field:has(input[type='range']) {
-      position: relative;
-    }
-
-    .demo-dock-tab-range-value {
-      position: absolute;
-      right: 0;
-      top: 0;
-      font-size: 0.75rem;
-      color: var(--ml-ui-text-muted, #9ca3af);
-    }
-
-    .demo-dock-tab-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .demo-dock-tab-btn {
-      border: 1px solid var(--ml-ui-border, #4b5563);
-      border-radius: 6px;
-      background: var(--ml-ui-bg, #111827);
-      color: var(--ml-ui-text, #e5e7eb);
-      font-size: 0.82rem;
-      padding: 0.35rem 0.75rem;
-      cursor: pointer;
-    }
-
-    .demo-dock-tab-btn:hover {
-      border-color: var(--ml-ui-accent, #60a5fa);
-    }
-
-    .demo-dock-tab-btn-primary {
-      border-color: var(--ml-ui-accent, #2563eb);
-      background: var(--ml-ui-accent, #2563eb);
-      color: #ffffff;
-    }
-
-    .demo-dock-tab-btn-primary:hover {
-      filter: brightness(1.08);
-    }
-
-    .demo-dock-tab-status {
-      padding: 0.55rem 0.65rem;
-      border-radius: 6px;
-      border: 1px solid var(--ml-ui-border, #374151);
-      background: #1f2937;
-      color: var(--ml-ui-text-muted, #9ca3af);
-      line-height: 1.45;
-      word-break: break-word;
-    }
-
-    .viewer-canvas-area {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    #cad-container {
-      position: absolute;
-      isolation: isolate;
-      inset: 0;
-      overflow: hidden;
-    }
-
-    #cad-container canvas {
-      display: block;
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    .empty-state {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 20;
-      pointer-events: none;
-    }
-
-    .empty-state.hidden {
-      display: none;
-    }
-
-    .open-main-button {
-      pointer-events: auto;
-      border: 1px solid #60a5fa;
-      background: #2563eb;
-      color: #ffffff;
-      border-radius: 10px;
-      padding: 0.7rem 1.2rem;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .open-main-button:hover {
-      background: #1d4ed8;
-    }
-
-    .selection-action-menu {
-      position: fixed;
-      z-index: 1001;
-      display: flex;
-      gap: 0.35rem;
-      padding: 0.35rem;
-      border: 1px solid #374151;
-      border-radius: 8px;
-      background: #111827;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    }
-
-    .selection-action-menu[hidden] {
-      display: none;
-    }
-
-    .selection-action-menu button {
-      border: 1px solid #4b5563;
-      border-radius: 6px;
-      background: #1f2937;
-      color: #e5e7eb;
-      font-size: 0.82rem;
-      font-weight: 600;
-      padding: 0.35rem 0.75rem;
-      cursor: pointer;
-    }
-
-    .selection-action-menu button:hover {
-      border-color: #22c55e;
-      background: #14532d;
-      color: #ffffff;
-    }
-
-    #fileInputElement {
-      display: none;
-    }
-  </style>
-</head>
-
-<body class="app-booting">
-  <div class="app-shell">
-    <aside class="phase-sidebar" aria-label="工艺与阶段">
-      <header class="phase-sidebar-header" id="phaseSidebarHeader">
-        <strong id="phaseSidebarTitle">工艺与阶段</strong>
-        <button class="phase-sidebar-style-button" id="phaseHighlightStyleButton" type="button" aria-label="高亮样式"
-          title="高亮样式" disabled></button>
-      </header>
-      <div class="phase-sidebar-content" id="phaseWorkspaceMount"></div>
-    </aside>
-    <div class="phase-sidebar-resize-handle" id="phaseSidebarResizeHandle" role="separator" aria-label="调整工艺侧栏宽度"
-      aria-orientation="vertical" aria-valuemin="240" aria-valuemax="520" tabindex="0"></div>
-    <main class="viewer-pane" id="viewerPane">
-      <section class="phase-contextbar" aria-label="当前工艺、序列与阶段">
-        <label class="phase-context-field">
-          <span>工艺</span>
-          <select id="phaseContextProcess" aria-label="快速选择工艺"></select>
-        </label>
-        <label class="phase-context-field">
-          <span>序列</span>
-          <select id="phaseContextSequence" aria-label="快速选择序列"></select>
-        </label>
-        <label class="phase-context-field">
-          <span>PHASE</span>
-          <select id="phaseContextPhase" aria-label="快速选择阶段"></select>
-        </label>
-        <span class="phase-context-summary" id="phaseContextSummary">尚未创建工艺</span>
-        <span class="phase-context-spacer"></span>
-        <span class="phase-context-status" id="phaseContextStatus"><i></i><span>等待创建工艺</span></span>
-      </section>
-      <div class="dev-toolbar is-disabled" id="devToolbar" role="toolbar" aria-label="Viewer demo controls">
-        <div class="dev-toolbar-menu-wrap">
-          <button type="button" id="devDockButton" disabled aria-haspopup="menu" aria-expanded="false">
-            Dock
-          </button>
-          <div id="devDockMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Dock panel controls">
-            <div class="dev-toolbar-menu-section">
-              <button type="button" id="devDockOpenToggle" class="dev-toolbar-menu-toggle" role="menuitem">
-                Open Dock
-              </button>
-            </div>
-            <div class="dev-toolbar-menu-section">
-              <button type="button" id="devDockAddTab" class="dev-toolbar-menu-toggle" role="menuitem">
-                Add Dock Tab
-              </button>
-            </div>
-            <div class="dev-toolbar-menu-section">
-              <label class="dev-toolbar-menu-field" for="devDockSizeInput">
-                <span class="dev-toolbar-menu-label" id="devDockSizeLabel">Width (px)</span>
-                <input type="number" id="devDockSizeInput" min="120" max="9999" step="1" value="280" disabled />
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="dev-toolbar-menu-wrap">
-          <button type="button" id="devViewerToolbarButton" disabled aria-haspopup="menu" aria-expanded="false">
-            Toolbar
-          </button>
-          <div id="devViewerToolbarMenu" class="dev-toolbar-menu" hidden role="menu" aria-label="Toolbar controls">
-            <div class="dev-toolbar-menu-section">
-              <label class="dev-toolbar-menu-field" for="devToolbarLayoutSelect">
-                <span class="dev-toolbar-menu-label">Items layout</span>
-                <select id="devToolbarLayoutSelect" disabled aria-label="Toolbar items layout">
-                  <option value="default">Built-in default</option>
-                </select>
-              </label>
-            </div>
-            <div class="dev-toolbar-menu-section">
-              <span class="dev-toolbar-menu-label">Position</span>
-              <div class="dev-toolbar-menu-actions" role="group" aria-label="Toolbar position">
-                <button type="button" data-viewer-toolbar-placement="top" role="menuitem">Top</button>
-                <button type="button" data-viewer-toolbar-placement="bottom" role="menuitem">Bottom</button>
-                <button type="button" data-viewer-toolbar-placement="left" role="menuitem">Left</button>
-                <button type="button" data-viewer-toolbar-placement="right" role="menuitem">Right</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PID Optimizer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        height: 100%;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #dfe7e9;
+        color: #e5e7eb;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body.app-booting .app-shell {
+        visibility: hidden;
+      }
+
+      .app-shell {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .file-sidebar-column {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: row;
+        min-width: 0;
+        width: 180px;
+      }
+
+      .file-sidebar-column.is-hidden {
+        display: none;
+      }
+
+      .file-sidebar {
+        flex: 1 1 auto;
+        min-width: 0;
+        background: #0f172a;
+        border-right: none;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        overflow: auto;
+      }
+
+      .file-sidebar-resize-handle {
+        flex: 0 0 6px;
+        width: 6px;
+        cursor: ew-resize;
+        background: transparent;
+        touch-action: none;
+        border-right: 1px solid #1f2937;
+      }
+
+      .file-sidebar-resize-handle:hover,
+      .file-sidebar-resize-handle:active {
+        background: #374151;
+      }
+
+      .file-sidebar-toggle {
+        display: none;
+      }
+
+      .sidebar-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #93c5fd;
+      }
+
+      .sidebar-help {
+        font-size: 0.82rem;
+        color: #9ca3af;
+        line-height: 1.4;
+        margin-bottom: 0.75rem;
+      }
+
+      .file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .file-list-item {
+        width: 100%;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #1f2937;
+        color: #e5e7eb;
+        text-align: left;
+        padding: 0.65rem 0.7rem;
+        font-size: 0.88rem;
+        cursor: pointer;
+        transition:
+          background 0.2s ease,
+          border-color 0.2s ease;
+      }
+
+      .file-list-item:hover {
+        background: #273447;
+        border-color: #60a5fa;
+      }
+
+      .file-list-item.active {
+        border-color: #60a5fa;
+        background: #1d4f91;
+      }
+
+      .viewer-pane {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: #111827;
+      }
+
+      .dev-toolbar {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.65rem;
+        border-bottom: 1px solid #374151;
+        background: #1f2937;
+      }
+
+      .dev-toolbar.is-disabled {
+        opacity: 0.55;
+      }
+
+      .dev-toolbar.is-disabled .dev-toolbar-primary {
+        opacity: 1;
+      }
+
+      .dev-toolbar button {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.65rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .dev-toolbar button:hover:not(:disabled) {
+        border-color: #60a5fa;
+        background: #1d4f91;
+      }
+
+      .dev-toolbar button.is-active {
+        border-color: #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .dev-toolbar button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .dev-toolbar-menu {
+        position: absolute;
+        z-index: 120;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        padding: 0.5rem;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: #111827;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      }
+
+      .dev-toolbar-menu[hidden] {
+        display: none;
+      }
+
+      .dev-toolbar-menu-section + .dev-toolbar-menu-section {
+        margin-top: 0.55rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid #374151;
+      }
+
+      .dev-toolbar-menu-label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .dev-toolbar-menu-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35rem;
+      }
+
+      .dev-toolbar-menu-actions button.is-selected {
+        border-color: #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+      }
+
+      .dev-toolbar-menu-toggle {
+        width: 100%;
+      }
+
+      .dev-toolbar-menu-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .dev-toolbar-menu-field input[type='number'] {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
+      }
+
+      .dev-toolbar-menu-field input[type='number']:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-field select {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #111827;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.5rem;
+        width: 100%;
+        cursor: pointer;
+      }
+
+      .dev-toolbar-menu-field select:hover:not(:disabled) {
+        border-color: #60a5fa;
+      }
+
+      .dev-toolbar-menu-field select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .dev-toolbar-menu-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.82rem;
+        color: #e5e7eb;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .dev-toolbar-menu-check input[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        accent-color: #2563eb;
+        cursor: pointer;
+      }
+
+      .dev-toolbar-menu-check input[type='checkbox']:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .demo-dock-tab-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--ml-ui-text, #e5e7eb);
+      }
+
+      .demo-dock-tab-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .demo-dock-tab-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--ml-ui-text, #f3f4f6);
+      }
+
+      .demo-dock-tab-description {
+        margin: 0;
+        color: var(--ml-ui-text-muted, #9ca3af);
+        line-height: 1.45;
+      }
+
+      .demo-dock-tab-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .demo-dock-tab-field-inline {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .demo-dock-tab-label {
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--ml-ui-text-muted, #9ca3af);
+      }
+
+      .demo-dock-tab-control {
+        border: 1px solid var(--ml-ui-border, #4b5563);
+        border-radius: 6px;
+        background: var(--ml-ui-bg, #111827);
+        color: var(--ml-ui-text, #e5e7eb);
+        font: inherit;
+        padding: 0.4rem 0.55rem;
+      }
+
+      .demo-dock-tab-control[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        padding: 0;
+      }
+
+      .demo-dock-tab-control[type='range'] {
+        padding: 0;
+        border: none;
+        background: transparent;
+      }
+
+      .demo-dock-tab-field:has(input[type='range']) {
+        position: relative;
+      }
+
+      .demo-dock-tab-range-value {
+        position: absolute;
+        right: 0;
+        top: 0;
+        font-size: 0.75rem;
+        color: var(--ml-ui-text-muted, #9ca3af);
+      }
+
+      .demo-dock-tab-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .demo-dock-tab-btn {
+        border: 1px solid var(--ml-ui-border, #4b5563);
+        border-radius: 6px;
+        background: var(--ml-ui-bg, #111827);
+        color: var(--ml-ui-text, #e5e7eb);
+        font-size: 0.82rem;
+        padding: 0.35rem 0.75rem;
+        cursor: pointer;
+      }
+
+      .demo-dock-tab-btn:hover {
+        border-color: var(--ml-ui-accent, #60a5fa);
+      }
+
+      .demo-dock-tab-btn-primary {
+        border-color: var(--ml-ui-accent, #2563eb);
+        background: var(--ml-ui-accent, #2563eb);
+        color: #ffffff;
+      }
+
+      .demo-dock-tab-btn-primary:hover {
+        filter: brightness(1.08);
+      }
+
+      .demo-dock-tab-status {
+        padding: 0.55rem 0.65rem;
+        border-radius: 6px;
+        border: 1px solid var(--ml-ui-border, #374151);
+        background: #1f2937;
+        color: var(--ml-ui-text-muted, #9ca3af);
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
+      .viewer-canvas-area {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      #cad-container {
+        position: absolute;
+        isolation: isolate;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      #cad-container canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .empty-state {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+        pointer-events: none;
+      }
+
+      .empty-state.hidden {
+        display: none;
+      }
+
+      .open-main-button {
+        pointer-events: auto;
+        border: 1px solid #60a5fa;
+        background: #2563eb;
+        color: #ffffff;
+        border-radius: 10px;
+        padding: 0.7rem 1.2rem;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .open-main-button:hover {
+        background: #1d4ed8;
+      }
+
+      .selection-action-menu {
+        position: fixed;
+        z-index: 1001;
+        display: flex;
+        gap: 0.35rem;
+        padding: 0.35rem;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #111827;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+
+      .selection-action-menu[hidden] {
+        display: none;
+      }
+
+      .selection-action-menu button {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        background: #1f2937;
+        color: #e5e7eb;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        cursor: pointer;
+      }
+
+      .selection-action-menu button:hover {
+        border-color: #22c55e;
+        background: #14532d;
+        color: #ffffff;
+      }
+
+      .flow-debug-panel {
+        position: absolute;
+        z-index: 30;
+        top: 12px;
+        right: 12px;
+        width: min(360px, calc(100% - 24px));
+        padding: 0.75rem;
+        border: 1px solid #4b5563;
+        border-radius: 8px;
+        background: rgba(17, 24, 39, 0.96);
+        color: #e5e7eb;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+
+      .flow-debug-panel.is-empty {
+        opacity: 0.78;
+      }
+
+      .flow-debug-header,
+      .flow-debug-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .flow-debug-title {
+        flex: 1;
+        font-size: 0.88rem;
+        font-weight: 700;
+      }
+
+      .flow-debug-fields {
+        display: grid;
+        grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+        gap: 0.35rem 0.65rem;
+        margin: 0.65rem 0;
+        font-size: 0.78rem;
+      }
+
+      .flow-debug-fields dt {
+        color: #9ca3af;
+        font-weight: 600;
+      }
+
+      .flow-debug-fields dd {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .flow-debug-status {
+        min-height: 2.5em;
+        line-height: 1.3;
+      }
+
+      .flow-debug-actions {
+        justify-content: flex-end;
+      }
+
+      .flow-debug-panel button {
+        border: 1px solid #4b5563;
+        border-radius: 6px;
+        padding: 0.35rem 0.7rem;
+        background: #1f2937;
+        color: #e5e7eb;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .flow-debug-panel button:hover:not(:disabled) {
+        border-color: #22c55e;
+        background: #14532d;
+      }
+
+      .flow-debug-panel button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .flow-debug-next {
+        border-color: #22c55e !important;
+      }
+
+      #fileInputElement {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body class="app-booting">
+    <div class="app-shell">
+      <aside class="phase-sidebar" aria-label="工艺与阶段">
+        <header class="phase-sidebar-header" id="phaseSidebarHeader">
+          <strong id="phaseSidebarTitle">工艺与阶段</strong>
+          <button
+            class="phase-sidebar-style-button"
+            id="phaseHighlightStyleButton"
+            type="button"
+            aria-label="高亮样式"
+            title="高亮样式"
+            disabled
+          ></button>
+        </header>
+        <div class="phase-sidebar-content" id="phaseWorkspaceMount"></div>
+      </aside>
+      <div
+        class="phase-sidebar-resize-handle"
+        id="phaseSidebarResizeHandle"
+        role="separator"
+        aria-label="调整工艺侧栏宽度"
+        aria-orientation="vertical"
+        aria-valuemin="240"
+        aria-valuemax="520"
+        tabindex="0"
+      ></div>
+      <main class="viewer-pane" id="viewerPane">
+        <section class="phase-contextbar" aria-label="当前工艺、序列与阶段">
+          <label class="phase-context-field">
+            <span>工艺</span>
+            <select id="phaseContextProcess" aria-label="快速选择工艺"></select>
+          </label>
+          <label class="phase-context-field">
+            <span>序列</span>
+            <select
+              id="phaseContextSequence"
+              aria-label="快速选择序列"
+            ></select>
+          </label>
+          <label class="phase-context-field">
+            <span>PHASE</span>
+            <select id="phaseContextPhase" aria-label="快速选择阶段"></select>
+          </label>
+          <span class="phase-context-summary" id="phaseContextSummary"
+            >尚未创建工艺</span
+          >
+          <span class="phase-context-spacer"></span>
+          <span class="phase-context-status" id="phaseContextStatus"
+            ><i></i><span>等待创建工艺</span></span
+          >
+        </section>
+        <div
+          class="dev-toolbar is-disabled"
+          id="devToolbar"
+          role="toolbar"
+          aria-label="Viewer demo controls"
+        >
+          <div class="dev-toolbar-menu-wrap">
+            <button
+              type="button"
+              id="devDockButton"
+              disabled
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Dock
+            </button>
+            <div
+              id="devDockMenu"
+              class="dev-toolbar-menu"
+              hidden
+              role="menu"
+              aria-label="Dock panel controls"
+            >
+              <div class="dev-toolbar-menu-section">
+                <button
+                  type="button"
+                  id="devDockOpenToggle"
+                  class="dev-toolbar-menu-toggle"
+                  role="menuitem"
+                >
+                  Open Dock
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button
+                  type="button"
+                  id="devDockAddTab"
+                  class="dev-toolbar-menu-toggle"
+                  role="menuitem"
+                >
+                  Add Dock Tab
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label class="dev-toolbar-menu-field" for="devDockSizeInput">
+                  <span class="dev-toolbar-menu-label" id="devDockSizeLabel"
+                    >Width (px)</span
+                  >
+                  <input
+                    type="number"
+                    id="devDockSizeInput"
+                    min="120"
+                    max="9999"
+                    step="1"
+                    value="280"
+                    disabled
+                  />
+                </label>
               </div>
             </div>
-            <div class="dev-toolbar-menu-section">
-              <label class="dev-toolbar-menu-field" for="devViewerToolbarEdgeOffset">
-                <span class="dev-toolbar-menu-label">Edge inset (px)</span>
-                <input type="number" id="devViewerToolbarEdgeOffset" min="0" max="128" step="1" value="8" disabled />
-              </label>
-            </div>
-            <div class="dev-toolbar-menu-section">
-              <button type="button" id="devViewerToolbarVisibilityToggle" class="dev-toolbar-menu-toggle"
-                role="menuitem">
-                Hide Toolbar
-              </button>
-            </div>
-            <div class="dev-toolbar-menu-section">
-              <button type="button" id="devViewerToolbarCollapseToggle" class="dev-toolbar-menu-toggle" role="menuitem">
-                Collapse Toolbar
-              </button>
+          </div>
+          <div class="dev-toolbar-menu-wrap">
+            <button
+              type="button"
+              id="devViewerToolbarButton"
+              disabled
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Toolbar
+            </button>
+            <div
+              id="devViewerToolbarMenu"
+              class="dev-toolbar-menu"
+              hidden
+              role="menu"
+              aria-label="Toolbar controls"
+            >
+              <div class="dev-toolbar-menu-section">
+                <label
+                  class="dev-toolbar-menu-field"
+                  for="devToolbarLayoutSelect"
+                >
+                  <span class="dev-toolbar-menu-label">Items layout</span>
+                  <select
+                    id="devToolbarLayoutSelect"
+                    disabled
+                    aria-label="Toolbar items layout"
+                  >
+                    <option value="default">Built-in default</option>
+                  </select>
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <span class="dev-toolbar-menu-label">Position</span>
+                <div
+                  class="dev-toolbar-menu-actions"
+                  role="group"
+                  aria-label="Toolbar position"
+                >
+                  <button
+                    type="button"
+                    data-viewer-toolbar-placement="top"
+                    role="menuitem"
+                  >
+                    Top
+                  </button>
+                  <button
+                    type="button"
+                    data-viewer-toolbar-placement="bottom"
+                    role="menuitem"
+                  >
+                    Bottom
+                  </button>
+                  <button
+                    type="button"
+                    data-viewer-toolbar-placement="left"
+                    role="menuitem"
+                  >
+                    Left
+                  </button>
+                  <button
+                    type="button"
+                    data-viewer-toolbar-placement="right"
+                    role="menuitem"
+                  >
+                    Right
+                  </button>
+                </div>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <label
+                  class="dev-toolbar-menu-field"
+                  for="devViewerToolbarEdgeOffset"
+                >
+                  <span class="dev-toolbar-menu-label">Edge inset (px)</span>
+                  <input
+                    type="number"
+                    id="devViewerToolbarEdgeOffset"
+                    min="0"
+                    max="128"
+                    step="1"
+                    value="8"
+                    disabled
+                  />
+                </label>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button
+                  type="button"
+                  id="devViewerToolbarVisibilityToggle"
+                  class="dev-toolbar-menu-toggle"
+                  role="menuitem"
+                >
+                  Hide Toolbar
+                </button>
+              </div>
+              <div class="dev-toolbar-menu-section">
+                <button
+                  type="button"
+                  id="devViewerToolbarCollapseToggle"
+                  class="dev-toolbar-menu-toggle"
+                  role="menuitem"
+                >
+                  Collapse Toolbar
+                </button>
+              </div>
             </div>
           </div>
+          <button
+            type="button"
+            id="pidDrawingLibraryButton"
+            aria-haspopup="dialog"
+          >
+            PID 图纸
+          </button>
+          <button
+            type="button"
+            id="projectManagementButton"
+            aria-haspopup="dialog"
+          >
+            Project
+          </button>
+          <button
+            type="button"
+            id="reportWorkspaceButton"
+            aria-haspopup="dialog"
+          >
+            报告
+          </button>
+          <button
+            type="button"
+            id="languageToggleButton"
+            class="language-toggle-button"
+            aria-label="切换为英文"
+            title="切换为英文"
+          ></button>
         </div>
-        <button type="button" id="pidDrawingLibraryButton" aria-haspopup="dialog">
-          PID 图纸
-        </button>
-        <button type="button" id="projectManagementButton" aria-haspopup="dialog">
-          Project
-        </button>
-        <button type="button" id="reportWorkspaceButton" aria-haspopup="dialog">
-          报告
-        </button>
-        <button type="button" id="languageToggleButton" class="language-toggle-button" aria-label="切换为英文"
-          title="切换为英文"></button>
-      </div>
-      <section class="viewer-canvas-area">
-        <div class="empty-state" id="emptyState">
-          <button type="button" class="open-main-button" id="centerOpenButton">Open File</button>
-        </div>
-        <div class="selection-action-menu" id="selectionActionMenu" hidden role="menu" aria-label="Selection actions">
-          <button type="button" id="selectionOpenButton" role="menuitem">Open</button>
-          <button type="button" id="selectionCloseButton" role="menuitem">Close</button>
-        </div>
-        <input type="file" id="fileInputElement" accept=".dxf,.dwg" />
-        <div id="cad-container"></div>
-      </section>
-    </main>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
-
+        <section class="viewer-canvas-area">
+          <div class="empty-state" id="emptyState">
+            <button
+              type="button"
+              class="open-main-button"
+              id="centerOpenButton"
+            >
+              Open File
+            </button>
+          </div>
+          <div
+            class="selection-action-menu"
+            id="selectionActionMenu"
+            hidden
+            role="menu"
+            aria-label="Selection actions"
+          >
+            <button type="button" id="selectionOpenButton" role="menuitem">
+              Open
+            </button>
+            <button type="button" id="selectionCloseButton" role="menuitem">
+              Close
+            </button>
+          </div>
+          <aside
+            class="flow-debug-panel is-empty"
+            id="flowDebugPanel"
+            role="region"
+            aria-disabled="true"
+          >
+            <div class="flow-debug-header">
+              <strong class="flow-debug-title" data-flow-debug="title"></strong>
+            </div>
+            <dl class="flow-debug-fields">
+              <dt data-flow-debug="component"></dt>
+              <dd data-flow-debug="componentValue"></dd>
+              <dt data-flow-debug="objectId"></dt>
+              <dd data-flow-debug="objectIdValue"></dd>
+              <dt data-flow-debug="from"></dt>
+              <dd data-flow-debug="fromValue"></dd>
+              <dt data-flow-debug="to"></dt>
+              <dd data-flow-debug="toValue"></dd>
+              <dt data-flow-debug="progress"></dt>
+              <dd data-flow-debug="progressValue"></dd>
+              <dt data-flow-debug="queue"></dt>
+              <dd data-flow-debug="queueValue"></dd>
+              <dt data-flow-debug="status"></dt>
+              <dd
+                class="flow-debug-status"
+                data-flow-debug="statusValue"
+                aria-live="polite"
+              ></dd>
+            </dl>
+            <div class="flow-debug-actions">
+              <button type="button" id="flowDebugClearButton" disabled></button>
+              <button
+                type="button"
+                class="flow-debug-next"
+                id="flowDebugNextButton"
+                disabled
+              ></button>
+            </div>
+          </aside>
+          <input type="file" id="fileInputElement" accept=".dxf,.dwg" />
+          <div id="cad-container"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
