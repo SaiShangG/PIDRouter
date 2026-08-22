@@ -67,7 +67,10 @@ export const resolveEntityPresentation = (
   context: PresentationResolutionContext = {}
 ): ResolvedEntityPresentation => {
   let source: PresentationSource = 'default'
-  let style: HighlightStyle = profile.defaultFlowStyle
+  let style: HighlightStyle = context.flowPath
+    ? { ...profile.defaultFlowStyle, ...context.flowPath.styleOverride }
+    : profile.defaultFlowStyle
+  if (context.flowPath) source = 'flow'
   const utility = context.flowPath?.utilityId
     ? profile.utilities.find(
         item => item.id === context.flowPath?.utilityId && item.enabled

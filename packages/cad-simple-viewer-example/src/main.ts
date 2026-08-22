@@ -117,6 +117,19 @@ const EXAMPLE_COMMAND_ALIASES = {
 const ACTIVE_PROJECT_STORAGE_KEY =
   'cad-simple-viewer-example-active-project-id'
 
+const areEqualNumberSets = (
+  left: readonly number[] | undefined,
+  right: readonly number[] | undefined
+): boolean => {
+  const leftSet = new Set(left ?? [])
+  const rightSet = new Set(right ?? [])
+  if (leftSet.size !== rightSet.size) return false
+  for (const value of leftSet) {
+    if (!rightSet.has(value)) return false
+  }
+  return true
+}
+
 interface FlowConnectionEdge {
   From?: number
   To?: {
@@ -175,6 +188,21 @@ interface FlowConnectionBBox {
 interface FlowConnectionArea {
   Id?: string
   BBox?: FlowConnectionBBox
+  Components?: {
+    $values?: FlowConnectionComponent[]
+  }
+}
+
+interface FlowConnectionComponent {
+  Handle?: number
+  Id?: string
+  Name?: string
+}
+
+interface FlowConnectionComponentInfo {
+  areaId?: string
+  componentId?: string
+  name?: string
 }
 
 interface FlowConnectionDocument {
@@ -201,6 +229,13 @@ interface FlowConnectionBounds {
   maxX: number
   maxY: number
 }
+
+const CONNECTED_FLOW_STYLE = {
+  color: 0x9c27b0,
+  lineWidthPx: 3.5,
+  opacity: 1,
+  visible: true
+} as const
 
 // The raster helper layer contains the large regular grid used for P&ID
 // positioning. Keep it out of PDF content while retaining it for bounds lookup.
@@ -365,6 +400,43 @@ const buildFlowConnectionLogIndex = (document: FlowConnectionDocument) => {
   return index
 }
 
+const buildFlowEntityIndex = (document: FlowConnectionDocument) => {
+  const index = new Map<string, FlowConnectionEntity>()
+
+  const addEntity = (entity: FlowConnectionEntity) => {
+    if (entity.Handle != null && entity.Handle >= 0) {
+      handleKeysFromNumber(entity.Handle).forEach(handleKey => {
+        index.set(handleKey, entity)
+      })
+    }
+    entity.Items?.$values?.forEach(addEntity)
+  }
+
+  document.Dsl?.Entities?.$values?.forEach(addEntity)
+  return index
+}
+
+const buildFlowComponentIndex = (document: FlowConnectionDocument) => {
+  const index = new Map<string, FlowConnectionComponentInfo[]>()
+
+  document.Org?.Areas?.$values?.forEach(area => {
+    area.Components?.$values?.forEach(component => {
+      if (component.Handle == null || component.Handle < 0) return
+
+      const info = {
+        areaId: area.Id,
+        componentId: component.Id,
+        name: component.Name
+      }
+      handleKeysFromNumber(component.Handle).forEach(handleKey => {
+        index.set(handleKey, [...(index.get(handleKey) ?? []), info])
+      })
+    })
+  })
+
+  return index
+}
+
 const collectFlowBoundaryHandleKeys = (
   entity: FlowConnectionEntity,
   boundaryHandleKeys: Set<string>
@@ -388,7 +460,33 @@ const buildFlowBoundaryHandleKeys = (document: FlowConnectionDocument) => {
     collectFlowBoundaryHandleKeys(entity, boundaryHandleKeys)
   })
 
+  document.Org?.Areas?.$values?.forEach(area => {
+    area.Components?.$values?.forEach(component => {
+      const name = component.Name?.trim().toUpperCase() ?? ''
+      if (!name.includes('VALVE') && !name.includes('PUMP')) return
+      if (component.Handle == null || component.Handle < 0) return
+      handleKeysFromNumber(component.Handle).forEach(handleKey => {
+        boundaryHandleKeys.add(handleKey)
+      })
+    })
+  })
+
   return boundaryHandleKeys
+}
+
+const buildFlowEdgeHandleKeys = (document: FlowConnectionDocument) => {
+  const edgeHandleKeys = new Set<string>()
+  const entities = document.Dsl?.Entities?.$values ?? []
+
+  entities.forEach(entity => {
+    if (!entity.$type?.includes('.Polyline,')) return
+    if (entity.Handle == null || entity.Handle < 0) return
+    handleKeysFromNumber(entity.Handle).forEach(handleKey => {
+      edgeHandleKeys.add(handleKey)
+    })
+  })
+
+  return edgeHandleKeys
 }
 
 const collectFlowConnectionGraphHandles = (document: FlowConnectionDocument) => {
@@ -711,9 +809,12 @@ const flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
 const flowConnectionLogIndex = buildFlowConnectionLogIndex(
   flowConnectionDocument
 )
+const flowEntityIndex = buildFlowEntityIndex(flowConnectionDocument)
+const flowComponentIndex = buildFlowComponentIndex(flowConnectionDocument)
 const flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(
   flowConnectionDocument
 )
+const flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
 const flowConnectionPidBounds = resolveFlowConnectionPidBounds(
   flowConnectionDocument
 )
@@ -1754,6 +1855,17 @@ class CadViewerApp {
 
   private async switchProject(project: ProjectRecord): Promise<void> {
     if (project.id === this.activeProjectId) {
+      const shouldReloadActiveWorkspace =
+        this.phaseRepository !== undefined &&
+        (!this.activeProject ||
+          this.activeProject.name !== project.name ||
+          this.activeProject.description !== project.description ||
+          !areEqualNumberSets(this.activeProject.fileIds, project.fileIds))
+      if (shouldReloadActiveWorkspace) {
+        await this.loadProjectWorkspace(project, true)
+        this.syncAppToolbarContext()
+        return
+      }
       this.activeProject = project
       this.projectManagementButton.title = project.name
       this.phasePanel?.render()
@@ -3067,12 +3179,30 @@ class CadViewerApp {
     await this.initialize()
     const options: AcApOpenDatabaseOptions = {
       minimumChunkSize: 1000,
-      progressiveRendering: true,
+      progressiveRendering: false,
       mode: AcEdOpenMode.Write,
       openViewMode: AcApOpenViewMode.Extents,
       sysVars: { lwdisplay: false }
     }
     if (drawing.kind === 'url') {
+      const backendFileMatch = /^file:(\d+)$/.exec(drawing.id)
+      if (backendFileMatch) {
+        try {
+          const content = await this.drawingLibraryRepository.getContent(
+            backendFileMatch[1]
+          )
+          return AcApDocManager.instance.openDocument(
+            drawing.sourceName,
+            content,
+            options
+          )
+        } catch (error) {
+          log.warn(
+            `Failed to open backend drawing ${drawing.id} as binary content:`,
+            error
+          )
+        }
+      }
       return drawing.url
         ? AcApDocManager.instance.openUrl(drawing.url, options)
         : false
@@ -3170,6 +3300,7 @@ class CadViewerApp {
 
     const actionIds = this.getSelectionActionIds(ids)
     this.selectedObjectIds = actionIds
+    actionIds.forEach(objectId => this.logSelectedObjectInfo(objectId))
 
     if (actionIds.length === 0) {
       this.hideSelectionActionMenu()
@@ -3177,6 +3308,31 @@ class CadViewerApp {
     }
 
     this.showSelectionActionMenu(actionIds)
+  }
+
+  private logSelectedObjectInfo(objectId: AcDbObjectId) {
+    const handleKeys = handleKeysFromObjectId(objectId)
+    const dslEntity = handleKeys
+      .map(handleKey => flowEntityIndex.get(handleKey))
+      .find(entity => entity != null)
+    const components = handleKeys.flatMap(
+      handleKey => flowComponentIndex.get(handleKey) ?? []
+    )
+    const rawEntity =
+      AcApDocManager.instance.curDocument.database.tables.blockTable.getEntityById(
+        objectId
+      )
+
+    console.info('[Selection] Object information', {
+      handleId: String(objectId),
+      handleKeys,
+      type: dslEntity?.$type ?? rawEntity?.constructor.name,
+      layerName: dslEntity?.LayerName,
+      blockName: dslEntity?.BlockName,
+      components,
+      dslEntity,
+      rawEntity
+    })
   }
 
   private handleSelectionRemoved() {
@@ -3254,11 +3410,11 @@ class CadViewerApp {
     if (!layout) return
 
     const ownerId = this.selectedObjectIds[0]
-    this.removeOpenHighlight()
-    this.runtimeDeviceStates = {}
     this.openFlowBoundary(ownerId)
     this.setDeviceState(ownerId, 'open')
-    const traversal = this.getFlowConnectionTraversal(ownerId)
+    const traversal = this.isFlowBoundaryObject(ownerId)
+      ? this.getFlowConnectionTraversal(ownerId)
+      : { connectedHandles: new Set<number>(), traversalEdges: [] }
     this.logOpenFlowConnection(ownerId, traversal)
     this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
     this.openHighlightGroups.set(
@@ -3334,7 +3490,10 @@ class CadViewerApp {
     const traversalEdgeKeys = new Set<string>()
     const visitedHandleKeys = new Set<string>()
     const pendingHandleKeys = handleKeysFromObjectId(objectId)
-    const traversableBoundaryKeys = new Set(pendingHandleKeys)
+    const traversableBoundaryKeys = new Set([
+      ...pendingHandleKeys,
+      ...this.openFlowBoundaryHandleKeys
+    ])
 
     while (pendingHandleKeys.length > 0) {
       const handleKey = pendingHandleKeys.shift()
@@ -3351,7 +3510,13 @@ class CadViewerApp {
           return
         }
 
-        connectedHandles.add(handleId)
+        if (
+          handleKeysFromNumber(handleId).some(nextKey =>
+            flowEdgeHandleKeys.has(nextKey)
+          )
+        ) {
+          connectedHandles.add(handleId)
+        }
         traversedToHandles.add(handleId)
         handleKeysFromNumber(handleId).forEach(nextKey => {
           if (!visitedHandleKeys.has(nextKey)) {
@@ -3409,6 +3574,20 @@ class CadViewerApp {
     }
 
     return false
+  }
+
+  private isFlowBoundaryObject(objectId: AcDbObjectId) {
+    const handleKeys = handleKeysFromObjectId(objectId)
+    if (handleKeys.some(handleKey => flowBoundaryHandleKeys.has(handleKey))) {
+      return true
+    }
+
+    const db = AcApDocManager.instance.curDocument?.database
+    const entity = db?.tables.blockTable.getEntityById(objectId) as
+      | LayerNamedEntity
+      | undefined
+    const layerName = entity?.layer ?? entity?.layerName
+    return isFlowBoundaryLayerName(layerName)
   }
 
   private openFlowBoundary(objectId: AcDbObjectId) {
@@ -3581,24 +3760,22 @@ class CadViewerApp {
   }
 
   private captureFlowPaths(): FlowStateSnapshot['flowPaths'] {
-    const activeHandles = [...this.openFlowBoundaryHandleKeys].sort()
-    return activeHandles.length && this.loadedPhase
-      ? [
-          {
-            id: `flow-default-${this.loadedPhase.phaseId}`,
-            name: '默认流路',
-            handleKeys: activeHandles
-          }
-        ]
-      : []
+    if (!this.loadedPhase) return []
+    return [...this.openHighlightConnections.keys()].map(ownerId => ({
+      id: `flow-${this.loadedPhase!.phaseId}-${String(ownerId)}`,
+      name: '默认流路',
+      handleKeys: handleKeysFromObjectId(ownerId),
+      styleOverride: { ...CONNECTED_FLOW_STYLE }
+    }))
   }
 
   private resolvePresentationForObjectId(
     objectId: AcDbObjectId,
     draft = this.getLoadedHighlightStyleDraft()
   ): ResolvedEntityPresentation {
-    if (!draft) {
-      return resolveEntityPresentation({
+    const profile =
+      draft?.presentationProfile ??
+      {
         defaultFlowStyle: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true },
         unknownDeviceStyle: { color: 0x546e7a, lineWidthPx: 2, opacity: 1, visible: true },
         dimmedBaseStyle: { color: 0x9e9e9e, opacity: 0.35 },
@@ -3618,27 +3795,23 @@ class CadViewerApp {
         },
         deviceStylesInitialized: true,
         utilities: []
-      })
-    }
-    for (const flowPath of this.getLoadedFlowState()?.flowPaths ?? []) {
-      for (const handleKey of flowPath.handleKeys) {
-        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-        if (!ownerId) continue
-        const group =
-          this.openHighlightGroups.get(ownerId) ??
-          this.getOpenHighlightObjectIds(ownerId)
-        if (group.has(objectId)) {
-          const isOwnerObject = objectId === ownerId
-          return resolveEntityPresentation(draft.presentationProfile, {
-            flowPath,
-            deviceState: isOwnerObject
-              ? this.runtimeDeviceStates[handleKey]
-              : undefined
-          })
-        }
       }
+
+    for (const [ownerId, group] of this.openHighlightGroups) {
+      if (!group.has(objectId)) continue
+      const ownerHandleKeys = handleKeysFromObjectId(ownerId)
+      const flowPath = {
+        id: `flow-runtime-${String(ownerId)}`,
+        name: '默认流路',
+        handleKeys: ownerHandleKeys,
+        styleOverride: { ...CONNECTED_FLOW_STYLE }
+      }
+      const deviceState = handleKeysFromObjectId(objectId)
+        .map(handleKey => this.runtimeDeviceStates[handleKey])
+        .find((state): state is DeviceState => state !== undefined)
+      return resolveEntityPresentation(profile, { flowPath, deviceState })
     }
-    return resolveEntityPresentation(draft.presentationProfile)
+    return resolveEntityPresentation(profile)
   }
 
   private clearViewerSelection() {
@@ -3786,9 +3959,13 @@ class CadViewerApp {
       this.openFlowBoundaryHandleKeys.add(handleKey)
       const ownerId = this.resolveObjectIdByHandleKey(handleKey)
       if (ownerId) {
+        const traversal = this.isFlowBoundaryObject(ownerId)
+          ? this.getFlowConnectionTraversal(ownerId)
+          : { connectedHandles: new Set<number>(), traversalEdges: [] }
+        this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
         this.openHighlightGroups.set(
           ownerId,
-          this.getOpenHighlightObjectIds(ownerId)
+          this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
         )
       } else {
         log.warn(`Unable to restore phase highlight handle: ${handleKey}`)

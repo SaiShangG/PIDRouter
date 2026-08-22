@@ -50,7 +50,16 @@ describe('presentationStyleResolver', () => {
       resolveEntityPresentation(profile, {
         flowPath: { ...flowPath, utilityId: 'missing', styleOverride: undefined }
       })
-    ).toMatchObject({ color: 0x00c853, source: 'default' })
+    ).toMatchObject({ color: 0x00c853, source: 'flow' })
+    expect(
+      resolveEntityPresentation(profile, {
+        flowPath: {
+          ...flowPath,
+          utilityId: undefined,
+          styleOverride: { color: 0x9c27b0, lineWidthPx: 3.5 }
+        }
+      })
+    ).toMatchObject({ color: 0x9c27b0, lineWidthPx: 3.5, source: 'flow' })
   })
 
   it('clamps style fields and produces stable keys', () => {
