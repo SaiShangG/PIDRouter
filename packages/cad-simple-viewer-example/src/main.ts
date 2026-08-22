@@ -55,6 +55,10 @@ import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import flowConnectionJsonText from './FlowConnection/1.json?raw'
 import {
+  FlowDebugTraversal,
+  type FlowDebugTraversalStep
+} from './flowDebugTraversal'
+import {
   type AppLocale,
   loadAppLocale,
   saveAppLocale,
@@ -228,6 +232,26 @@ interface FlowConnectionBounds {
   minY: number
   maxX: number
   maxY: number
+}
+
+type FlowDebugStatus =
+  | 'ready'
+  | 'advanced'
+  | 'blocked'
+  | 'complete'
+  | 'noEdges'
+  | 'missingEntity'
+  | 'missingStartEntity'
+  | 'highlightFailed'
+
+interface FlowDebugSession {
+  ownerId: AcDbObjectId
+  traversal: FlowDebugTraversal
+  currentObjectId?: AcDbObjectId
+  currentEntity?: FlowConnectionEntity
+  currentFrom?: number
+  currentTo?: number
+  status: FlowDebugStatus
 }
 
 const CONNECTED_FLOW_STYLE = {
@@ -819,6 +843,59 @@ const flowConnectionPidBounds = resolveFlowConnectionPidBounds(
   flowConnectionDocument
 )
 
+AcApI18n.mergeLocaleMessage('en', {
+  flowDebug: {
+    title: 'Flow traversal debug',
+    component: 'Current component',
+    objectId: 'Object ID',
+    from: 'From',
+    to: 'To',
+    progress: 'Progress (processed / discovered)',
+    queue: 'Queue (pending)',
+    status: 'Status',
+    next: 'Next',
+    clear: 'Clear',
+    empty: 'No debug traversal is active.',
+    ready: 'Start object highlighted. Click Next to traverse one target.',
+    advanced: 'Highlighted the next connected object.',
+    blocked: 'Reached a closed flow boundary; this branch was not expanded.',
+    complete: 'Traversal complete.',
+    noEdges: 'No outgoing flow graph edges were found for the start object.',
+    missingEntity:
+      'The graph target is missing from the active drawing; traversal continued.',
+    missingStartEntity: 'The start object could not be highlighted.',
+    highlightFailed:
+      'The target exists but its highlight could not be created.',
+    unknownComponent: 'Unknown component',
+    missingObject: 'Missing in drawing'
+  }
+})
+AcApI18n.mergeLocaleMessage('zh', {
+  flowDebug: {
+    title: '流向遍历调试',
+    component: '当前组件',
+    objectId: '对象 ID',
+    from: 'From',
+    to: 'To',
+    progress: '进度（已处理 / 已发现）',
+    queue: '队列（待处理）',
+    status: '状态',
+    next: '下一步',
+    clear: '清除',
+    empty: '当前没有调试遍历。',
+    ready: '已高亮起始对象。点击“下一步”遍历一个目标。',
+    advanced: '已高亮下一个连接对象。',
+    blocked: '已到达关闭的流向边界；未继续展开该分支。',
+    complete: '遍历完成。',
+    noEdges: '起始对象没有可用的流向图出边。',
+    missingEntity: '当前图纸中缺少该图目标；遍历已继续。',
+    missingStartEntity: '无法高亮起始对象。',
+    highlightFailed: '目标存在，但无法创建其高亮。',
+    unknownComponent: '未知组件',
+    missingObject: '图纸中缺失'
+  }
+})
+
 type ColorWritable = {
   set(value: number): void
 }
@@ -875,6 +952,9 @@ class CadViewerApp {
   private selectionActionMenu: HTMLDivElement
   private selectionOpenButton: HTMLButtonElement
   private selectionCloseButton: HTMLButtonElement
+  private flowDebugPanel: HTMLElement
+  private flowDebugNextButton: HTMLButtonElement
+  private flowDebugClearButton: HTMLButtonElement
   private pidDrawingLibraryButton: HTMLButtonElement
   private projectManagementButton: HTMLButtonElement
   private reportWorkspaceButton: HTMLButtonElement
@@ -909,6 +989,7 @@ class CadViewerApp {
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
   private openHighlightConnections = new Map<AcDbObjectId, Set<number>>()
   private openFlowBoundaryHandleKeys = new Set<string>()
+  private flowDebugSession?: FlowDebugSession
   private readonly phasePresentationController = new PhasePresentationController()
   private runtimeDeviceStates: Record<string, DeviceState> = {}
   private phaseStore = new PhaseWorkspaceStore()
@@ -987,6 +1068,15 @@ class CadViewerApp {
     this.selectionCloseButton = document.getElementById(
       'selectionCloseButton'
     ) as HTMLButtonElement
+    this.flowDebugPanel = document.getElementById(
+      'flowDebugPanel'
+    ) as HTMLElement
+    this.flowDebugNextButton = document.getElementById(
+      'flowDebugNextButton'
+    ) as HTMLButtonElement
+    this.flowDebugClearButton = document.getElementById(
+      'flowDebugClearButton'
+    ) as HTMLButtonElement
     this.pidDrawingLibraryButton = document.getElementById(
       'pidDrawingLibraryButton'
     ) as HTMLButtonElement
@@ -1038,6 +1128,7 @@ class CadViewerApp {
     this.setupFileHandling()
     this.setupPredefinedFileActions()
     this.setupSelectionActionMenu()
+    this.setupFlowDebugPanel()
     this.setupMobileSidebar()
     const fileSidebarResizeHandle = document.getElementById(
       'fileSidebarResizeHandle'
@@ -1112,6 +1203,7 @@ class CadViewerApp {
     this.syncDockMenuState()
     this.syncViewerToolbarMenuState()
     localizeDom(document, this.appLocale)
+    this.renderFlowDebugPanel()
   }
 
   private setupReportWorkspace() {
@@ -3266,6 +3358,230 @@ class CadViewerApp {
     })
   }
 
+  private setupFlowDebugPanel() {
+    console.info('[FlowDebug] stepwise-panel-v1 loaded', {
+      panelId: this.flowDebugPanel.id,
+      nextButtonId: this.flowDebugNextButton.id,
+      clearButtonId: this.flowDebugClearButton.id
+    })
+
+    this.flowDebugNextButton.addEventListener('click', event => {
+      event.stopPropagation()
+      this.advanceFlowDebugTraversal()
+    })
+    this.flowDebugClearButton.addEventListener('click', event => {
+      event.stopPropagation()
+      this.clearFlowDebugSession(true)
+    })
+    this.renderFlowDebugPanel()
+  }
+
+  private startFlowDebugSession(ownerId: AcDbObjectId) {
+    const startKeys = handleKeysFromObjectId(ownerId)
+    const traversableBoundaryKeys = new Set([
+      ...startKeys,
+      ...this.openFlowBoundaryHandleKeys
+    ])
+    const traversal = new FlowDebugTraversal({
+      startKeys,
+      getEdges: handleKey =>
+        (flowConnectionLogIndex.get(handleKey) ?? []).flatMap(edge =>
+          edge.to.map(to => ({ from: edge.from, to }))
+        ),
+      getHandleKeys: handleKeysFromNumber,
+      isBlocked: handle =>
+        this.isClosedFlowBoundary(handle, traversableBoundaryKeys)
+    })
+    this.flowDebugSession = {
+      ownerId,
+      traversal,
+      currentObjectId: ownerId,
+      currentEntity: this.resolveFlowConnectionEntity(startKeys),
+      status: traversal.pendingEdges.length > 0 ? 'ready' : 'noEdges'
+    }
+    this.renderFlowDebugPanel()
+  }
+
+  private advanceFlowDebugTraversal() {
+    const session = this.flowDebugSession
+    if (!session) return
+
+    const step = session.traversal.next()
+    if (!step) {
+      session.status = 'complete'
+      this.renderFlowDebugPanel()
+      return
+    }
+
+    const objectId = this.resolveObjectIdByHandle(step.edge.to)
+    session.currentFrom = step.edge.from
+    session.currentTo = step.edge.to
+    session.currentObjectId = objectId
+    session.currentEntity = this.resolveFlowConnectionEntity(
+      handleKeysFromNumber(step.edge.to)
+    )
+
+    if (!objectId) {
+      session.status = 'missingEntity'
+    } else {
+      const highlightGroup = this.openHighlightGroups.get(session.ownerId)
+      if (highlightGroup) {
+        highlightGroup.add(objectId)
+      }
+      this.syncOpenHighlightRoots()
+      session.status = this.resolveFlowDebugStepStatus(
+        step,
+        this.openHighlightRoots.has(objectId)
+      )
+    }
+
+    console.info('[FlowConnection] Debug step', {
+      from: step.edge.from,
+      to: step.edge.to,
+      objectId: objectId ? String(objectId) : undefined,
+      blocked: step.blocked,
+      pending: step.pendingCount
+    })
+    this.renderFlowDebugPanel()
+  }
+
+  private resolveFlowDebugStepStatus(
+    step: FlowDebugTraversalStep,
+    highlighted: boolean
+  ): FlowDebugStatus {
+    if (!highlighted) return 'highlightFailed'
+    if (step.blocked) return 'blocked'
+    return step.pendingCount === 0 ? 'complete' : 'advanced'
+  }
+
+  private resolveFlowConnectionEntity(handleKeys: string[]) {
+    for (const handleKey of handleKeys) {
+      const entity = flowEntityIndex.get(handleKey)
+      if (entity) return entity
+    }
+    return undefined
+  }
+
+  private describeFlowConnectionEntity(entity?: FlowConnectionEntity) {
+    if (!entity) return AcApI18n.t('flowDebug.unknownComponent')
+
+    const typeParts = entity.$type?.split(',')[0]?.split('.').filter(Boolean)
+    const typeName = typeParts?.[typeParts.length - 1]
+    const component = entity.BlockName || typeName || entity.LayerName
+    const details = [
+      component,
+      entity.BlockName ? typeName : undefined,
+      entity.LayerName
+    ].filter((value): value is string => Boolean(value))
+    return [...new Set(details)].join(' · ')
+  }
+
+  private formatFlowDebugHandle(handle: number) {
+    return `${handle} (0x${handle.toString(16).toUpperCase()})`
+  }
+
+  private setFlowDebugText(field: string, value: string) {
+    const element = this.flowDebugPanel.querySelector<HTMLElement>(
+      `[data-flow-debug="${field}"]`
+    )
+    if (element) element.textContent = value
+  }
+
+  private renderFlowDebugPanel() {
+    const session = this.flowDebugSession
+    const emptyValue = '-'
+    const labelKeys = [
+      'title',
+      'component',
+      'objectId',
+      'from',
+      'to',
+      'progress',
+      'queue',
+      'status'
+    ] as const
+    labelKeys.forEach(key => {
+      this.setFlowDebugText(key, AcApI18n.t(`flowDebug.${key}`))
+    })
+    this.flowDebugNextButton.textContent = AcApI18n.t('flowDebug.next')
+    this.flowDebugClearButton.textContent = AcApI18n.t('flowDebug.clear')
+
+    this.flowDebugPanel.classList.toggle('is-empty', !session)
+    this.flowDebugPanel.setAttribute(
+      'aria-label',
+      AcApI18n.t('flowDebug.title')
+    )
+    this.flowDebugPanel.setAttribute('aria-disabled', String(!session))
+    this.flowDebugNextButton.disabled =
+      !session || session.traversal.pendingEdges.length === 0
+    this.flowDebugClearButton.disabled = !session
+
+    if (!session) {
+      ;['componentValue', 'objectIdValue', 'fromValue', 'toValue'].forEach(
+        field => this.setFlowDebugText(field, emptyValue)
+      )
+      this.setFlowDebugText('progressValue', '0 / 0')
+      this.setFlowDebugText('queueValue', '0')
+      this.setFlowDebugText('statusValue', AcApI18n.t('flowDebug.empty'))
+      return
+    }
+
+    const pendingEdges = session.traversal.pendingEdges
+    const pendingPreview = pendingEdges
+      .slice(0, 4)
+      .map(edge => this.formatFlowDebugHandle(edge.to))
+      .join(', ')
+    this.setFlowDebugText(
+      'componentValue',
+      this.describeFlowConnectionEntity(session.currentEntity)
+    )
+    this.setFlowDebugText(
+      'objectIdValue',
+      session.currentObjectId
+        ? String(session.currentObjectId)
+        : AcApI18n.t('flowDebug.missingObject')
+    )
+    this.setFlowDebugText(
+      'fromValue',
+      session.currentFrom == null
+        ? emptyValue
+        : this.formatFlowDebugHandle(session.currentFrom)
+    )
+    this.setFlowDebugText(
+      'toValue',
+      session.currentTo == null
+        ? String(session.ownerId)
+        : this.formatFlowDebugHandle(session.currentTo)
+    )
+    this.setFlowDebugText(
+      'progressValue',
+      `${session.traversal.processedCount} / ${session.traversal.discoveredCount}`
+    )
+    this.setFlowDebugText(
+      'queueValue',
+      `${pendingEdges.length}${pendingPreview ? `: ${pendingPreview}` : ''}${
+        pendingEdges.length > 4 ? ', ...' : ''
+      }`
+    )
+    this.setFlowDebugText(
+      'statusValue',
+      AcApI18n.t(`flowDebug.${session.status}`)
+    )
+  }
+
+  private clearFlowDebugSession(restoreNormalHighlight: boolean) {
+    if (!this.flowDebugSession) {
+      this.renderFlowDebugPanel()
+      return
+    }
+
+    this.flowDebugSession = undefined
+    if (restoreNormalHighlight) {
+      this.recomputeOpenHighlightGroups()
+    }
+    this.renderFlowDebugPanel()
+  }
+
   private setupSelectionActionIntegration() {
     if (this.selectionActionsInitialized) return
 
@@ -3410,25 +3726,32 @@ class CadViewerApp {
     if (!layout) return
 
     const ownerId = this.selectedObjectIds[0]
+    this.clearFlowDebugSession(false)
     this.openFlowBoundary(ownerId)
     this.setDeviceState(ownerId, 'open')
     const traversal = this.isFlowBoundaryObject(ownerId)
       ? this.getFlowConnectionTraversal(ownerId)
       : { connectedHandles: new Set<number>(), traversalEdges: [] }
     this.logOpenFlowConnection(ownerId, traversal)
-    this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-    this.openHighlightGroups.set(
+    this.openHighlightConnections.set(
       ownerId,
-      this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+      new Set(traversal.connectedHandles)
     )
+    this.openHighlightGroups.set(ownerId, new Set([ownerId]))
+    this.startFlowDebugSession(ownerId)
 
     this.recomputeOpenHighlightGroups()
+    if (!this.openHighlightRoots.has(ownerId) && this.flowDebugSession) {
+      this.flowDebugSession.status = 'missingStartEntity'
+      this.renderFlowDebugPanel()
+    }
     this.clearViewerSelection()
     this.hideSelectionActionMenu()
   }
 
   private closeSelectedObjects() {
     const ownerIds = this.getOpenHighlightOwnerIds(this.selectedObjectIds)
+    this.clearFlowDebugSession(false)
     ownerIds.forEach(ownerId => {
       this.closeFlowBoundary(ownerId)
       this.setDeviceState(ownerId, 'closed')
@@ -3608,6 +3931,14 @@ class CadViewerApp {
     return db.tables.blockTable.getEntityById(handleKey)?.objectId
   }
 
+  private resolveObjectIdByHandle(handleId: number) {
+    for (const handleKey of handleKeysFromNumber(handleId)) {
+      const objectId = this.resolveObjectIdByHandleKey(handleKey)
+      if (objectId) return objectId
+    }
+    return undefined
+  }
+
   private setDeviceState(objectId: AcDbObjectId, mode: DeviceState['mode']) {
     handleKeysFromObjectId(objectId).forEach(key => {
       this.runtimeDeviceStates[key] = { key, label: key, mode }
@@ -3617,6 +3948,7 @@ class CadViewerApp {
 
   private recomputeOpenHighlightGroups() {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
+      if (this.flowDebugSession?.ownerId === ownerId) return
       this.openHighlightGroups.set(
         ownerId,
         this.getOpenHighlightObjectIds(
@@ -3829,6 +4161,7 @@ class CadViewerApp {
     let removedHighlight = false
 
     if (!ids) {
+      this.clearFlowDebugSession(false)
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
       this.openFlowBoundaryHandleKeys.clear()
@@ -4247,6 +4580,7 @@ class CadViewerApp {
   }
 
   private resetPhaseRuntimeState(preserveHighlightRoots = false) {
+    this.clearFlowDebugSession(false)
     this.clearViewerSelection()
     if (preserveHighlightRoots) {
       this.openFlowBoundaryHandleKeys.clear()

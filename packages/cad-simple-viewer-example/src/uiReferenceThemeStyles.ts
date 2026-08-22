@@ -512,6 +512,35 @@ export function injectUiReferenceThemeStyles() {
       background: #dff4eb;
     }
 
+    .flow-debug-panel {
+      border-color: #bac8cb;
+      color: var(--reference-ink);
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 8px 24px rgba(14, 42, 49, .2);
+    }
+
+    .flow-debug-fields dt { color: var(--reference-muted); }
+
+    .flow-debug-panel button {
+      border-color: #cbd5d7;
+      color: #3e555c;
+      background: var(--reference-white);
+    }
+
+    .flow-debug-panel button:hover:not(:disabled) {
+      border-color: var(--reference-green);
+      color: #075d43;
+      background: #dff4eb;
+    }
+
+    .flow-debug-next {
+      border-color: var(--reference-green) !important;
+      color: #ffffff !important;
+      background: var(--reference-green-dark) !important;
+    }
+
+    .flow-debug-next:hover:not(:disabled) { background: #066c4e !important; }
+
     .demo-dock-tab-status {
       border-color: var(--reference-line);
       color: var(--reference-muted);
