@@ -89,7 +89,7 @@ export class AcTrLayoutView extends AcTrBaseView {
     return this._mode
   }
   set mode(value: AcEdViewMode) {
-    if (value == AcEdViewMode.SELECTION) {
+    if (value == AcEdViewMode.SELECTION || value == AcEdViewMode.BRUSH) {
       this._cameraControls.mouseButtons = {
         MIDDLE: THREE.MOUSE.PAN
       }

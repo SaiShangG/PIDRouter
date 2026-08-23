@@ -16,7 +16,8 @@ import {
   applyUiTheme,
   isCompactUiLayout,
   layoutBackgroundSysVar,
-  ML_UI_COMPACT_MAX_WIDTH} from '@mlightcad/cad-simple-viewer'
+  ML_UI_COMPACT_MAX_WIDTH
+} from '@mlightcad/cad-simple-viewer'
 import {
   AcCmColor,
   AcCmColorMethod,
@@ -25,7 +26,7 @@ import {
   AcGeBox2d,
   log
 } from '@mlightcad/data-model'
-import { Languages, Palette, PanelLeft, Save } from 'lucide'
+import { Brush, Eraser, Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
@@ -45,12 +46,17 @@ import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
+import {
+  BrushHighlightFeature,
+  type BrushHighlightOverlay
+} from './brush/BrushHighlightFeature'
 import { setupCompactPhaseSidebar } from './compactPhaseSidebar'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
 import {
   applyDemoToolbarLayout,
   getCurrentDemoToolbarLayoutId,
-  getDemoToolbarLayouts} from './demoToolbarPresets'
+  getDemoToolbarLayouts
+} from './demoToolbarPresets'
 import { DrawingLibraryModal } from './drawing-library/DrawingLibraryModal'
 import { injectDrawingLibraryStyles } from './drawing-library/drawingLibraryStyles'
 import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyles'
@@ -90,6 +96,7 @@ import { PhaseWorkspaceStore } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
 import type {
   DrawingAssetRef,
+  FlowPathStatus,
   FlowStateSnapshot
 } from './phase/types'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
@@ -100,7 +107,8 @@ import {
 import { PhasePresentationController } from './presentation/PhasePresentationController'
 import {
   type ResolvedEntityPresentation,
-  resolveEntityPresentation} from './presentation/presentationStyleResolver'
+  resolveEntityPresentation
+} from './presentation/presentationStyleResolver'
 import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
 import { ProcessAssistantProjectRepository } from './project/ProcessAssistantProjectRepository'
 import { ProjectManagementModal } from './project/ProjectManagementModal'
@@ -244,9 +252,11 @@ const CONNECTED_FLOW_STYLE = {
 } as const
 
 // The raster helper layer contains the large regular grid used for P&ID
-// positioning. Keep it out of PDF content while retaining it for bounds lookup.
-const PDF_EXCLUDED_LAYERS = ['$PHI_RASTER']
-const PDF_PID_RASTER_LAYERS = ['$PHI_RASTER']
+// positioning. Keep it hidden in the viewer and out of PDF content while
+// retaining it for bounds lookup.
+const PHI_RASTER_LAYER_NAME = '$PHI_RASTER'
+const PDF_EXCLUDED_LAYERS = [PHI_RASTER_LAYER_NAME]
+const PDF_PID_RASTER_LAYERS = [PHI_RASTER_LAYER_NAME]
 const PDF_PID_SEARCH_PADDING_RATIO = 0.55
 const PDF_PID_SEARCH_MIN_PADDING = 600
 const PDF_PID_FINAL_PADDING_RATIO = 0.06
@@ -593,13 +603,13 @@ const resolveFlowConnectionPidBounds = (
 
   return bounds
     ? clampBounds(
-        expandBounds(
-          bounds,
-          PDF_PID_FINAL_PADDING_RATIO,
-          PDF_PID_FINAL_MIN_PADDING
-        ),
-        areaBounds
-      )
+      expandBounds(
+        bounds,
+        PDF_PID_FINAL_PADDING_RATIO,
+        PDF_PID_FINAL_MIN_PADDING
+      ),
+      areaBounds
+    )
     : searchBounds
 }
 
@@ -716,11 +726,11 @@ const mergeBounds = (
 
   return bounds
     ? {
-        minX: Math.min(bounds.minX, nextBounds.minX),
-        minY: Math.min(bounds.minY, nextBounds.minY),
-        maxX: Math.max(bounds.maxX, nextBounds.maxX),
-        maxY: Math.max(bounds.maxY, nextBounds.maxY)
-      }
+      minX: Math.min(bounds.minX, nextBounds.minX),
+      minY: Math.min(bounds.minY, nextBounds.minY),
+      maxX: Math.max(bounds.maxX, nextBounds.maxX),
+      maxY: Math.max(bounds.maxY, nextBounds.maxY)
+    }
     : nextBounds
 }
 
@@ -913,6 +923,7 @@ class CadViewerApp {
   private activeProject?: ProjectRecord
   private activeProjectId?: number
   private valveDebugFeature?: ReturnType<typeof createValveDebugFeature>
+  private brushHighlightFeature?: BrushHighlightFeature
 
   constructor() {
     this.container = document.getElementById('cad-container') as HTMLDivElement
@@ -1734,7 +1745,31 @@ class CadViewerApp {
         toolbar: {
           placement: 'right',
           items: 'default',
-          appendItems: [createAgentToolbarItem(this.appLocale)],
+          appendItems: [
+            {
+              id: 'brush-highlight',
+              label: 'toolbar.brush',
+              requiresDocument: true,
+              icon: () => {
+                const icon = document.createElement('span')
+                icon.append(createPhaseIcon(Brush))
+                return icon
+              },
+              action: () => this.brushHighlightFeature?.activate('paint')
+            },
+            {
+              id: 'brush-erase',
+              label: 'toolbar.eraser',
+              requiresDocument: true,
+              icon: () => {
+                const icon = document.createElement('span')
+                icon.append(createPhaseIcon(Eraser))
+                return icon
+              },
+              action: () => this.brushHighlightFeature?.activate('erase')
+            },
+            createAgentToolbarItem(this.appLocale)
+          ],
           appendItemsAfter: 'layer',
           collapsible: true
         }
@@ -1748,6 +1783,7 @@ class CadViewerApp {
       await this.loadProcessAssistantWorkspace()
       this.setupPhaseWorkspace()
       this.setupValveDebugFeature()
+      this.setupBrushHighlightFeature()
 
       AcApDocManager.instance.events.documentActivated.addEventListener(
         args => {
@@ -1976,11 +2012,10 @@ class CadViewerApp {
               ?.sequences.find(item => item.id === sequenceId)
               ?.phases.find(item => item.id === phaseId)
             if (phase) {
-              document.title = `${
-                phase.drawing.kind === 'assigned'
-                  ? phase.drawing.displayName
-                  : '未关联图纸'
-              } · ${phase.name}`
+              document.title = `${phase.drawing.kind === 'assigned'
+                ? phase.drawing.displayName
+                : '未关联图纸'
+                } · ${phase.name}`
             }
           }
         },
@@ -2060,6 +2095,57 @@ class CadViewerApp {
     this.valveDebugFeature.attach()
   }
 
+  private setupBrushHighlightFeature() {
+    this.brushHighlightFeature = new BrushHighlightFeature({
+      getView: () => AcApDocManager.instance.curView,
+      getHighlightStyle: objectId =>
+        this.resolveBrushHighlightStyle(objectId),
+      createOverlay: (objectIds, style) =>
+        this.createBrushHighlightOverlay(objectIds, style)
+    })
+    this.brushHighlightFeature.attach()
+  }
+
+  private resolveBrushHighlightStyle(objectId: AcDbObjectId) {
+    return this.resolvePresentationForObjectId(objectId, undefined, {
+      id: `brush-${String(objectId)}`,
+      name: 'Brush',
+      handleKeys: handleKeysFromObjectId(objectId),
+      styleOverride: { ...CONNECTED_FLOW_STYLE }
+    })
+  }
+
+  private createBrushHighlightOverlay(
+    objectIds: readonly AcDbObjectId[],
+    style: ResolvedEntityPresentation
+  ): BrushHighlightOverlay | null {
+    const view = AcApDocManager.instance.curView
+    const layout = view?.cadScene.activeLayout
+    if (!view || !layout || objectIds.length === 0) return null
+
+    const root = layout.createEntityPreviewRoot([...new Set(objectIds)], {
+      missingEntity: 'skip'
+    }) as PreviewRoot | null
+    if (!root) return null
+
+    root.name = 'BrushHighlight'
+    upgradePreviewWideLines(root, style, view.width, view.height)
+    this.phasePresentationController.apply(
+      root as unknown as Parameters<PhasePresentationController['apply']>[0],
+      style
+    )
+      ; (layout.internalObject as LayoutObjectHost).add(root)
+    view.isDirty = true
+
+    return {
+      dispose: () => {
+        root.removeFromParent()
+        this.disposePreviewRoot(root)
+        view.isDirty = true
+      }
+    }
+  }
+
   private createValveDebugOverlay(
     objectIds: readonly AcDbObjectId[],
     kind: 'path' | 'locator'
@@ -2117,28 +2203,28 @@ class CadViewerApp {
         const frame = new LineSegments2(frameGeometry, frameMaterial)
         frame.name = 'ValveDebugLocatorBounds'
         frame.userData.disposeGeometryOnRemove = true
-        ;(root as unknown as THREE.Object3D).add(frame)
+          ; (root as unknown as THREE.Object3D).add(frame)
       }
     }
 
     const style: ResolvedEntityPresentation =
       kind === 'path'
         ? {
-            key: 'valve-debug-path',
-            color: CONNECTED_FLOW_STYLE.color,
-            lineWidthPx: CONNECTED_FLOW_STYLE.lineWidthPx,
-            opacity: CONNECTED_FLOW_STYLE.opacity,
-            visible: true,
-            source: 'flow'
-          }
+          key: 'valve-debug-path',
+          color: CONNECTED_FLOW_STYLE.color,
+          lineWidthPx: CONNECTED_FLOW_STYLE.lineWidthPx,
+          opacity: CONNECTED_FLOW_STYLE.opacity,
+          visible: true,
+          source: 'flow'
+        }
         : {
-            key: 'valve-debug-locator',
-            color: 0x00bcd4,
-            lineWidthPx: 5,
-            opacity: 1,
-            visible: true,
-            source: 'flow'
-          }
+          key: 'valve-debug-locator',
+          color: 0x00bcd4,
+          lineWidthPx: 5,
+          opacity: 1,
+          visible: true,
+          source: 'flow'
+        }
 
     root.name = kind === 'path' ? 'ValveDebugPathHighlight' : 'ValveDebugLocator'
     upgradePreviewWideLines(root, style, view.width, view.height)
@@ -2146,7 +2232,7 @@ class CadViewerApp {
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
       style
     )
-    ;(layout.internalObject as LayoutObjectHost).add(root)
+      ; (layout.internalObject as LayoutObjectHost).add(root)
     view.isDirty = true
 
     return {
@@ -3293,10 +3379,10 @@ class CadViewerApp {
       const stored = await this.drawingAssetStore.get(drawing.id)
       return stored
         ? AcApDocManager.instance.openDocument(
-            stored.fileName,
-            stored.content,
-            options
-          )
+          stored.fileName,
+          stored.content,
+          options
+        )
         : false
     }
     const cmd = new AcApQNewCmd()
@@ -3486,7 +3572,7 @@ class CadViewerApp {
 
       root.name = 'SelectionOpenHighlight'
       this.applyOpenHighlightStyle(root, id)
-      ;(layout.internalObject as LayoutObjectHost).add(root)
+        ; (layout.internalObject as LayoutObjectHost).add(root)
       this.openHighlightRoots.set(id, root)
       changedHighlight = true
     })
@@ -3586,7 +3672,8 @@ class CadViewerApp {
 
   private resolvePresentationForObjectId(
     objectId: AcDbObjectId,
-    draft = this.getLoadedHighlightStyleDraft()
+    draft = this.getLoadedHighlightStyleDraft(),
+    flowPath?: FlowPathStatus
   ): ResolvedEntityPresentation {
     const profile =
       draft?.presentationProfile ??
@@ -3623,7 +3710,7 @@ class CadViewerApp {
       }
       return resolveEntityPresentation(profile, { flowPath })
     }
-    return resolveEntityPresentation(profile)
+    return resolveEntityPresentation(profile, flowPath ? { flowPath } : undefined)
   }
 
   private removeOpenHighlight(ids?: AcDbObjectId[]) {
@@ -3770,11 +3857,10 @@ class CadViewerApp {
     }
     this.loadedDrawingAssetId =
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
-    document.title = `${
-      phase.drawing.kind === 'assigned'
-        ? phase.drawing.displayName
-        : '未关联图纸'
-    } · ${phase.name}`
+    document.title = `${phase.drawing.kind === 'assigned'
+      ? phase.drawing.displayName
+      : '未关联图纸'
+      } · ${phase.name}`
     this.phasePanel?.render()
     this.syncPhaseContextBar()
     return true
@@ -4033,14 +4119,26 @@ class CadViewerApp {
   private onFileOpened() {
     this.hasOpenedFile = true
     this.resetPhaseRuntimeState()
+    this.hideDisplayRasterLayer()
     this.valveDebugFeature?.attach()
+    this.brushHighlightFeature?.attach()
     this.setDrawingBackground(true)
     this.updateEmptyStateVisibility()
     this.updateDevToolbarLabels()
   }
 
+  private hideDisplayRasterLayer() {
+    const document = AcApDocManager.instance.curDocument
+    const layer = document?.database.tables.layerTable.getAt(
+      PHI_RASTER_LAYER_NAME
+    )
+    if (!document || !layer || layer.isOff) return
+    document.layerStore.setLayerOn(PHI_RASTER_LAYER_NAME, false)
+  }
+
   private resetPhaseRuntimeState(preserveHighlightRoots = false) {
     this.valveDebugFeature?.reset()
+    this.brushHighlightFeature?.reset()
     if (preserveHighlightRoots) {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()

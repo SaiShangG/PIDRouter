@@ -7,6 +7,8 @@
 export const zh: Record<string, string> = {
   'toolbar.select': '选择',
   'toolbar.pan': '平移',
+  'toolbar.brush': '画笔',
+  'toolbar.eraser': '擦除',
   'toolbar.zoomExtent': '缩放至范围',
   'toolbar.zoomWindow': '窗口缩放',
   'toolbar.layer': '图层管理器',

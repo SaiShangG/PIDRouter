@@ -68,17 +68,25 @@ describe('ValveDebugFeature', () => {
     canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }))
     const menu = document.querySelector<HTMLDivElement>('.valve-debug-context-menu')!
     expect(menu.hidden).toBe(false)
-    expect(menu.querySelector('button')?.textContent).toBe('Open')
+    const openButton = menu.querySelector<HTMLButtonElement>('[data-valve-action="open"]')!
+    const closeButton = menu.querySelector<HTMLButtonElement>('[data-valve-action="close"]')!
+    expect(openButton.textContent).toBe('Open')
+    expect(closeButton.textContent).toBe('Close')
+    expect(openButton.disabled).toBe(false)
+    expect(closeButton.disabled).toBe(true)
 
-    menu.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(host.querySelector('.valve-debug-tree-label')?.textContent).toBe('V-1')
     expect(overlays.some(item => item.kind === 'path' && item.ids.includes('1') && item.ids.includes('2'))).toBe(true)
     host.querySelector<HTMLButtonElement>('[data-handle-key="2"]')?.click()
     expect(zoomCalls).toBe(0)
 
     canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }))
-    expect(menu.querySelector('button')?.textContent).toBe('Closed')
-    menu.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(openButton.textContent).toBe('Open')
+    expect(closeButton.textContent).toBe('Close')
+    expect(openButton.disabled).toBe(true)
+    expect(closeButton.disabled).toBe(false)
+    closeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(overlays.find(item => item.kind === 'path')?.disposed).toBe(true)
     feature.dispose()
   })

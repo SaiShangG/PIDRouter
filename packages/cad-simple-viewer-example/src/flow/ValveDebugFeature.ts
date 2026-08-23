@@ -61,9 +61,14 @@ const injectMenuStyles = () => {
       font: 11px/1.3 "IBM Plex Mono", monospace;
       overflow-wrap: anywhere;
     }
+    .valve-debug-context-menu-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 6px;
+    }
     .valve-debug-context-menu-action {
       width: 100%;
-      margin-top: 6px;
       padding: 7px 8px;
       border: 1px solid #3b7e6b;
       border-radius: 4px;
@@ -72,6 +77,10 @@ const injectMenuStyles = () => {
       font: 600 12px/1.2 inherit;
       text-align: left;
       cursor: pointer;
+    }
+    .valve-debug-context-menu-action:disabled {
+      opacity: .5;
+      cursor: default;
     }
     .valve-debug-context-menu-action:hover,
     .valve-debug-context-menu-action:focus-visible {
@@ -86,45 +95,47 @@ const injectMenuStyles = () => {
 const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
   locale === 'en'
     ? {
-        title: 'Valve debug',
-        empty: 'Right-click a valve to inspect its connected path.',
-        currentStart: 'Start',
-        state: 'State',
-        open: 'Open',
-        closed: 'Closed',
-        nodeCount: 'Nodes',
-        stoppedCount: 'Stops',
-        locateUnavailable: 'Not drawable',
-        start: 'Start',
-        valve: 'Valve',
-        line: 'Line',
-        equipment: 'Equipment',
-        truncated: 'Truncated',
-        missing: 'Missing',
-        collapse: 'Collapse valve debug panel',
-        expand: 'Expand valve debug panel',
-        resize: 'Resize valve debug panel'
-      }
+      title: 'Valve debug',
+      empty: 'Right-click a valve to inspect its connected path.',
+      currentStart: 'Start',
+      state: 'State',
+      open: 'Open',
+      close: 'Close',
+      closed: 'Closed',
+      nodeCount: 'Nodes',
+      stoppedCount: 'Stops',
+      locateUnavailable: 'Not drawable',
+      start: 'Start',
+      valve: 'Valve',
+      line: 'Line',
+      equipment: 'Equipment',
+      truncated: 'Truncated',
+      missing: 'Missing',
+      collapse: 'Collapse valve debug panel',
+      expand: 'Expand valve debug panel',
+      resize: 'Resize valve debug panel'
+    }
     : {
-        title: '阀门调试',
-        empty: '右键选择阀门，查看其连接路径。',
-        currentStart: '起点',
-        state: '状态',
-        open: '打开',
-        closed: '关闭',
-        nodeCount: '节点',
-        stoppedCount: '截断',
-        locateUnavailable: '无法定位',
-        start: '起点',
-        valve: '阀门',
-        line: '线路',
-        equipment: '设备',
-        truncated: '关闭/截断',
-        missing: '缺失',
-        collapse: '折叠阀门调试面板',
-        expand: '展开阀门调试面板',
-        resize: '调整阀门调试面板宽度'
-      }
+      title: '阀门调试',
+      empty: '右键选择阀门，查看其连接路径。',
+      currentStart: '起点',
+      state: '状态',
+      open: '打开',
+      close: '关闭',
+      closed: '关闭',
+      nodeCount: '节点',
+      stoppedCount: '截断',
+      locateUnavailable: '无法定位',
+      start: '起点',
+      valve: '阀门',
+      line: '线路',
+      equipment: '设备',
+      truncated: '关闭/截断',
+      missing: '缺失',
+      collapse: '折叠阀门调试面板',
+      expand: '展开阀门调试面板',
+      resize: '调整阀门调试面板宽度'
+    }
 
 export const defaultValveDebugLabels = getLabels
 
@@ -135,7 +146,9 @@ export class ValveDebugFeature {
   private readonly results = new Map<string, ReturnType<typeof traverseFlowFromValve>>()
   private readonly contextMenu: HTMLDivElement
   private readonly menuTitle: HTMLDivElement
-  private readonly menuAction: HTMLButtonElement
+  private readonly menuActions: HTMLDivElement
+  private readonly openMenuAction: HTMLButtonElement
+  private readonly closeMenuAction: HTMLButtonElement
   private attachedCanvas?: HTMLCanvasElement
   private activeKey?: string
   private pathOverlay?: ValveDebugOverlay
@@ -159,16 +172,18 @@ export class ValveDebugFeature {
     this.contextMenu.setAttribute('role', 'menu')
     this.menuTitle = document.createElement('div')
     this.menuTitle.className = 'valve-debug-context-menu-title'
-    this.menuAction = document.createElement('button')
-    this.menuAction.className = 'valve-debug-context-menu-action'
-    this.menuAction.type = 'button'
-    this.menuAction.setAttribute('role', 'menuitem')
-    this.menuAction.addEventListener('click', () => {
-      if (this.menuAction.dataset.handleKey) {
-        this.toggleValve(this.menuAction.dataset.handleKey)
-      }
+    this.menuActions = document.createElement('div')
+    this.menuActions.className = 'valve-debug-context-menu-actions'
+    this.openMenuAction = this.createMenuAction('open', () => {
+      const key = this.openMenuAction.dataset.handleKey
+      if (key) this.setValveState(key, 'open')
     })
-    this.contextMenu.append(this.menuTitle, this.menuAction)
+    this.closeMenuAction = this.createMenuAction('close', () => {
+      const key = this.closeMenuAction.dataset.handleKey
+      if (key) this.setValveState(key, 'closed')
+    })
+    this.menuActions.append(this.openMenuAction, this.closeMenuAction)
+    this.contextMenu.append(this.menuTitle, this.menuActions)
     document.body.append(this.contextMenu)
 
     document.addEventListener('pointerdown', this.handleDocumentPointerDown, true)
@@ -204,11 +219,11 @@ export class ValveDebugFeature {
 
   setLocale(locale: ValveDebugLocale) {
     this.panel.setLabels(this.options.getLabels(locale))
-    const key = this.menuAction.dataset.handleKey
+    const key = this.openMenuAction.dataset.handleKey
     if (key && !this.contextMenu.hidden) {
       const state = this.states.get(key) ?? 'closed'
       const labels = this.options.getLabels(locale)
-      this.menuAction.textContent = state === 'open' ? labels.closed : labels.open
+      this.updateMenuActions(key, state, labels)
     }
     this.renderPanel()
   }
@@ -274,8 +289,7 @@ export class ValveDebugFeature {
     const state = this.states.get(key) ?? 'closed'
     const labels = this.options.getLabels(this.options.getLocale())
     this.menuTitle.textContent = `${node.label} · ${key}`
-    this.menuAction.textContent = state === 'open' ? labels.closed : labels.open
-    this.menuAction.dataset.handleKey = key
+    this.updateMenuActions(key, state, labels)
     this.contextMenu.hidden = false
     const inset = 8
     const rect = this.contextMenu.getBoundingClientRect()
@@ -283,20 +297,47 @@ export class ValveDebugFeature {
     const top = Math.min(clientY + 4, window.innerHeight - rect.height - inset)
     this.contextMenu.style.left = `${Math.max(inset, left)}px`
     this.contextMenu.style.top = `${Math.max(inset, top)}px`
-    this.menuAction.focus()
+      ; (state === 'open' ? this.closeMenuAction : this.openMenuAction).focus()
   }
 
   private closeMenu() {
     this.contextMenu.hidden = true
-    delete this.menuAction.dataset.handleKey
+    delete this.openMenuAction.dataset.handleKey
+    delete this.closeMenuAction.dataset.handleKey
   }
 
-  private toggleValve(key: string) {
-    const nextState: ValveRuntimeState = this.states.get(key) === 'open' ? 'closed' : 'open'
-    this.states.set(key, nextState)
+  private setValveState(key: string, state: ValveRuntimeState) {
+    if (this.states.get(key) === state) {
+      this.closeMenu()
+      return
+    }
+    this.states.set(key, state)
     this.activeKey = key
     this.closeMenu()
     this.recomputeResults()
+  }
+
+  private createMenuAction(action: 'open' | 'close', onClick: () => void) {
+    const button = document.createElement('button')
+    button.className = 'valve-debug-context-menu-action'
+    button.type = 'button'
+    button.setAttribute('role', 'menuitem')
+    button.dataset.valveAction = action
+    button.addEventListener('click', onClick)
+    return button
+  }
+
+  private updateMenuActions(
+    key: string,
+    state: ValveRuntimeState,
+    labels: ValveDebugPanelLabels
+  ) {
+    this.openMenuAction.textContent = labels.open
+    this.closeMenuAction.textContent = labels.close
+    this.openMenuAction.dataset.handleKey = key
+    this.closeMenuAction.dataset.handleKey = key
+    this.openMenuAction.disabled = state === 'open'
+    this.closeMenuAction.disabled = state === 'closed'
   }
 
   private recomputeResults() {
@@ -327,11 +368,11 @@ export class ValveDebugFeature {
     const state = this.activeKey ? this.states.get(this.activeKey) ?? 'closed' : undefined
     const snapshot: ValveDebugPanelSnapshot = root
       ? {
-          root,
-          state,
-          nodeCount: countFlowTreeNodes(root),
-          stoppedCount: countFlowTreeStops(root)
-        }
+        root,
+        state,
+        nodeCount: countFlowTreeNodes(root),
+        stoppedCount: countFlowTreeStops(root)
+      }
       : {}
     this.panel.render(snapshot)
   }

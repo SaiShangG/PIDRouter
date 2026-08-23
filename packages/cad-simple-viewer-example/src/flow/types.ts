@@ -119,6 +119,7 @@ export interface ValveDebugPanelLabels {
   currentStart: string
   state: string
   open: string
+  close: string
   closed: string
   nodeCount: string
   stoppedCount: string

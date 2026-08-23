@@ -121,7 +121,9 @@ export enum AcEdViewMode {
    * - The cursor typically changes to indicate pan mode
    * - Entity selection is disabled
    */
-  PAN = 1
+  PAN = 1,
+  /** Brush mode - pointer strokes pick and highlight entities. */
+  BRUSH = 2
 }
 
 /**
