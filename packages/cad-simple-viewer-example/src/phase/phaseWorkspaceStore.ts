@@ -159,9 +159,6 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   flowState: {
     flowPaths: phase.flowState.flowPaths.map(cloneFlowPath)
   },
-  deviceStates: Object.fromEntries(
-    Object.entries(phase.deviceStates).map(([key, device]) => [key, { ...device }])
-  ),
   createdAt: phase.createdAt,
   updatedAt: phase.updatedAt
 })
@@ -405,9 +402,6 @@ const migratePhase = (
         ]
       : []
   },
-  deviceStates: Object.fromEntries(
-    Object.entries(phase.deviceStates).map(([key, device]) => [key, { ...device }])
-  ),
   createdAt: phase.createdAt,
   updatedAt: phase.updatedAt
 })
@@ -481,8 +475,11 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
         sequences: process.sequences.map(sequence => ({
           ...sequence,
           phases: sequence.phases.map(phase => ({
-            ...phase,
+            id: phase.id,
+            number: phase.number,
+            name: phase.name,
             drawing: { ...phase.drawing },
+            sourcePhaseId: phase.sourcePhaseId,
             flowState: {
               flowPaths: phase.flowState.openBoundaryHandleKeys.length
                 ? [
@@ -494,12 +491,8 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
                   ]
                 : []
             },
-            deviceStates: Object.fromEntries(
-              Object.entries(phase.deviceStates).map(([key, device]) => [
-                key,
-                { ...device }
-              ])
-            )
+            createdAt: phase.createdAt,
+            updatedAt: phase.updatedAt
           }))
         }))
       }))
@@ -516,14 +509,20 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
       sequences: process.sequences.map(sequence => ({
         ...sequence,
         phases: sequence.phases.map(phase => ({
-          ...phase,
+          id: phase.id,
+          number: phase.number,
+          name: phase.name,
           flowState: {
             flowPaths: normalizeFlowPaths(
               phase.flowState.flowPaths,
               phase.id,
               presentationProfile
             )
-          }
+          },
+          drawing: { ...phase.drawing },
+          sourcePhaseId: phase.sourcePhaseId,
+          createdAt: phase.createdAt,
+          updatedAt: phase.updatedAt
         }))
       }))
     }
@@ -775,14 +774,6 @@ export class PhaseWorkspaceStore {
       flowState: sourcePhase
         ? { flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath) }
         : { flowPaths: [] },
-      deviceStates: sourcePhase
-        ? Object.fromEntries(
-            Object.entries(sourcePhase.deviceStates).map(([key, device]) => [
-              key,
-              { ...device }
-            ])
-          )
-        : {},
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -839,15 +830,12 @@ export class PhaseWorkspaceStore {
     processId: string,
     sequenceId: string,
     phaseId: string,
-    state: Pick<PhaseSnapshot, 'flowState' | 'deviceStates'>
+    state: Pick<PhaseSnapshot, 'flowState'>
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     phase.flowState = {
       flowPaths: state.flowState.flowPaths.map(cloneFlowPath)
     }
-    phase.deviceStates = Object.fromEntries(
-      Object.entries(state.deviceStates).map(([key, device]) => [key, { ...device }])
-    )
     phase.updatedAt = this.now()
   }
 
@@ -937,12 +925,6 @@ export class PhaseWorkspaceStore {
     phase.flowState = {
       flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath)
     }
-    phase.deviceStates = Object.fromEntries(
-      Object.entries(sourcePhase.deviceStates).map(([key, device]) => [
-        key,
-        { ...device }
-      ])
-    )
     phase.updatedAt = this.now()
     return previousAssetId
       ? this.removeUnusedDrawing(previousAssetId)

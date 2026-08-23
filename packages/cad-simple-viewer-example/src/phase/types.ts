@@ -89,7 +89,6 @@ export interface PhaseSnapshot {
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
   flowState: FlowStateSnapshot
-  deviceStates: Record<string, DeviceState>
   createdAt: string
   updatedAt: string
 }

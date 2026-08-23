@@ -22,7 +22,7 @@ const pairs: TranslationPair[] = [
   ['Collapse Toolbar', '折叠工具栏'], ['Expand Toolbar', '展开工具栏'], ['Display', '显示'],
   ['Display controls', '显示控件'], ['Line weight', '线宽'], ['Command line', '命令行'],
   ['White background', '白色背景'], ['Sidebar', '侧栏'], ['Open File', '打开文件'],
-  ['Selection actions', '选择操作'], ['Close', '关闭'], ['切换为英文', 'Switch to English'],
+  ['Close', '关闭'], ['切换为英文', 'Switch to English'],
   ['切换为中文', 'Switch to Chinese'],
   ['报告', 'Report'], ['独立报告工作区', 'Independent report workspace'],
   ['PDF 报告页面', 'PDF report pages'], ['关闭报告工作区', 'Close report workspace'],

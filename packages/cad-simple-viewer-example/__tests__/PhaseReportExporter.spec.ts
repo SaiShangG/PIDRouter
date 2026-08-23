@@ -30,7 +30,6 @@ const workspace: PhaseWorkspaceState = {
           name: `Step ${phaseNumber}`,
           drawing: { kind: 'unassigned' as const },
           flowState: { flowPaths: [] },
-          deviceStates: {},
           createdAt: 'now',
           updatedAt: 'now'
         }))

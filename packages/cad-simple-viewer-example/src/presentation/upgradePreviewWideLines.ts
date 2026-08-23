@@ -3,6 +3,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 
+import { extractLineDrawRangePositions } from './extractLineDrawRangePositions'
 import type { ResolvedEntityPresentation } from './presentationStyleResolver'
 
 export function upgradePreviewWideLines(
@@ -25,13 +26,10 @@ export function upgradePreviewWideLines(
   thinLines.forEach(line => {
     const parent = line.parent
     if (!parent) return
-    const sourceGeometry = line.geometry.index
-      ? line.geometry.toNonIndexed()
-      : line.geometry
-    const geometry = new LineSegmentsGeometry().fromLineSegments(
-      new THREE.LineSegments(sourceGeometry)
-    )
-    if (sourceGeometry !== line.geometry) sourceGeometry.dispose()
+    const positions = extractLineDrawRangePositions(line.geometry)
+    if (!positions) return
+    const geometry = new LineSegmentsGeometry()
+    geometry.setPositions(positions)
     const material = new LineMaterial({
       color: style.color,
       linewidth: style.lineWidthPx,

@@ -129,11 +129,7 @@ describe('PhaseWorkspaceRepository', () => {
       displayName: 'Supply PID'
     })
     expect(phase.flowState.flowPaths[0].handleKeys).toEqual(['1A'])
-    expect(phase.deviceStates['1A']).toEqual({
-      key: '1A',
-      label: 'XV-101',
-      mode: 'open'
-    })
+    expect(phase).not.toHaveProperty('deviceStates')
     expect(workspace.drawingAssets['file:5'].url).toBe(
       'http://localhost/api/v1/File/download/stored%20drawing.dwg'
     )

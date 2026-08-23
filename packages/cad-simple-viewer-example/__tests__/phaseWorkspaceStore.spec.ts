@@ -139,15 +139,15 @@ describe('PhaseWorkspaceStore', () => {
     expect(process.activeSequenceId).toBe('sequence-default-process-1')
     expect(sequence.id).toBe('sequence-default-process-1')
     expect(sequence.activePhaseId).toBe(legacyPhase.id)
-    expect(sequence.phases[0]).toEqual({
-      ...legacyPhase,
+    expect(sequence.phases[0]).toMatchObject({
+      id: legacyPhase.id,
+      number: legacyPhase.number,
+      name: legacyPhase.name,
       drawing: {
         kind: 'assigned',
         assetId: drawing.id,
         displayName: 'CIP-01.dwg'
       },
-      drawingAssetId: undefined,
-      drawingDisplayName: undefined,
       flowState: {
         flowPaths: [
           {
@@ -158,6 +158,7 @@ describe('PhaseWorkspaceStore', () => {
         ]
       }
     })
+    expect(sequence.phases[0]).not.toHaveProperty('deviceStates')
     expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
   })
 
@@ -196,10 +197,7 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
     })
     store.updatePhaseState(process.id, sequence.id, first.id, {
-      flowState: flowState(['1a', '2b']),
-      deviceStates: {
-        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
-      }
+      flowState: flowState(['1a', '2b'])
     })
 
     const second = store.createPhase({
@@ -219,11 +217,9 @@ describe('PhaseWorkspaceStore', () => {
 
     second.flowState.flowPaths[0].handleKeys.push('changed')
     second.flowState.flowPaths[0].styleOverride!.color = 0xffffff
-    second.deviceStates['1a'].mode = 'closed'
     const storedFirst = store.snapshot().processes[0].sequences[0].phases[0]
     expect(storedFirst.flowState.flowPaths[0].handleKeys).toEqual(['1a', '2b'])
     expect(storedFirst.flowState.flowPaths[0].styleOverride?.color).toBe(0x123456)
-    expect(storedFirst.deviceStates['1a'].mode).toBe('open')
     expect(historical.sourcePhaseId).toBe(first.id)
   })
 
@@ -238,10 +234,7 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
     })
     store.updatePhaseState(process.id, sourceSequence.id, source.id, {
-      flowState: flowState(['1a']),
-      deviceStates: {
-        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
-      }
+      flowState: flowState(['1a'])
     })
     const targetSequence = store.createSequence(process.id, 2, 'Tank wash')
 
@@ -262,13 +255,11 @@ describe('PhaseWorkspaceStore', () => {
     })
     copy.flowState.flowPaths[0].handleKeys.push('changed')
     copy.flowState.flowPaths[0].styleOverride!.lineWidthPx = 12
-    copy.deviceStates['1a'].mode = 'closed'
     const snapshot = store.snapshot()
     const storedSource = snapshot.processes[0].sequences[0].phases[0]
     const storedTarget = snapshot.processes[0].sequences[1]
     expect(storedSource.flowState.flowPaths[0].handleKeys).toEqual(['1a'])
     expect(storedSource.flowState.flowPaths[0].styleOverride?.lineWidthPx).toBe(4)
-    expect(storedSource.deviceStates['1a'].mode).toBe('open')
     expect(storedTarget.phases.map(phase => phase.id)).toEqual([copy.id])
     expect(storedTarget.activePhaseId).toBe(copy.id)
     expect(snapshot.processes[0].activeSequenceId).toBe(targetSequence.id)
@@ -414,7 +405,6 @@ describe('PhaseWorkspaceStore', () => {
                       name: 'Rinse',
                       drawing: { kind: 'unassigned' },
                       flowState: { openBoundaryHandleKeys: ['1a', '2b'] },
-                      deviceStates: legacyPhase.deviceStates,
                       createdAt: legacyPhase.createdAt,
                       updatedAt: legacyPhase.updatedAt
                     }
@@ -506,10 +496,7 @@ describe('PhaseWorkspaceStore', () => {
       source: { kind: 'new', drawing, displayName: 'CIP-01.dwg' }
     })
     store.updatePhaseState(process.id, sequence.id, source.id, {
-      flowState: flowState(['1a']),
-      deviceStates: {
-        '1a': { key: '1a', label: 'XV-101', mode: 'open' }
-      }
+      flowState: flowState(['1a'])
     })
     const targetSequence = store.createSequence(process.id, 2, 'Target route')
     const target = store.createPhase({
@@ -537,6 +524,5 @@ describe('PhaseWorkspaceStore', () => {
       color: 0x123456,
       lineWidthPx: 4
     })
-    expect(associated.deviceStates['1a'].mode).toBe('open')
   })
 })

@@ -45,7 +45,6 @@ const workspace: PhaseWorkspaceState = {
               displayName: 'Blank.dwg'
             },
             flowState: { flowPaths: [] },
-            deviceStates: {},
             createdAt: 'now',
             updatedAt: 'now'
           }))

@@ -920,8 +920,7 @@ export class PhaseWorkspacePanel {
     status.append(
       this.createStatusBadge(`${phase.flowState.flowPaths.length} 条流路`),
       this.createStatusBadge(`${process.presentationProfile.utilities.length} 个 Utility`),
-      this.createStatusBadge(`${process.presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`),
-      this.createStatusBadge(`${Object.keys(phase.deviceStates).length} 个设备`)
+      this.createStatusBadge(`${process.presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`)
     )
     this.addDetail(details, '状态', status)
     edit.addEventListener('click', () => {

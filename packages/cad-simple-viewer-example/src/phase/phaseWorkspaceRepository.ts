@@ -13,8 +13,6 @@ import {
   PhaseWorkspaceStore
 } from './phaseWorkspaceStore'
 import {
-  type DeviceMode,
-  type DeviceState,
   type DrawingAssetRef,
   type FlowPathStatus,
   PHASE_WORKSPACE_SCHEMA_VERSION,
@@ -60,7 +58,6 @@ export interface PersistedPhaseData {
   }
   sourcePhaseId?: number
   flowState: PhaseSnapshot['flowState']
-  deviceStates: PhaseSnapshot['deviceStates']
 }
 
 export interface CreateBackendPhaseInput {
@@ -72,16 +69,6 @@ export interface CreateBackendPhaseInput {
 }
 
 type JsonRecord = Record<string, unknown>
-
-const DEVICE_MODES = new Set<DeviceMode>([
-  'open',
-  'closed',
-  'pulse',
-  'start',
-  'stop',
-  'active',
-  'unknown'
-])
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -360,7 +347,6 @@ export class PhaseWorkspaceRepository {
       drawing: this.readDrawing(data.drawing, drawingAssets),
       sourcePhaseId: this.readSourcePhaseId(data.sourcePhaseId),
       flowState: { flowPaths: this.readFlowPaths(data.flowState) },
-      deviceStates: this.readDeviceStates(data.deviceStates),
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -436,33 +422,10 @@ export class PhaseWorkspaceRepository {
     return value.flowPaths.filter(isRecord) as unknown as FlowPathStatus[]
   }
 
-  private readDeviceStates(value: unknown): Record<string, DeviceState> {
-    if (!isRecord(value)) return {}
-    return Object.fromEntries(
-      Object.entries(value).flatMap(([key, candidate]) => {
-        if (!isRecord(candidate) || !DEVICE_MODES.has(candidate.mode as DeviceMode)) {
-          return []
-        }
-        return [
-          [
-            key,
-            {
-              key,
-              label:
-                typeof candidate.label === 'string' ? candidate.label : key,
-              mode: candidate.mode as DeviceMode
-            }
-          ]
-        ]
-      })
-    )
-  }
-
   private createEmptyPhaseData(): PersistedPhaseData {
     return {
       schemaVersion: 1,
-      flowState: { flowPaths: [] },
-      deviceStates: {}
+      flowState: { flowPaths: [] }
     }
   }
 
@@ -484,8 +447,7 @@ export class PhaseWorkspaceRepository {
             }
           : undefined,
       sourcePhaseId,
-      flowState: phase.flowState,
-      deviceStates: phase.deviceStates
+      flowState: phase.flowState
     }
   }
 
