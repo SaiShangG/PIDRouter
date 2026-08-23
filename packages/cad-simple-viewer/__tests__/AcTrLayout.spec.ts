@@ -79,14 +79,20 @@ jest.mock('@mlightcad/three-renderer', () => {
       const group = new THREE.Group()
       group.addEntity = mockAddEntity
       group.removeEntity = mockRemoveEntity
-      group.hasEntity = jest.fn()
+      group.hasEntity = jest.fn().mockReturnValue(true)
+      group.isIntersectWith = jest.fn().mockReturnValue(true)
+      group.createPreviewSubset = jest.fn().mockImplementation(() => {
+        const subset = new THREE.Group()
+        subset.add(new THREE.Object3D())
+        return subset
+      })
       group.setEntityVisible = jest.fn().mockReturnValue(true)
       group.getEntityVisible = jest.fn()
       group.clear = jest.fn()
       group.computeBoundingBox = mockComputeBoundingBox
       return group
     }),
-    AcTrGroup: class AcTrGroup {}
+    AcTrGroup: class AcTrGroup { }
   }
 })
 
@@ -272,19 +278,19 @@ describe('AcTrLayout spatial index', () => {
       new THREE.Vector3(-180, 0, 0),
       new THREE.Vector3(574, 56, 0)
     )
-    ;(
-      entity.userData as {
-        spatialIndexChildBoxes?: Array<{
-          minX: number
-          minY: number
-          maxX: number
-          maxY: number
-          id: string
-        }>
-      }
-    ).spatialIndexChildBoxes = [
-      { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
-    ]
+      ; (
+        entity.userData as {
+          spatialIndexChildBoxes?: Array<{
+            minX: number
+            minY: number
+            maxX: number
+            maxY: number
+            id: string
+          }>
+        }
+      ).spatialIndexChildBoxes = [
+          { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
+        ]
 
     layout.addEntity(entity)
 
@@ -308,20 +314,20 @@ describe('AcTrLayout spatial index', () => {
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(300, 10, 0)
     )
-    ;(
-      entity.userData as {
-        spatialIndexChildBoxes?: Array<{
-          minX: number
-          minY: number
-          maxX: number
-          maxY: number
-          id: string
-        }>
-      }
-    ).spatialIndexChildBoxes = [
-      { minX: 0, minY: 0, maxX: 100, maxY: 10, id: 'line-left' },
-      { minX: 200, minY: 0, maxX: 300, maxY: 10, id: 'line-right' }
-    ]
+      ; (
+        entity.userData as {
+          spatialIndexChildBoxes?: Array<{
+            minX: number
+            minY: number
+            maxX: number
+            maxY: number
+            id: string
+          }>
+        }
+      ).spatialIndexChildBoxes = [
+          { minX: 0, minY: 0, maxX: 100, maxY: 10, id: 'line-left' },
+          { minX: 200, minY: 0, maxX: 300, maxY: 10, id: 'line-right' }
+        ]
 
     layout.addEntity(entity)
 
@@ -352,19 +358,19 @@ describe('AcTrLayout spatial index', () => {
       new THREE.Vector3(-180, 0, 0),
       new THREE.Vector3(574, 56, 0)
     )
-    ;(
-      entity.userData as {
-        spatialIndexChildBoxes?: Array<{
-          minX: number
-          minY: number
-          maxX: number
-          maxY: number
-          id: string
-        }>
-      }
-    ).spatialIndexChildBoxes = [
-      { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
-    ]
+      ; (
+        entity.userData as {
+          spatialIndexChildBoxes?: Array<{
+            minX: number
+            minY: number
+            maxX: number
+            maxY: number
+            id: string
+          }>
+        }
+      ).spatialIndexChildBoxes = [
+          { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
+        ]
 
     layout.addEntity(entity)
 
@@ -378,6 +384,39 @@ describe('AcTrLayout spatial index', () => {
     ])
   })
 
+  it('excludes entities on invisible layers from search and intersection tests', () => {
+    const layout = new AcTrLayout()
+    const visibleLayer = layout.addLayer(createLayerInfo('visible'))
+      .internalObject as unknown as {
+        hasEntity: jest.Mock
+        isIntersectWith: jest.Mock
+      }
+    const hiddenLayer = layout.addLayer(createLayerInfo('hidden'))
+      .internalObject as unknown as {
+        hasEntity: jest.Mock
+        isIntersectWith: jest.Mock
+      }
+    visibleLayer.hasEntity.mockImplementation((id: string) => id === 'visible')
+    hiddenLayer.hasEntity.mockImplementation((id: string) => id === 'hidden')
+    visibleLayer.isIntersectWith.mockReturnValue(true)
+    hiddenLayer.isIntersectWith.mockReturnValue(true)
+
+    layout.addEntity(createEntity('visible', 'visible'))
+    layout.addEntity(createEntity('hidden', 'hidden'))
+    layout.updateLayer({ ...createLayerInfo('hidden'), isOff: true })
+
+    const pickBox = {
+      min: { x: 0, y: 0 },
+      max: { x: 10, y: 10 }
+    } as unknown as import('@mlightcad/data-model').AcGeBox2d
+
+    expect(collectBoxSelectionIds(layout, pickBox, 'crossing')).toEqual([
+      'visible'
+    ])
+    expect(layout.isIntersectWith('hidden', new THREE.Raycaster())).toBe(false)
+    expect(layout.isIntersectWith('visible', new THREE.Raycaster())).toBe(true)
+  })
+
   it('window-selects INSERT when the child union fits entirely inside the pick box', () => {
     const layout = new AcTrLayout()
     layout.addLayer(createLayerInfo())
@@ -387,19 +426,19 @@ describe('AcTrLayout spatial index', () => {
       new THREE.Vector3(-180, 0, 0),
       new THREE.Vector3(574, 56, 0)
     )
-    ;(
-      entity.userData as {
-        spatialIndexChildBoxes?: Array<{
-          minX: number
-          minY: number
-          maxX: number
-          maxY: number
-          id: string
-        }>
-      }
-    ).spatialIndexChildBoxes = [
-      { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
-    ]
+      ; (
+        entity.userData as {
+          spatialIndexChildBoxes?: Array<{
+            minX: number
+            minY: number
+            maxX: number
+            maxY: number
+            id: string
+          }>
+        }
+      ).spatialIndexChildBoxes = [
+          { minX: 394, minY: 0, maxX: 574, maxY: 56, id: 'line-1' }
+        ]
 
     layout.addEntity(entity)
 
@@ -425,9 +464,9 @@ describe('AcTrLayout entity preview helpers', () => {
     const layout = new AcTrLayout()
     const group = layout.addLayer(createLayerInfo())
       .internalObject as unknown as {
-      hasEntity: jest.Mock
-      computeBoundingBox: jest.Mock
-    }
+        hasEntity: jest.Mock
+        computeBoundingBox: jest.Mock
+      }
     group.hasEntity = jest
       .fn()
       .mockImplementation((id: string) => id === 'line-1' || id === 'line-2')
@@ -465,9 +504,9 @@ describe('AcTrLayout entity preview helpers', () => {
     const layout = new AcTrLayout()
     const group = layout.addLayer(createLayerInfo())
       .internalObject as unknown as {
-      hasEntity: jest.Mock
-      computeBoundingBox: jest.Mock
-    }
+        hasEntity: jest.Mock
+        computeBoundingBox: jest.Mock
+      }
     group.hasEntity = jest
       .fn()
       .mockImplementation((id: string) => id === 'line-1' || id === 'line-2')
@@ -488,5 +527,30 @@ describe('AcTrLayout entity preview helpers', () => {
     expect(
       layout.findPreviewableEntityIds(['line-1', 'line-2', 'missing'])
     ).toEqual(['line-1'])
+  })
+
+  it('does not create preview subsets from invisible layers', () => {
+    const layout = new AcTrLayout()
+    const visibleGroup = layout.addLayer(createLayerInfo('visible'))
+      .internalObject as unknown as {
+        hasEntity: jest.Mock
+        createPreviewSubset: jest.Mock
+      }
+    const hiddenGroup = layout.addLayer(createLayerInfo('hidden'))
+      .internalObject as unknown as {
+        hasEntity: jest.Mock
+        createPreviewSubset: jest.Mock
+      }
+    visibleGroup.hasEntity.mockImplementation((id: string) => id === 'entity')
+    hiddenGroup.hasEntity.mockImplementation((id: string) => id === 'entity')
+    layout.updateLayer({ ...createLayerInfo('hidden'), isOff: true })
+
+    const preview = layout.createEntityPreviewRoot(['entity'], {
+      missingEntity: 'skip'
+    })
+
+    expect(preview).not.toBeNull()
+    expect(visibleGroup.createPreviewSubset).toHaveBeenCalledTimes(1)
+    expect(hiddenGroup.createPreviewSubset).not.toHaveBeenCalled()
   })
 })

@@ -311,7 +311,13 @@ export class AcTrLayout {
     const layers = this.getLayersByObjectId(objectId)
     for (let index = 0; index < layers.length; ++index) {
       const layer = layers[index]
-      if (layer && layer.isIntersectWith(objectId, raycaster)) return true
+      if (
+        layer &&
+        layer.visible &&
+        layer.isIntersectWith(objectId, raycaster)
+      ) {
+        return true
+      }
     }
     return false
   }
@@ -563,7 +569,7 @@ export class AcTrLayout {
     const idsByLayer = new Map<AcTrLayer, Set<AcDbObjectId>>()
 
     for (const id of entityIds) {
-      const layers = this.getLayersByObjectId(id)
+      const layers = this.getLayersByObjectId(id).filter(layer => layer.visible)
       if (layers.length === 0) {
         if (requireAllEntities || missingEntity === 'fail') {
           return null
@@ -735,7 +741,7 @@ export class AcTrLayout {
    * @returns Return query results containing entity IDs and their bounds
    */
   search(box: AcGeBox2d | AcGeBox3d, options?: AcTrSpatialSearchOptions) {
-    return this._spatialIndex.search(
+    const results = this._spatialIndex.search(
       {
         minX: box.min.x,
         minY: box.min.y,
@@ -744,6 +750,7 @@ export class AcTrLayout {
       },
       options
     )
+    return results.filter(item => this.hasVisibleEntity(item.id))
   }
 
   /**
