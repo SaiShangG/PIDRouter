@@ -52,6 +52,10 @@ export const ICON_CLEAR_MEASUREMENTS =
 export const ICON_SWITCH_BG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" fill="currentColor"/><rect x="14" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><path d="M12 4a8 8 0 0 1 7.25 7.25" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><path d="M20.75 10 L17.25 10 L19 12.5 Z" fill="currentColor"/><path d="M12 20a8 8 0 0 1-8-8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/><path d="M6 14 L2.5 14 L4 11 Z" fill="currentColor"/></svg>'
 
+/** Monochrome drawing mode icon. */
+export const ICON_MONOCHROME =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="currentColor" d="M6 6h3v3H6zM11 6h3v3h-3zM6 11h3v3H6zM11 11h3v3h-3z"/></svg>'
+
 /** Annotation tools parent menu icon. */
 export const ICON_ANNOTATION =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 20 20"><rect x="4" y="6" width="11" height="10" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="currentColor" d="M7 14.5 13.5 8l1.5 1.5-6.5 6.5H7v-1.5Z"/><path fill="currentColor" d="M13.2 7.3 15 5.5l1.5 1.5-1.8 1.8-1.5-1.5Z"/></svg>'

@@ -121,6 +121,7 @@ export const DEFAULT_VIEW_2D_OPTIONS: AcTrView2dOptions = {
 export class AcTrView2d extends AcEdBaseView {
   /** The Three.js renderer wrapper for CAD rendering */
   private _renderer: AcTrRenderer
+  private _monochromeBackgroundColor?: number
   /**
    * ID of the currently scheduled requestAnimationFrame callback.
    *
@@ -634,13 +635,31 @@ export class AcTrView2d extends AcEdBaseView {
     return this._renderer.getClearColor()
   }
 
+  /** Whether the drawing is shown in monochrome black on a white background. */
+  get monochrome(): boolean {
+    return this._renderer.monochrome
+  }
+
+  set monochrome(value: boolean) {
+    if (value === this._renderer.monochrome) return
+    if (value) {
+      this._monochromeBackgroundColor = this.backgroundColor
+      this.applyCanvasBackground(0xffffff)
+      this._renderer.monochrome = true
+    } else {
+      this._renderer.monochrome = false
+      this.applyCanvasBackground(this._monochromeBackgroundColor ?? 0x000000)
+      this._monochromeBackgroundColor = undefined
+    }
+  }
+
   /**
    * Sets the background color of the view.
    *
    * @param value - The background color as a 24-bit hexadecimal RGB number
    */
   set backgroundColor(value: number) {
-    this.applyCanvasBackground(value)
+    this.applyCanvasBackground(this.monochrome ? 0xffffff : value)
   }
 
   /**

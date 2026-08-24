@@ -62,8 +62,8 @@ export class AcTrRenderer implements AcGiRenderer<AcTrEntity> {
   public readonly events: {
     fontNotFound: AcCmEventManager<AcTrFontNotFoundEventArgs>
   } = {
-    fontNotFound: new AcCmEventManager<AcTrFontNotFoundEventArgs>()
-  }
+      fontNotFound: new AcCmEventManager<AcTrFontNotFoundEventArgs>()
+    }
 
   constructor(renderer: THREE.WebGLRenderer) {
     this._renderer = renderer
@@ -187,6 +187,14 @@ export class AcTrRenderer implements AcGiRenderer<AcTrEntity> {
   }
   set currentBackgroundColor(value: number) {
     this._context.styleManager.currentBackgroundColor = value
+  }
+
+  /** Whether drawing materials are rendered as black on a white background. */
+  get monochrome(): boolean {
+    return this._context.styleManager.monochrome
+  }
+  set monochrome(value: boolean) {
+    this._context.styleManager.monochrome = value
   }
 
   /** Shared style/material cache used by entity conversion and layer updates. */

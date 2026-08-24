@@ -1,7 +1,7 @@
 import {
   acgiForegroundColorForBackground,
-  AcGiLineWeight,
   acgiIsLightBackground,
+  AcGiLineWeight,
   acgiResolveSubEntityTraitsRgbFromBackground,
   AcGiSubEntityTraits,
   deepClone
@@ -589,9 +589,48 @@ export abstract class AcTrMaterialManager<T> {
     traits: AcGiSubEntityTraits,
     layerColorRgb?: number
   ): number {
+    if (this.options.monochrome) return BLACK_RGB
     return this.resolveDisplayRgbForBackground(
       this.resolveSourceMaterialRgb(traits, layerColorRgb)
     )
+  }
+
+  /** Repaints cached drawing materials after a display-mode change. */
+  repaintAllMaterials(): void {
+    for (const key of Object.keys(this.cache)) {
+      const material = this.cache[key]
+      const metadata = getMaterialMetadata(material)
+      if (metadata.isForeground === true) {
+        AcTrMaterialUtil.setMaterialColor(
+          material,
+          new THREE.Color(
+            this.options.monochrome
+              ? BLACK_RGB
+              : acgiForegroundColorForBackground(
+                this.options.currentBackgroundColor
+              )
+          )
+        )
+        continue
+      }
+      if (metadata.isBackgroundFill === true) {
+        AcTrMaterialUtil.setMaterialColor(
+          material,
+          new THREE.Color(this.options.currentBackgroundColor)
+        )
+        continue
+      }
+      const sourceRgb =
+        metadata.sourceColorRgb ?? this.resolveTraitsRgb(this.keyToTraits[key])
+      AcTrMaterialUtil.setMaterialColor(
+        material,
+        new THREE.Color(
+          this.options.monochrome
+            ? BLACK_RGB
+            : this.resolveDisplayRgbForBackground(sourceRgb)
+        )
+      )
+    }
   }
 
   private resolveSourceMaterialRgb(
@@ -632,7 +671,11 @@ export abstract class AcTrMaterialManager<T> {
     setMaterialMetadata(material, { sourceColorRgb: rgb })
     AcTrMaterialUtil.setMaterialColor(
       material,
-      new THREE.Color(this.resolveDisplayRgbForBackground(rgb))
+      new THREE.Color(
+        this.options.monochrome
+          ? BLACK_RGB
+          : this.resolveDisplayRgbForBackground(rgb)
+      )
     )
   }
 

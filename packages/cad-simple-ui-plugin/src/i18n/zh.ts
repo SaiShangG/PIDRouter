@@ -19,6 +19,8 @@ export const zh: Record<string, string> = {
   'toolbar.measureArc': '测量弧长',
   'toolbar.clearMeasurements': '清除测量',
   'toolbar.switchBg': '切换背景',
+  'toolbar.monochromeOn': '切换为彩色模式',
+  'toolbar.monochromeOff': '切换为纯黑模式',
   'toolbar.annotation': '审阅标注',
   'toolbar.revMText': '文字说明',
   'toolbar.revFreehand': '自由手绘',

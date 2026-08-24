@@ -33,7 +33,8 @@ export class AcTrStyleManager {
     maxFragmentUniforms: 1024,
     resolution: new THREE.Vector2(1, 1),
     showLineWeight: false,
-    currentBackgroundColor: ACGI_MODEL_SPACE_BACKGROUND
+    currentBackgroundColor: ACGI_MODEL_SPACE_BACKGROUND,
+    monochrome: false
   }
   private pointMgr: AcTrPointMaterialManager
   private lineMgr: AcTrLineMaterialManager
@@ -114,6 +115,20 @@ export class AcTrStyleManager {
     this.changeBackground(value)
     this.repaintForegroundMaterials(acgiForegroundColorForBackground(value))
     this.repaintWhiteMaterials(value)
+    if (this.options.monochrome) {
+      this.repaintAllMaterials()
+    }
+  }
+
+  /** Whether drawing materials are rendered as black on a white background. */
+  get monochrome(): boolean {
+    return this.options.monochrome
+  }
+
+  set monochrome(value: boolean) {
+    if (this.options.monochrome === value) return
+    this.options.monochrome = value
+    this.repaintAllMaterials()
   }
 
   /**
@@ -234,6 +249,12 @@ export class AcTrStyleManager {
     this.lineMgr.changeWhiteDisplayForBackground(backgroundColor)
     this.pointMgr.changeWhiteDisplayForBackground(backgroundColor)
     this.fillMgr.changeWhiteDisplayForBackground(backgroundColor)
+  }
+
+  private repaintAllMaterials() {
+    this.lineMgr.repaintAllMaterials()
+    this.pointMgr.repaintAllMaterials()
+    this.fillMgr.repaintAllMaterials()
   }
 
   /**

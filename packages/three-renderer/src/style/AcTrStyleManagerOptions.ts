@@ -47,4 +47,7 @@ export interface AcTrStyleManagerOptions {
    * Default is model-space dark background (`ACGI_MODEL_SPACE_BACKGROUND`).
    */
   currentBackgroundColor: number
+
+  /** Whether drawing materials are rendered as monochrome black. */
+  monochrome: boolean
 }

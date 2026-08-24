@@ -19,6 +19,8 @@ export const en: Record<string, string> = {
   'toolbar.measureArc': 'Measure Arc Length',
   'toolbar.clearMeasurements': 'Clear Measurements',
   'toolbar.switchBg': 'Switch Background',
+  'toolbar.monochromeOn': 'Switch to Color Mode',
+  'toolbar.monochromeOff': 'Switch to Monochrome Mode',
   'toolbar.annotation': 'Annotation',
   'toolbar.revMText': 'Text Note',
   'toolbar.revFreehand': 'Freehand Sketch',

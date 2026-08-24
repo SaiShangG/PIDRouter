@@ -20,6 +20,7 @@ import {
   ICON_MEASURE_ARC,
   ICON_MEASURE_AREA,
   ICON_MEASURE_DISTANCE,
+  ICON_MONOCHROME,
   ICON_PAN,
   ICON_PLACEMENT_BOTTOM,
   ICON_PLACEMENT_LEFT,
@@ -273,6 +274,29 @@ export function createDefaultToolbarItems(
       icon: ICON_SWITCH_BG,
       command: 'switchbg',
       minOpenMode: AcEdOpenMode.Review
+    },
+    {
+      id: 'monochrome',
+      minOpenMode: AcEdOpenMode.Review,
+      toggle: {
+        getValue: () => AcApDocManager.instance.curView?.monochrome ?? false,
+        on: {
+          label: 'toolbar.monochromeOn',
+          icon: ICON_MONOCHROME,
+          action: () => {
+            const view = AcApDocManager.instance.curView
+            if (view) view.monochrome = false
+          }
+        },
+        off: {
+          label: 'toolbar.monochromeOff',
+          icon: ICON_MONOCHROME,
+          action: () => {
+            const view = AcApDocManager.instance.curView
+            if (view) view.monochrome = true
+          }
+        }
+      }
     },
     createToolbarPlacementItem(context),
     {
