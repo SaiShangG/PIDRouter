@@ -81,6 +81,7 @@ export interface DeviceState {
 
 export interface FlowStateSnapshot {
   flowPaths: FlowPathStatus[]
+  deviceStates?: Record<string, DeviceState>
 }
 
 export type PhaseDrawingAssociation =

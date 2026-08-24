@@ -13,8 +13,10 @@ import {
   PhaseWorkspaceStore
 } from './phaseWorkspaceStore'
 import {
+  type DeviceState,
   type DrawingAssetRef,
   type FlowPathStatus,
+  type FlowStateSnapshot,
   PHASE_WORKSPACE_SCHEMA_VERSION,
   type PhaseDrawingAssociation,
   type PhaseSnapshot,
@@ -346,7 +348,7 @@ export class PhaseWorkspaceRepository {
       name: phase.name?.trim() || `Phase ${phase.id}`,
       drawing: this.readDrawing(data.drawing, drawingAssets),
       sourcePhaseId: this.readSourcePhaseId(data.sourcePhaseId),
-      flowState: { flowPaths: this.readFlowPaths(data.flowState) },
+      flowState: this.readFlowState(data),
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -422,6 +424,42 @@ export class PhaseWorkspaceRepository {
     return value.flowPaths.filter(isRecord) as unknown as FlowPathStatus[]
   }
 
+  private readFlowState(data: JsonRecord): FlowStateSnapshot {
+    const flowState = isRecord(data.flowState) ? data.flowState : {}
+    const deviceStates = this.readDeviceStates(
+      flowState.deviceStates ?? data.deviceStates
+    )
+    return {
+      flowPaths: this.readFlowPaths(flowState),
+      ...(deviceStates ? { deviceStates } : {})
+    }
+  }
+
+  private readDeviceStates(
+    value: unknown
+  ): Record<string, DeviceState> | undefined {
+    if (!isRecord(value)) return undefined
+    const entries = Object.entries(value).flatMap(([recordKey, candidate]) => {
+      if (!isRecord(candidate) || typeof candidate.mode !== 'string') return []
+      const key =
+        typeof candidate.key === 'string' && candidate.key.trim()
+          ? candidate.key.trim()
+          : recordKey
+      return [[
+        key,
+        {
+          key,
+          label:
+            typeof candidate.label === 'string' && candidate.label.trim()
+              ? candidate.label.trim()
+              : key,
+          mode: candidate.mode
+        } as DeviceState
+      ] as const]
+    })
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  }
+
   private createEmptyPhaseData(): PersistedPhaseData {
     return {
       schemaVersion: 1,
@@ -442,9 +480,9 @@ export class PhaseWorkspaceRepository {
       drawing:
         fileId !== undefined && phase.drawing.kind === 'assigned'
           ? {
-              fileId,
-              displayName: phase.drawing.displayName
-            }
+            fileId,
+            displayName: phase.drawing.displayName
+          }
           : undefined,
       sourcePhaseId,
       flowState: phase.flowState

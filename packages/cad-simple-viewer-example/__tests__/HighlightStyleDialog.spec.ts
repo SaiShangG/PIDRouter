@@ -40,8 +40,12 @@ describe('HighlightStyleDialog', () => {
     })
     dialog.open()
 
-    expect(dialog.element.textContent).toContain('所有 Phase 的默认流路')
+    expect(dialog.element.textContent).toContain('阀门 · OPEN')
+    expect(dialog.element.textContent).toContain('阀门 · CLOSED')
     expect(dialog.element.querySelector('[aria-label="流路名称"]')).toBeNull()
+      ;[...dialog.element.querySelectorAll('button')]
+        .find(button => button.textContent?.includes('新增设备状态'))!
+        .click()
 
     const color = dialog.element.querySelector<HTMLInputElement>(
       '[aria-label="高亮颜色"]'

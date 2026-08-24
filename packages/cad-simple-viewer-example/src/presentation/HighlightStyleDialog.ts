@@ -30,7 +30,7 @@ const parseHex = (value: string) =>
 export class HighlightStyleDialog {
   readonly element = document.createElement('div')
   private draft: HighlightStyleDraft
-  private activeTab: 'flow' | 'device' | 'utility' | 'defaults' = 'flow'
+  private activeTab: 'device' | 'utility' | 'defaults' = 'device'
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
@@ -88,7 +88,6 @@ export class HighlightStyleDialog {
     tabs.className = 'highlight-style-tabs'
     tabs.setAttribute('role', 'tablist')
     const labels = {
-      flow: '流路',
       device: '设备',
       utility: 'Utility',
       defaults: '默认值'
@@ -108,7 +107,6 @@ export class HighlightStyleDialog {
 
     const content = document.createElement('div')
     content.className = 'highlight-style-content'
-    if (this.activeTab === 'flow') content.append(this.renderFlows())
     if (this.activeTab === 'device') content.append(this.renderDevices())
     if (this.activeTab === 'utility') content.append(this.renderUtilities())
     if (this.activeTab === 'defaults') content.append(this.renderDefaults())
@@ -127,18 +125,6 @@ export class HighlightStyleDialog {
     dialog.append(header, tabs, content, footer)
     this.element.append(dialog)
     localizeDom(this.element, this.options.getLocale?.() ?? 'zh')
-  }
-
-  private renderFlows() {
-    const section = document.createElement('section')
-    section.className = 'highlight-defaults'
-    const description = document.createElement('p')
-    description.textContent = '此样式应用于当前工艺的所有 Phase；已指定 Utility 的流路使用对应 Utility 样式。'
-    section.append(description, this.styleField(
-      '所有 Phase 的默认流路',
-      this.draft.presentationProfile.defaultFlowStyle
-    ))
-    return section
   }
 
   private renderDevices() {
@@ -325,18 +311,6 @@ export class HighlightStyleDialog {
     })
     section.append(this.checkboxLabel('非高亮内容透明度', opacity))
     return section
-  }
-
-  private styleField(labelText: string, style: HighlightStyle) {
-    const field = document.createElement('label')
-    field.className = 'highlight-default-field'
-    const label = document.createElement('span')
-    label.textContent = labelText
-    field.append(label, this.styleControls(style, changed => {
-      Object.assign(style, changed)
-      this.emitPreview()
-    }))
-    return field
   }
 
   private styleControls(

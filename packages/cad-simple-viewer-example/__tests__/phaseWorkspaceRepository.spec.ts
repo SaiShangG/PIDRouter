@@ -69,34 +69,34 @@ describe('PhaseWorkspaceRepository', () => {
         Promise.resolve(
           operationId === 10
             ? [
-                {
-                  id: 20,
-                  name: 'Transfer',
-                  index: 1,
-                  operationId: 10,
-                  jsonData: JSON.stringify({
-                    schemaVersion: 1,
-                    drawing: { fileId: 5, displayName: 'Supply PID' },
-                    flowState: {
-                      flowPaths: [
-                        { id: 'flow-1', name: 'Main', handleKeys: ['1A'] }
-                      ]
-                    },
-                    deviceStates: {
-                      '1A': { label: 'XV-101', mode: 'open' }
-                    }
-                  })
-                }
-              ]
+              {
+                id: 20,
+                name: 'Transfer',
+                index: 1,
+                operationId: 10,
+                jsonData: JSON.stringify({
+                  schemaVersion: 1,
+                  drawing: { fileId: 5, displayName: 'Supply PID' },
+                  flowState: {
+                    flowPaths: [
+                      { id: 'flow-1', name: 'Main', handleKeys: ['1A'] }
+                    ]
+                  },
+                  deviceStates: {
+                    '1A': { label: 'XV-101', mode: 'open' }
+                  }
+                })
+              }
+            ]
             : [
-                {
-                  id: 21,
-                  name: 'Broken state',
-                  index: 1,
-                  operationId: 11,
-                  jsonData: '{invalid'
-                }
-              ]
+              {
+                id: 21,
+                name: 'Broken state',
+                index: 1,
+                operationId: 11,
+                jsonData: '{invalid'
+              }
+            ]
         )
       ),
       create: jest.fn(),
@@ -129,7 +129,9 @@ describe('PhaseWorkspaceRepository', () => {
       displayName: 'Supply PID'
     })
     expect(phase.flowState.flowPaths[0].handleKeys).toEqual(['1A'])
-    expect(phase).not.toHaveProperty('deviceStates')
+    expect(phase.flowState.deviceStates).toEqual({
+      '1A': { key: '1A', label: 'XV-101', mode: 'open' }
+    })
     expect(workspace.drawingAssets['file:5'].url).toBe(
       'http://localhost/api/v1/File/download/stored%20drawing.dwg'
     )

@@ -23,7 +23,7 @@ export const PROCESS_ASSISTANT_TARGET_URL =
 
 export const PROCESS_ASSISTANT_API_URL =
   import.meta.env.DEV &&
-  import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY !== 'false'
+    import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY !== 'false'
     ? ''
     : PROCESS_ASSISTANT_TARGET_URL
 

@@ -1,5 +1,7 @@
 import {
   type CreatePhaseInput,
+  type DeviceMode,
+  type DeviceState,
   type DrawingAssetRef,
   type FlowPathStatus,
   type HighlightStyle,
@@ -94,6 +96,25 @@ const cloneFlowPath = (flowPath: FlowPathStatus): FlowPathStatus => ({
     : undefined
 })
 
+const cloneDeviceStates = (
+  deviceStates: Record<string, DeviceState> | undefined
+) =>
+  deviceStates
+    ? Object.fromEntries(
+      Object.entries(deviceStates).map(([key, state]) => [
+        key,
+        { ...state }
+      ])
+    )
+    : undefined
+
+const cloneFlowState = (flowState: PhaseSnapshot['flowState']) => ({
+  flowPaths: flowState.flowPaths.map(cloneFlowPath),
+  ...(flowState.deviceStates
+    ? { deviceStates: cloneDeviceStates(flowState.deviceStates) }
+    : {})
+})
+
 interface LegacyPhaseSnapshot
   extends Omit<PhaseSnapshot, 'drawing' | 'flowState'> {
   drawingAssetId: string
@@ -165,9 +186,7 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   name: phase.name,
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
-  flowState: {
-    flowPaths: phase.flowState.flowPaths.map(cloneFlowPath)
-  },
+  flowState: cloneFlowState(phase.flowState),
   createdAt: phase.createdAt,
   updatedAt: phase.updatedAt
 })
@@ -397,6 +416,44 @@ const normalizeFlowPaths = (
   })
 }
 
+const DEVICE_MODES = new Set<DeviceMode>([
+  'open',
+  'closed',
+  'pulse',
+  'start',
+  'stop',
+  'active',
+  'unknown'
+])
+
+const normalizeDeviceStates = (
+  value: unknown
+): Record<string, DeviceState> | undefined => {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value).flatMap(([recordKey, candidate]) => {
+    if (!isRecord(candidate) || !DEVICE_MODES.has(candidate.mode as DeviceMode)) {
+      return []
+    }
+    const key =
+      typeof candidate.key === 'string' && candidate.key.trim()
+        ? candidate.key.trim()
+        : recordKey.trim()
+    if (!key) return []
+    return [[
+      key,
+      {
+        key,
+        label:
+          typeof candidate.label === 'string' && candidate.label.trim()
+            ? candidate.label.trim()
+            : key,
+        mode: candidate.mode as DeviceMode
+      }
+    ] as const]
+  })
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 const migrateDrawing = (
   phase: LegacyPhaseSnapshot,
   drawingAssets: Record<string, DrawingAssetRef>
@@ -544,7 +601,14 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
               phase.flowState.flowPaths,
               phase.id,
               presentationProfile
-            )
+            ),
+            ...(normalizeDeviceStates(phase.flowState.deviceStates)
+              ? {
+                deviceStates: normalizeDeviceStates(
+                  phase.flowState.deviceStates
+                )
+              }
+              : {})
           },
           drawing: { ...phase.drawing },
           sourcePhaseId: phase.sourcePhaseId,
@@ -799,7 +863,7 @@ export class PhaseWorkspaceStore {
       drawing: phaseDrawing,
       sourcePhaseId: sourcePhase?.id,
       flowState: sourcePhase
-        ? { flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath) }
+        ? cloneFlowState(sourcePhase.flowState)
         : { flowPaths: [] },
       createdAt: timestamp,
       updatedAt: timestamp
@@ -860,9 +924,7 @@ export class PhaseWorkspaceStore {
     state: Pick<PhaseSnapshot, 'flowState'>
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
-    phase.flowState = {
-      flowPaths: state.flowState.flowPaths.map(cloneFlowPath)
-    }
+    phase.flowState = cloneFlowState(state.flowState)
     phase.updatedAt = this.now()
   }
 
@@ -956,9 +1018,7 @@ export class PhaseWorkspaceStore {
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
     phase.drawing = { ...sourcePhase.drawing }
     phase.sourcePhaseId = sourcePhase.id
-    phase.flowState = {
-      flowPaths: sourcePhase.flowState.flowPaths.map(cloneFlowPath)
-    }
+    phase.flowState = cloneFlowState(sourcePhase.flowState)
     phase.updatedAt = this.now()
     return previousAssetId
       ? this.removeUnusedDrawing(previousAssetId)

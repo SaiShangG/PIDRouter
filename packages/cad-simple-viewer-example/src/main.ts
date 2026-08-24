@@ -3822,6 +3822,18 @@ class CadViewerApp {
         highlightedIds.forEach(id => entityStyles.set(String(id), style))
       })
     }
+    Object.values(flowState.deviceStates ?? {}).forEach(deviceState => {
+      const objectId = this.resolveObjectIdByHandleKey(deviceState.key)
+      if (!objectId) return
+      const style = resolveEntityPresentation(draft.presentationProfile, {
+        deviceState
+      })
+      if (style.visible) {
+        entityStyles.set(String(objectId), style)
+      } else {
+        entityStyles.delete(String(objectId))
+      }
+    })
     const groups = new Map<
       string,
       { entityIds: Set<string>; style: ResolvedEntityPresentation }
@@ -3918,6 +3930,14 @@ class CadViewerApp {
     }))
   }
 
+  private captureDeviceStates(): Record<string, DeviceState> | undefined {
+    const entries = [...this.valveDeviceStates.values()].map(deviceState => [
+      deviceState.key,
+      { ...deviceState }
+    ] as const)
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  }
+
   private resolvePresentationForObjectId(
     objectId: AcDbObjectId,
     draft = this.getLoadedHighlightStyleDraft(),
@@ -3979,7 +3999,10 @@ class CadViewerApp {
     if (!currentPhase) return
     const nextState = {
       flowState: {
-        flowPaths: this.captureFlowPaths()
+        flowPaths: this.captureFlowPaths(),
+        ...(this.captureDeviceStates()
+          ? { deviceStates: this.captureDeviceStates() }
+          : {})
       }
     }
     const stateChanged =
@@ -4064,7 +4087,16 @@ class CadViewerApp {
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
 
-    const restoredValveKeys: string[] = []
+    const restoredValveKeys = new Set<string>()
+    Object.values(phase.flowState.deviceStates ?? {}).forEach(deviceState => {
+      const ownerId = this.resolveObjectIdByHandleKey(deviceState.key)
+      if (!ownerId) {
+        log.warn(`Unable to restore device state handle: ${deviceState.key}`)
+        return
+      }
+      this.valveDeviceStates.set(ownerId, { ...deviceState })
+      if (deviceState.mode === 'open') restoredValveKeys.add(deviceState.key)
+    })
     phase.flowState.flowPaths.forEach(flowPath => {
       flowPath.handleKeys.forEach(handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
@@ -4094,19 +4126,21 @@ class CadViewerApp {
                 : undefined
         })
         if (this.isFlowBoundaryObject(ownerId)) {
-          restoredValveKeys.push(handleKey)
-          this.valveDeviceStates.set(ownerId, {
-            key: handleKey,
-            label:
-              this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
-              handleKey,
-            mode: 'open'
-          })
+          if (!this.valveDeviceStates.has(ownerId)) {
+            this.valveDeviceStates.set(ownerId, {
+              key: handleKey,
+              label:
+                this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
+                handleKey,
+              mode: 'open'
+            })
+          }
+          restoredValveKeys.add(handleKey)
         }
       })
     })
     this.recomputeOpenHighlightGroups()
-    this.valveDebugFeature?.restoreOpenStates(restoredValveKeys)
+    this.valveDebugFeature?.restoreOpenStates([...restoredValveKeys])
     this.loadedPhase = {
       processId,
       sequenceId,
