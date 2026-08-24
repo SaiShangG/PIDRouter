@@ -14,68 +14,70 @@ describe('flowGraph', () => {
     expect(normalizeFlowHandle(-1)).toBeUndefined()
   })
 
-  it('uses Org Valve components as the authoritative valve classification', () => {
+  it('indexes ControlModules and infers only unique contained-handle owners', () => {
     const graph = buildFlowGraphIndex(
       documentWithGraph({
-        Dsl: {
-          Entities: {
-            $values: [
-              { Handle: 1, $type: 'Demo.Polyline, Demo' },
-              { Handle: 2, $type: 'Demo.Block, Demo', LayerName: 'Valve' },
-              { Handle: 3, $type: 'Demo.Block, Demo' }
-            ]
-          }
-        },
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [
+            { CadHandle: 2, Id: 'V-2', Name: 'Valve' },
+            { CadHandle: 5, Id: 'P-5', Name: 'Pump' }
+          ],
+          ContainCadEntityHandles: [2, 3, 4, 5, 6]
+        }],
         Map: {
-          Maps: {
-            $values: [
-              {
-                Graph: {
-                  Edges: {
-                    $values: [{ From: 1, To: { $values: [2, 3] } }]
-                  }
-                }
-              }
+          Graph: {
+            Vertices: [2, 3, 4, 5, 6],
+            Edges: [
+              { Source: 2, Target: 3 },
+              { Source: 3, Target: 4 },
+              { Source: 4, Target: 5 },
+              { Source: 2, Target: 6 },
+              { Source: 5, Target: 6 }
             ]
-          }
-        },
-        Org: {
-          Areas: {
-            $values: [{ Components: { $values: [{ Handle: 2, Id: 'V-2', Name: 'Valve' }] } }]
           }
         }
       })
     )
 
-    expect(graph.nodes.get('1')?.kind).toBe('line')
     expect(graph.nodes.get('2')?.kind).toBe('valve')
     expect(graph.nodes.get('2')?.label).toBe('V-2')
-    expect(graph.nodes.get('3')?.kind).toBe('equipment')
+    expect(graph.nodes.get('5')?.kind).toBe('pump')
     expect(graph.valveKeys).toEqual(new Set(['2']))
+    expect(graph.pumpKeys).toEqual(new Set(['5']))
+    expect(graph.primaryHandleByCadHandle.get('3')).toBe('2')
+    expect(graph.primaryHandleByCadHandle.get('4')).toBe('5')
+    expect(graph.primaryHandleByCadHandle.has('6')).toBe(false)
   })
 
-  it('builds a deduplicated directed adjacency index and ignores negative roots', () => {
+  it('builds bidirectional adjacency, preserves link metadata, and ignores invalid edges', () => {
     const graph = buildFlowGraphIndex({
       Map: {
-        Maps: {
-          $values: [
+        Graph: {
+          Vertices: [1, 2],
+          Edges: [
+            { Source: -1, Target: 1 },
             {
-              Graph: {
-                Edges: {
-                  $values: [
-                    { From: -1, To: { $values: [1] } },
-                    { From: 1, To: { $values: [2, 2] } }
-                  ]
-                }
-              }
-            }
+              Source: 1,
+              Target: 2,
+              LinkTypeName: 'ProcessDrawingInfo.DirectLink, ProcessDrawingInfo',
+              LinkJson: '{"Type":1}'
+            },
+            { Source: 1, Target: 2 }
           ]
         }
       }
     })
 
     expect(graph.adjacency.get('1')).toEqual(['2'])
-    expect(graph.adjacency.get('2')).toEqual([])
+    expect(graph.adjacency.get('2')).toEqual(['1'])
+    expect(graph.edges[0]).toEqual({
+      source: '1',
+      target: '2',
+      linkTypeName: 'ProcessDrawingInfo.DirectLink, ProcessDrawingInfo',
+      linkType: 'DirectLink',
+      linkJson: '{"Type":1}'
+    })
     expect(graph.nodes.has('FFFF')).toBe(false)
   })
 })

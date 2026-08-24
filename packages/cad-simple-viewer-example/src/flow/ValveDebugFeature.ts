@@ -1,6 +1,6 @@
 import type { AcDbObjectId } from '@mlightcad/data-model'
 
-import { buildFlowGraphIndex } from './flowGraph'
+import { buildFlowGraphIndex, normalizeFlowHandle } from './flowGraph'
 import {
   countFlowTreeNodes,
   countFlowTreeStops,
@@ -226,7 +226,8 @@ export class ValveDebugFeature {
   restoreOpenStates(handleKeys: readonly string[]) {
     this.states.clear()
     handleKeys.forEach(key => {
-      if (this.graph.valveKeys.has(key)) this.states.set(key, 'open')
+      const valveKey = this.resolveValveKey(key)
+      if (valveKey) this.states.set(valveKey, 'open')
     })
     const restoredKeys = [...this.states.keys()]
     this.activeKey = restoredKeys[restoredKeys.length - 1]
@@ -274,7 +275,8 @@ export class ValveDebugFeature {
     const hit = view
       .pick(worldPoint)
       .flatMap(item => this.getCandidateHandleKeys(item.id))
-      .find(key => this.graph.valveKeys.has(key))
+      .map(key => this.resolveValveKey(key))
+      .find((key): key is string => key != null)
     if (!hit) return
 
     event.preventDefault()
@@ -461,6 +463,13 @@ export class ValveDebugFeature {
       }
     }
     return [...new Set(keys)]
+  }
+
+  private resolveValveKey(handleKey: string) {
+    const normalized = normalizeFlowHandle(handleKey)
+    if (!normalized) return undefined
+    const primaryKey = this.graph.primaryHandleByCadHandle.get(normalized) ?? normalized
+    return this.graph.valveKeys.has(primaryKey) ? primaryKey : undefined
   }
 }
 

@@ -7,42 +7,27 @@ import {
 } from '../src/flow/flowTraversal'
 
 const graph = buildFlowGraphIndex({
-  Dsl: {
-    Entities: {
-      $values: [
-        { Handle: 1, $type: 'Demo.Block, Demo' },
-        { Handle: 2, $type: 'Demo.Polyline, Demo' },
-        { Handle: 3, $type: 'Demo.Polyline, Demo' },
-        { Handle: 4, $type: 'Demo.Block, Demo' },
-        { Handle: 5, $type: 'Demo.Block, Demo' },
-        { Handle: 6, $type: 'Demo.Polyline, Demo' },
-        { Handle: 7, $type: 'Demo.Block, Demo' }
-      ]
-    }
-  },
+  Areas: [{
+    Id: 'A-1',
+    ControlModules: [
+      { CadHandle: 1, Id: 'V-1', Name: 'Valve' },
+      { CadHandle: 4, Id: 'V-4', Name: 'Valve' },
+      { CadHandle: 7, Id: 'V-7', Name: 'Valve' }
+    ],
+    ContainCadEntityHandles: [1, 2, 3, 4, 5, 6, 7]
+  }],
   Map: {
-    Maps: {
-      $values: [
-        {
-          Graph: {
-            Edges: {
-              $values: [
-                { From: 1, To: { $values: [2] } },
-                { From: 2, To: { $values: [3] } },
-                { From: 3, To: { $values: [4, 5] } },
-                { From: 5, To: { $values: [6] } },
-                { From: 6, To: { $values: [1] } },
-                { From: 4, To: { $values: [7] } }
-              ]
-            }
-          }
-        }
+    Graph: {
+      Vertices: [1, 2, 3, 4, 5, 6, 7],
+      Edges: [
+        { Source: 1, Target: 2 },
+        { Source: 2, Target: 3 },
+        { Source: 3, Target: 4 },
+        { Source: 3, Target: 5 },
+        { Source: 5, Target: 6 },
+        { Source: 6, Target: 1 },
+        { Source: 4, Target: 7 }
       ]
-    }
-  },
-  Org: {
-    Areas: {
-      $values: [{ Components: { $values: [{ Handle: 1, Id: 'V-1', Name: 'Valve' }, { Handle: 4, Id: 'V-4', Name: 'Valve' }, { Handle: 7, Id: 'V-7', Name: 'Valve' }] } }]
     }
   }
 })
@@ -61,23 +46,23 @@ describe('flowTraversal', () => {
     ]
     const nodes = flatten(result.root)
 
-    expect(result.highlightedKeys).toEqual(new Set(['1', '2', '3', '6']))
+    expect(result.highlightedKeys).toEqual(new Set(['1', '2', '6', '3', '5']))
     expect(result.stoppedValveKeys).toEqual(new Set(['4']))
     expect(nodes.some(node => node.key === '4' && node.status === 'closed')).toBe(true)
     expect(result.visitedKeys).toEqual(new Set(['1', '2', '3', '4', '5', '6']))
     expect(result.visitedEdges).toEqual(
-      new Set(['1|2', '2|3', '3|4', '3|5', '5|6', '6|1'])
+      new Set(['1|2', '1|6', '2|3', '5|6', '3|4', '3|5'])
     )
     expect(countFlowTreeNodes(result.root)).toBe(result.visitedKeys.size)
     expect(new Set(nodes.map(node => node.key))).toEqual(result.visitedKeys)
   })
 
-  it('follows only outgoing connections', () => {
+  it('follows connections in both directions and stops at closed valves', () => {
     const result = traverseFlowFromValve(graph, '4', new Map([['4', 'open' as const]]))
 
-    expect(result.visitedKeys).toEqual(new Set(['4', '7']))
-    expect(result.visitedEdges).toEqual(new Set(['4|7']))
-    expect(result.root.children.map(child => child.key)).toEqual(['7'])
+    expect(result.visitedKeys).toEqual(new Set(['4', '3', '7', '2', '5', '1', '6']))
+    expect(result.root.children.map(child => child.key)).toEqual(['3', '7'])
+    expect(result.stoppedValveKeys).toEqual(new Set(['1', '7']))
   })
 
   it('returns a closed start without expanding it', () => {
@@ -97,7 +82,7 @@ describe('flowTraversal', () => {
     const first = traverseFlowFromValve(graph, '1', states)
     const second = traverseFlowFromValve(graph, '4', states)
     expect(mergeFlowHighlightKeys([first, second])).toEqual(
-      new Set(['1', '2', '3', '4', '6'])
+      new Set(['1', '2', '6', '3', '5', '4', '7'])
     )
   })
 })

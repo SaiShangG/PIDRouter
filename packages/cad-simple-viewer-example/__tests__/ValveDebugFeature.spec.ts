@@ -30,27 +30,21 @@ describe('ValveDebugFeature', () => {
     const feature = new ValveDebugFeature({
       panelHost: host,
       graphDocument: {
-        Dsl: {
-          Entities: {
-            $values: [
-              { Handle: 1, $type: 'Demo.Block, Demo' },
-              { Handle: 2, $type: 'Demo.Polyline, Demo' },
-              { Handle: 3, $type: 'Demo.Block, Demo' }
-            ]
-          }
-        },
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Id: 'V-1', Name: 'Valve' }],
+          ContainCadEntityHandles: [1, 2, 3]
+        }],
         Map: {
-          Maps: {
-            $values: [{ Graph: { Edges: { $values: [{ From: 1, To: { $values: [2] } }, { From: 2, To: { $values: [3] } }] } } }]
+          Graph: {
+            Vertices: [1, 2, 3],
+            Edges: [{ Source: 1, Target: 2 }, { Source: 2, Target: 3 }]
           }
-        },
-        Org: {
-          Areas: { $values: [{ Components: { $values: [{ Handle: 1, Id: 'V-1', Name: 'Valve' }] } }] }
         }
       },
       getView: () => view,
       resolveObjectId: key => key,
-      resolveHandleKeys: objectId => objectId === 'V1' ? ['1'] : [],
+      resolveHandleKeys: objectId => objectId === 'V1' ? ['2'] : [],
       createOverlay: (ids, kind): ValveDebugOverlay => {
         const overlay = { ids: ids.map(String), kind, disposed: false }
         overlays.push(overlay)
@@ -99,15 +93,11 @@ describe('ValveDebugFeature', () => {
     const feature = new ValveDebugFeature({
       panelHost: host,
       graphDocument: {
-        Dsl: { Entities: { $values: [{ Handle: 1, $type: 'Demo.Block, Demo' }] } },
-        Map: { Maps: { $values: [] } },
-        Org: {
-          Areas: {
-            $values: [
-              { Components: { $values: [{ Handle: 1, Id: 'V-1', Name: 'Valve' }] } }
-            ]
-          }
-        }
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Id: 'V-1', Name: 'Valve' }]
+        }],
+        Map: { Graph: { Vertices: [1], Edges: [] } }
       },
       getView: () => ({
         canvas,

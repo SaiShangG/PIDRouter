@@ -1,8 +1,12 @@
 import type {
+  DocumentAreaInput,
+  DocumentControlModule,
+  DocumentControlModuleInput,
   FlowConnectionDocumentInput,
-  FlowConnectionEntityInput,
+  FlowGraphEdge,
   FlowGraphIndex,
-  FlowGraphNode
+  FlowGraphNode,
+  FlowGraphNodeKind
 } from './types'
 
 const normalizeLabel = (value: string | undefined) => value?.trim() || undefined
@@ -22,80 +26,47 @@ export const normalizeFlowHandle = (
   return raw.replace(/^0+/, '').toUpperCase() || '0'
 }
 
-const entityType = (entity: FlowConnectionEntityInput | undefined) =>
-  entity?.$type?.split(',')[0]?.split('.').pop()?.toLowerCase() ?? ''
+const moduleInfo = (module: DocumentControlModuleInput, name: string) =>
+  module.Infos?.find(info => info.Name?.trim().toUpperCase() === name)?.Value?.trim()
 
-const isLineEntity = (entity: FlowConnectionEntityInput | undefined) =>
-  entityType(entity).includes('polyline')
-
-const collectEntities = (document: FlowConnectionDocumentInput) => {
-  const entities = new Map<string, FlowConnectionEntityInput>()
-
-  const visit = (entity: FlowConnectionEntityInput) => {
-    const key = entity.Handle == null ? undefined : normalizeFlowHandle(entity.Handle)
-    if (key && entity.Handle != null && entity.Handle >= 0 && !entities.has(key)) {
-      entities.set(key, entity)
-    }
-    entity.Items?.$values?.forEach(visit)
-  }
-
-  document.Dsl?.Entities?.$values?.forEach(visit)
-  return entities
+const classifyControlModule = (
+  module: DocumentControlModuleInput
+): DocumentControlModule['deviceType'] => {
+  const tokens = [module.Name, moduleInfo(module, 'YQJ_CODE')]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(value => value.trim().toUpperCase())
+  if (tokens.some(value => value === 'VALVE' || value.includes('VALVE'))) return 'valve'
+  if (tokens.some(value => value === 'PUMP' || value.includes('PUMP'))) return 'pump'
+  return 'equipment'
 }
 
-const collectValveComponents = (document: FlowConnectionDocumentInput) => {
-  const components = new Map<
-    string,
-    { id?: string; name?: string; areaId?: string }
-  >()
-
-  const areas = document.Org?.Areas
-  const areaList = Array.isArray(areas) ? areas : areas?.$values ?? []
-  areaList.forEach(area => {
-    area.Components?.$values?.forEach(component => {
-      if (component.Handle == null || component.Handle < 0) return
-      if (component.Name?.trim().toUpperCase() !== 'VALVE') return
-      const key = normalizeFlowHandle(component.Handle)
-      if (!key || components.has(key)) return
-      components.set(key, {
-        id: normalizeLabel(component.Id),
-        name: normalizeLabel(component.Name),
-        areaId: normalizeLabel(area.Id)
+const collectControlModules = (document: FlowConnectionDocumentInput) => {
+  const modules = new Map<string, DocumentControlModule>()
+  document.Areas?.forEach(area => {
+    area.ControlModules?.forEach(module => {
+      const key = normalizeFlowHandle(module.CadHandle)
+      if (!key || module.CadHandle == null || modules.has(key)) return
+      modules.set(key, {
+        ...module,
+        CadHandle: module.CadHandle,
+        areaId: normalizeLabel(area.Id),
+        deviceType: classifyControlModule(module)
       })
     })
   })
-
-  return components
-}
-
-const attributeLabel = (entity: FlowConnectionEntityInput | undefined) => {
-  const attributes = entity?.Attributes?.$values ?? []
-  const preferredKeys = ['TAG', 'TAG_PRJ', 'PRJ_TAG_B', 'CODE', 'NAME', 'ID']
-  for (const preferredKey of preferredKeys) {
-    const match = attributes.find(
-      attribute =>
-        attribute.Key?.trim().toUpperCase() === preferredKey &&
-        normalizeLabel(attribute.Value)
-    )
-    if (match?.Value) return match.Value.trim()
-  }
-  return attributes.find(attribute => normalizeLabel(attribute.Value))?.Value?.trim()
+  return modules
 }
 
 const createNode = (
   key: string,
-  entity: FlowConnectionEntityInput | undefined,
-  valve: { id?: string; name?: string; areaId?: string } | undefined
+  module: DocumentControlModule | undefined,
+  existsInDocument: boolean
 ): FlowGraphNode => {
   const handle = Number.parseInt(key, 16)
-  const line = isLineEntity(entity)
-  const kind = valve ? 'valve' : line ? 'line' : 'equipment'
+  const kind: FlowGraphNodeKind = module?.deviceType ?? 'line'
   const label =
-    valve?.id ??
-    attributeLabel(entity) ??
-    normalizeLabel(entity?.BlockName) ??
-    normalizeLabel(entity?.LayerName) ??
-    (valve?.name ? `${valve.name}${valve.areaId ? ` · ${valve.areaId}` : ''}` : undefined) ??
+    normalizeLabel(module?.Id) ??
+    normalizeLabel(module?.Name) ??
     key
 
   return {
@@ -103,11 +74,9 @@ const createNode = (
     handle,
     kind,
     label,
-    layerName: normalizeLabel(entity?.LayerName),
-    blockName: normalizeLabel(entity?.BlockName),
-    componentId: valve?.id,
-    componentName: valve?.name,
-    missingEntity: !entity
+    componentId: normalizeLabel(module?.Id),
+    componentName: normalizeLabel(module?.Name),
+    missingEntity: !existsInDocument
   }
 }
 
@@ -121,40 +90,133 @@ const addNeighbor = (
   adjacency.set(from, neighbors)
 }
 
-/** Builds a stable, directed graph from a connection artifact. */
+const linkType = (typeName: string | undefined) =>
+  typeName?.split(',')[0]?.split('.').pop()
+
+const inferContainedModuleOwners = (
+  areas: readonly DocumentAreaInput[],
+  modules: ReadonlyMap<string, DocumentControlModule>,
+  adjacency: ReadonlyMap<string, readonly string[]>
+) => {
+  const owners = new Map<string, DocumentControlModule>()
+
+  areas.forEach(area => {
+    const allowed = new Set(
+      area.ContainCadEntityHandles
+        ?.map(normalizeFlowHandle)
+        .filter((key): key is string => key != null) ?? []
+    )
+    const areaModules = [...modules.entries()].filter(([, module]) => module.areaId === area.Id)
+    const distances = new Map<string, number>()
+    const candidates = new Map<string, Set<string>>()
+    const queue: string[] = []
+
+    areaModules.forEach(([key]) => {
+      if (!allowed.has(key)) return
+      distances.set(key, 0)
+      candidates.set(key, new Set([key]))
+      queue.push(key)
+    })
+
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      const nextDistance = (distances.get(current) ?? 0) + 1
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (!allowed.has(neighbor)) continue
+        const knownDistance = distances.get(neighbor)
+        if (knownDistance == null || nextDistance < knownDistance) {
+          distances.set(neighbor, nextDistance)
+          candidates.set(neighbor, new Set(candidates.get(current)))
+          queue.push(neighbor)
+        } else if (nextDistance === knownDistance) {
+          const ownersAtDistance = candidates.get(neighbor) ?? new Set<string>()
+          const previousSize = ownersAtDistance.size
+          candidates.get(current)?.forEach(owner => ownersAtDistance.add(owner))
+          candidates.set(neighbor, ownersAtDistance)
+          if (ownersAtDistance.size !== previousSize) queue.push(neighbor)
+        }
+      }
+    }
+
+    candidates.forEach((candidateKeys, handleKey) => {
+      if (candidateKeys.size !== 1) return
+      const primaryKey = candidateKeys.values().next().value as string
+      const module = modules.get(primaryKey)
+      if (module) owners.set(handleKey, module)
+    })
+  })
+
+  return owners
+}
+
+/** Builds stable device indexes and an undirected graph from Document.json. */
 export const buildFlowGraphIndex = (
   document: FlowConnectionDocumentInput
 ): FlowGraphIndex => {
-  const entities = collectEntities(document)
-  const valves = collectValveComponents(document)
+  const modules = collectControlModules(document)
   const nodes = new Map<string, FlowGraphNode>()
   const adjacency = new Map<string, string[]>()
+  const edges: FlowGraphEdge[] = []
+  const vertices = new Set(
+    document.Map?.Graph?.Vertices
+      ?.map(normalizeFlowHandle)
+      .filter((key): key is string => key != null) ?? []
+  )
 
   const ensureNode = (key: string) => {
-    if (!nodes.has(key)) nodes.set(key, createNode(key, entities.get(key), valves.get(key)))
+    const module = modules.get(key)
+    if (!nodes.has(key)) nodes.set(key, createNode(key, module, Boolean(module) || vertices.has(key)))
     if (!adjacency.has(key)) adjacency.set(key, [])
   }
 
-  valves.forEach((_, key) => ensureNode(key))
+  vertices.forEach(ensureNode)
+  modules.forEach((_, key) => ensureNode(key))
 
-  document.Map?.Maps?.$values?.forEach(map => {
-    map.Graph?.Edges?.$values?.forEach(edge => {
-      const from = edge.From == null ? undefined : normalizeFlowHandle(edge.From)
-      if (!from) return
-      ensureNode(from)
-
-      edge.To?.$values?.forEach(rawTo => {
-        const to = normalizeFlowHandle(rawTo)
-        if (!to) return
-        ensureNode(to)
-        addNeighbor(adjacency, from, to)
-      })
+  document.Map?.Graph?.Edges?.forEach(edge => {
+    const source = normalizeFlowHandle(edge.Source)
+    const target = normalizeFlowHandle(edge.Target)
+    if (!source || !target) return
+    vertices.add(source)
+    vertices.add(target)
+    ensureNode(source)
+    ensureNode(target)
+    addNeighbor(adjacency, source, target)
+    addNeighbor(adjacency, target, source)
+    edges.push({
+      source,
+      target,
+      linkTypeName: edge.LinkTypeName,
+      linkType: linkType(edge.LinkTypeName),
+      linkJson: edge.LinkJson
     })
   })
+
+  const containedOwners = inferContainedModuleOwners(document.Areas ?? [], modules, adjacency)
+  const primaryHandleByCadHandle = new Map<string, string>()
+  modules.forEach((_, key) => primaryHandleByCadHandle.set(key, key))
+  containedOwners.forEach((module, key) => {
+    const primaryKey = normalizeFlowHandle(module.CadHandle)
+    if (primaryKey) primaryHandleByCadHandle.set(key, primaryKey)
+  })
+
+  const deviceKeysByType = new Map<Exclude<FlowGraphNodeKind, 'line'>, Set<string>>([
+    ['valve', new Set()],
+    ['pump', new Set()],
+    ['equipment', new Set()]
+  ])
+  modules.forEach((module, key) => deviceKeysByType.get(module.deviceType)?.add(key))
+  const valveKeys = deviceKeysByType.get('valve') ?? new Set<string>()
+  const pumpKeys = deviceKeysByType.get('pump') ?? new Set<string>()
 
   return {
     nodes,
     adjacency,
-    valveKeys: new Set(valves.keys())
+    edges,
+    controlModuleByPrimaryHandle: modules,
+    controlModuleByContainedHandle: containedOwners,
+    primaryHandleByCadHandle,
+    deviceKeysByType,
+    valveKeys,
+    pumpKeys
   }
 }

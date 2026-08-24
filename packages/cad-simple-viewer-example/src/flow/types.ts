@@ -1,72 +1,60 @@
 import type { AcDbObjectId } from '@mlightcad/data-model'
 
-export interface FlowConnectionEdgeInput {
-  From?: number
-  To?: { $values?: number[] }
+export interface DocumentInfoInput {
+  Name?: string
+  Value?: string
 }
 
-export interface FlowConnectionEntityInput {
-  $type?: string
-  Handle?: number
-  LayerName?: string
-  BlockName?: string
-  Attributes?: {
-    $values?: Array<{ Key?: string; Value?: string }>
+export interface DocumentControlModuleInput {
+  CadHandle?: number
+  Id?: string
+  Name?: string
+  Infos?: DocumentInfoInput[]
+}
+
+export interface DocumentAreaInput {
+  Id?: string
+  CadHandle?: number
+  BoundingBox?: {
+    Min?: { X?: number; Y?: number; Z?: number }
+    Max?: { X?: number; Y?: number; Z?: number }
   }
-  Items?: { $values?: FlowConnectionEntityInput[] }
+  ControlModules?: DocumentControlModuleInput[]
+  ContainCadEntityHandles?: number[]
+}
+
+export interface DocumentGraphEdgeInput {
+  Source?: number
+  Target?: number
+  LinkTypeName?: string
+  LinkJson?: string
 }
 
 export interface FlowConnectionDocumentInput {
-  Areas?: Array<{
-    Id?: string
-    BoundingBox?: {
-      Min?: { X?: number; Y?: number; Z?: number }
-      Max?: { X?: number; Y?: number; Z?: number }
-    }
-    Components?: {
-      $values?: Array<{
-        Handle?: number
-        Id?: string
-        Name?: string
-      }>
-    }
-  }>
-  Dsl?: {
-    Entities?: { $values?: FlowConnectionEntityInput[] }
-  }
+  Areas?: DocumentAreaInput[]
   Map?: {
-    Maps?: {
-      $values?: Array<{
-        Graph?: { Edges?: { $values?: FlowConnectionEdgeInput[] } }
-      }>
+    Graph?: {
+      Vertices?: number[]
+      Edges?: DocumentGraphEdgeInput[]
     }
-  }
-  Org?: {
-    Areas?: {
-      $values?: Array<{
-        Id?: string
-        Components?: {
-          $values?: Array<{
-            Handle?: number
-            Id?: string
-            Name?: string
-          }>
-        }
-      }>
-    } | Array<{
-      Id?: string
-      Components?: {
-        $values?: Array<{
-          Handle?: number
-          Id?: string
-          Name?: string
-        }>
-      }
-    }>
   }
 }
 
-export type FlowGraphNodeKind = 'valve' | 'line' | 'equipment'
+export type FlowGraphNodeKind = 'valve' | 'pump' | 'line' | 'equipment'
+
+export interface DocumentControlModule extends DocumentControlModuleInput {
+  CadHandle: number
+  areaId?: string
+  deviceType: Exclude<FlowGraphNodeKind, 'line'>
+}
+
+export interface FlowGraphEdge {
+  source: string
+  target: string
+  linkTypeName?: string
+  linkType?: string
+  linkJson?: string
+}
 
 export interface FlowGraphNode {
   key: string
@@ -82,9 +70,16 @@ export interface FlowGraphNode {
 
 export interface FlowGraphIndex {
   nodes: ReadonlyMap<string, FlowGraphNode>
-  /** Outgoing neighbors in stable JSON order. */
+  /** Undirected neighbors in stable Document.json order. */
   adjacency: ReadonlyMap<string, readonly string[]>
+  edges: readonly FlowGraphEdge[]
+  controlModuleByPrimaryHandle: ReadonlyMap<string, DocumentControlModule>
+  /** Unique graph-inferred owner for an Area-contained CAD entity. */
+  controlModuleByContainedHandle: ReadonlyMap<string, DocumentControlModule>
+  primaryHandleByCadHandle: ReadonlyMap<string, string>
+  deviceKeysByType: ReadonlyMap<Exclude<FlowGraphNodeKind, 'line'>, ReadonlySet<string>>
   valveKeys: ReadonlySet<string>
+  pumpKeys: ReadonlySet<string>
 }
 
 export type FlowTreeNodeStatus =
@@ -106,7 +101,7 @@ export interface FlowDebugTreeNode {
 export interface FlowTraversalResult {
   root: FlowDebugTreeNode
   visitedKeys: ReadonlySet<string>
-  /** Directed edge keys visited during the walk (`A|B` means `A → B`). */
+  /** Canonical undirected edge keys visited during the walk. */
   visitedEdges: ReadonlySet<string>
   highlightedKeys: ReadonlySet<string>
   stoppedValveKeys: ReadonlySet<string>

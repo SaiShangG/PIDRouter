@@ -64,8 +64,13 @@ import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyl
 import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssistantDrawingRepository'
 import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
+import {
+  buildFlowGraphIndex,
+  normalizeFlowHandle
+} from './flow/flowGraph'
 import { getOpenValveHandleKeys } from './flow/openValveStates'
 import type {
+  FlowConnectionDocumentInput,
   ValveDebugOverlay,
   ValveDebugView
 } from './flow/types'
@@ -169,104 +174,6 @@ const areEqualNumberSets = (
   return true
 }
 
-interface FlowConnectionEdge {
-  From?: number
-  To?: {
-    $values?: number[]
-  }
-}
-
-interface FlowConnectionLogEdge {
-  from: number
-  to: number[]
-}
-
-interface FlowConnectionAttribute {
-  Key?: string
-  Value?: string
-}
-
-interface FlowConnectionEntity {
-  $type?: string
-  Handle?: number
-  LayerName?: string
-  BlockName?: string
-  Points?: {
-    $values?: FlowConnectionPoint2d[]
-  }
-  Position?: FlowConnectionPoint2d
-  Center?: FlowConnectionPoint2d
-  Radius?: number
-  Height?: number
-  Items?: {
-    $values?: FlowConnectionEntity[]
-  }
-  Attributes?: {
-    $values?: FlowConnectionAttribute[]
-  }
-}
-
-interface FlowConnectionMapItem {
-  Graph?: {
-    Edges?: {
-      $values?: FlowConnectionEdge[]
-    }
-  }
-}
-
-interface FlowConnectionPoint2d {
-  X?: number
-  Y?: number
-}
-
-interface FlowConnectionBBox {
-  Min?: FlowConnectionPoint2d
-  Max?: FlowConnectionPoint2d
-}
-
-interface FlowConnectionArea {
-  Id?: string
-  BoundingBox?: FlowConnectionBBox
-  BBox?: FlowConnectionBBox
-  Components?: {
-    $values?: FlowConnectionComponent[]
-  }
-}
-
-interface FlowConnectionComponent {
-  Handle?: number
-  Id?: string
-  Name?: string
-}
-
-interface FlowConnectionDocument {
-  Areas?: FlowConnectionArea[]
-  Dsl?: {
-    Entities?: {
-      $values?: FlowConnectionEntity[]
-    }
-  }
-  Map?: {
-    Maps?: {
-      $values?: FlowConnectionMapItem[]
-    }
-  }
-  Org?: {
-    Areas?: {
-      $values?: FlowConnectionArea[]
-    } | FlowConnectionArea[]
-  }
-}
-
-const getFlowConnectionAreas = (document: FlowConnectionDocument) => {
-  if (document.Areas) return document.Areas
-
-  const areasValue = document.Org?.Areas
-  return Array.isArray(areasValue)
-    ? areasValue
-    : areasValue?.$values ?? []
-}
-
 interface FlowConnectionBounds {
   minX: number
   minY: number
@@ -320,188 +227,26 @@ const isFiniteNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-const parseFlowConnectionDocument = (jsonText: string): FlowConnectionDocument => {
+const parseFlowConnectionDocument = (
+  jsonText: string
+): FlowConnectionDocumentInput => {
   try {
-    return JSON.parse(jsonText) as FlowConnectionDocument
+    return JSON.parse(jsonText) as FlowConnectionDocumentInput
   } catch (parseError) {
     log.warn('Failed to parse flow connection json:', parseError)
     return {}
   }
 }
 
-const isFlowBoundaryLayerName = (layerName?: string) => {
-  const normalized = layerName?.trim().toUpperCase()
-  if (!normalized || normalized.includes('TEXT')) return false
-
-  return (
-    normalized === 'VALVE' ||
-    normalized === 'VALVES' ||
-    normalized === 'PUMP' ||
-    normalized === 'PUMPS' ||
-    normalized.startsWith('P---PVL') ||
-    normalized.startsWith('P---PUMP')
-  )
-}
-
-const hasFlowConnectionPointAttribute = (entity: FlowConnectionEntity) => {
-  return (
-    entity.Attributes?.$values?.some(
-      attribute => attribute.Key?.trim().toUpperCase() === 'PHI_CONNECTIONPOINT'
-    ) ?? false
-  )
-}
-
-const entityHasFlowBoundaryLayer = (entity: FlowConnectionEntity): boolean => {
-  return (
-    isFlowBoundaryLayerName(entity.LayerName) ||
-    (entity.Items?.$values?.some(item => entityHasFlowBoundaryLayer(item)) ??
-      false)
-  )
-}
-
-const isFlowBoundaryEntity = (entity: FlowConnectionEntity) => {
-  if (!entityHasFlowBoundaryLayer(entity)) return false
-
-  return (
-    isFlowBoundaryLayerName(entity.LayerName) ||
-    hasFlowConnectionPointAttribute(entity) ||
-    (entity.Items?.$values?.length ?? 0) > 0
-  )
-}
-
-const addFlowConnectionIndexEntry = (
-  index: Map<string, number[]>,
-  fromKey: string,
-  toHandles: number[]
-) => {
-  const existing = index.get(fromKey) ?? []
-  index.set(fromKey, [...existing, ...toHandles])
-}
-
-const addFlowConnectionLogEntry = (
-  index: Map<string, FlowConnectionLogEdge[]>,
-  fromKey: string,
-  edge: FlowConnectionLogEdge
-) => {
-  const existing = index.get(fromKey) ?? []
-  index.set(fromKey, [...existing, edge])
-}
-
-const buildFlowConnectionIndex = (document: FlowConnectionDocument) => {
-  const index = new Map<string, number[]>()
-  const maps = document.Map?.Maps?.$values ?? []
-
-  maps.forEach(mapItem => {
-    const edges = mapItem.Graph?.Edges?.$values ?? []
-    edges.forEach(edge => {
-      if (edge.From == null) return
-
-      const fromHandle = Math.trunc(edge.From)
-      const fromKeys = handleKeysFromNumber(fromHandle)
-      if (fromKeys.length === 0) return
-
-      const toHandles = edge.To?.$values?.filter(handle => handle >= 0) ?? []
-      if (toHandles.length === 0) return
-
-      fromKeys.forEach(fromKey => {
-        addFlowConnectionIndexEntry(index, fromKey, toHandles)
-      })
-    })
-  })
-
-  return index
-}
-
-const buildFlowConnectionLogIndex = (document: FlowConnectionDocument) => {
-  const index = new Map<string, FlowConnectionLogEdge[]>()
-  const maps = document.Map?.Maps?.$values ?? []
-
-  maps.forEach(mapItem => {
-    const edges = mapItem.Graph?.Edges?.$values ?? []
-    edges.forEach(edge => {
-      if (edge.From == null) return
-
-      const fromHandle = Math.trunc(edge.From)
-      const fromKeys = handleKeysFromNumber(fromHandle)
-      if (fromKeys.length === 0) return
-
-      const toHandles = edge.To?.$values?.filter(handle => handle >= 0) ?? []
-      if (toHandles.length === 0) return
-
-      const logEdge = {
-        from: fromHandle,
-        to: toHandles
-      }
-      fromKeys.forEach(fromKey => {
-        addFlowConnectionLogEntry(index, fromKey, logEdge)
-      })
-    })
-  })
-
-  return index
-}
-
-const collectFlowBoundaryHandleKeys = (
-  entity: FlowConnectionEntity,
-  boundaryHandleKeys: Set<string>
-) => {
-  if (entity.Handle != null && entity.Handle > 0 && isFlowBoundaryEntity(entity)) {
-    handleKeysFromNumber(entity.Handle).forEach(handleKey => {
-      boundaryHandleKeys.add(handleKey)
-    })
-  }
-
-  entity.Items?.$values?.forEach(item => {
-    collectFlowBoundaryHandleKeys(item, boundaryHandleKeys)
-  })
-}
-
-const buildFlowBoundaryHandleKeys = (document: FlowConnectionDocument) => {
-  const boundaryHandleKeys = new Set<string>()
-  const entities = document.Dsl?.Entities?.$values ?? []
-
-  entities.forEach(entity => {
-    collectFlowBoundaryHandleKeys(entity, boundaryHandleKeys)
-  })
-
-  getFlowConnectionAreas(document).forEach(area => {
-    area.Components?.$values?.forEach(component => {
-      const name = component.Name?.trim().toUpperCase() ?? ''
-      if (!name.includes('VALVE') && !name.includes('PUMP')) return
-      if (component.Handle == null || component.Handle < 0) return
-      handleKeysFromNumber(component.Handle).forEach(handleKey => {
-        boundaryHandleKeys.add(handleKey)
-      })
-    })
-  })
-
-  return boundaryHandleKeys
-}
-
-const buildFlowEdgeHandleKeys = (document: FlowConnectionDocument) => {
-  const edgeHandleKeys = new Set<string>()
-  const entities = document.Dsl?.Entities?.$values ?? []
-
-  entities.forEach(entity => {
-    if (!entity.$type?.includes('.Polyline,')) return
-    if (entity.Handle == null || entity.Handle < 0) return
-    handleKeysFromNumber(entity.Handle).forEach(handleKey => {
-      edgeHandleKeys.add(handleKey)
-    })
-  })
-
-  return edgeHandleKeys
-}
-
 const resolveFlowConnectionAreaBounds = (
-  document: FlowConnectionDocument
+  document: FlowConnectionDocumentInput
 ): FlowConnectionBounds | null => {
-  const areas = getFlowConnectionAreas(document)
+  const areas = document.Areas ?? []
   let bounds: FlowConnectionBounds | null = null
 
   areas.forEach(area => {
-    const min = (area.BoundingBox ?? area.BBox)?.Min
-    const max = (area.BoundingBox ?? area.BBox)?.Max
+    const min = area.BoundingBox?.Min
+    const max = area.BoundingBox?.Max
     if (
       !isFiniteNumber(min?.X) ||
       !isFiniteNumber(min?.Y) ||
@@ -547,18 +292,12 @@ const mergeBounds = (
 let flowConnectionDocument = parseFlowConnectionDocument(
   flowConnectionJsonText
 )
-let flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
-let flowConnectionLogIndex = buildFlowConnectionLogIndex(flowConnectionDocument)
-let flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(flowConnectionDocument)
-let flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
+let flowGraphIndex = buildFlowGraphIndex(flowConnectionDocument)
 let flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
 
 const useFlowConnectionDocument = () => {
   flowConnectionDocument = parseFlowConnectionDocument(flowConnectionJsonText)
-  flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
-  flowConnectionLogIndex = buildFlowConnectionLogIndex(flowConnectionDocument)
-  flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(flowConnectionDocument)
-  flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
+  flowGraphIndex = buildFlowGraphIndex(flowConnectionDocument)
   flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
 }
 
@@ -601,11 +340,6 @@ type PreviewMaterial = {
   depthWrite: boolean
   needsUpdate: boolean
   dispose(): void
-}
-
-type LayerNamedEntity = {
-  layer?: string
-  layerName?: string
 }
 
 type PreviewGeometry = {
@@ -3333,64 +3067,35 @@ class CadViewerApp {
 
   private getFlowConnectionTraversal(objectId: AcDbObjectId) {
     const connectedHandles = new Set<number>()
-    const traversalEdges: FlowConnectionLogEdge[] = []
-    const traversalEdgeKeys = new Set<string>()
     const visitedHandleKeys = new Set<string>()
     const pendingHandleKeys = handleKeysFromObjectId(objectId)
+      .map(normalizeFlowHandle)
+      .filter((key): key is string => key != null)
     const traversableBoundaryKeys = this.getOpenFlowBoundaryKeys()
-    pendingHandleKeys.forEach(handleKey => traversableBoundaryKeys.add(handleKey))
+    const rootKeys = new Set(pendingHandleKeys)
 
     while (pendingHandleKeys.length > 0) {
       const handleKey = pendingHandleKeys.shift()
       if (!handleKey || visitedHandleKeys.has(handleKey)) continue
 
       visitedHandleKeys.add(handleKey)
-
-      const traversedToHandles = new Set<number>()
-      flowConnectionIndex.get(handleKey)?.forEach(handleId => {
-        if (this.isClosedFlowBoundary(handleId, traversableBoundaryKeys)) {
-          handleKeysFromNumber(handleId).forEach(boundaryKey => {
-            visitedHandleKeys.add(boundaryKey)
-          })
-          return
-        }
-
-        if (
-          handleKeysFromNumber(handleId).some(nextKey =>
-            flowEdgeHandleKeys.has(nextKey)
-          )
-        ) {
-          connectedHandles.add(handleId)
-        }
-        traversedToHandles.add(handleId)
-        handleKeysFromNumber(handleId).forEach(nextKey => {
-          if (!visitedHandleKeys.has(nextKey)) {
-            pendingHandleKeys.push(nextKey)
-          }
-        })
-      })
-
-      if (traversedToHandles.size > 0) {
-        flowConnectionLogIndex.get(handleKey)?.forEach(edge => {
-          const to = edge.to.filter(handleId => traversedToHandles.has(handleId))
-          if (to.length === 0) return
-
-          const edgeKey = `${edge.from}:${to.join(',')}`
-          if (traversalEdgeKeys.has(edgeKey)) return
-
-          traversalEdgeKeys.add(edgeKey)
-          traversalEdges.push({
-            from: edge.from,
-            to
-          })
-        })
+      if (
+        !rootKeys.has(handleKey) &&
+        this.isClosedFlowBoundary(handleKey, traversableBoundaryKeys)
+      ) {
+        continue
       }
+
+      const handleId = Number.parseInt(handleKey, 16)
+      if (!rootKeys.has(handleKey) && Number.isFinite(handleId)) {
+        connectedHandles.add(handleId)
+      }
+      flowGraphIndex.adjacency.get(handleKey)?.forEach(nextKey => {
+        if (!visitedHandleKeys.has(nextKey)) pendingHandleKeys.push(nextKey)
+      })
     }
 
-    return {
-      connectedHandles,
-      traversalEdges
-    }
+    return { connectedHandles }
   }
 
   private getOpenFlowBoundaryKeys() {
@@ -3405,45 +3110,18 @@ class CadViewerApp {
   }
 
   private isClosedFlowBoundary(
-    handleId: number,
+    handleKey: string,
     traversableBoundaryKeys: Set<string>
   ) {
-    const handleKeys = handleKeysFromNumber(handleId)
-    const isBoundary =
-      handleKeys.some(handleKey => flowBoundaryHandleKeys.has(handleKey)) ||
-      this.isRuntimeFlowBoundary(handleId)
-    if (!isBoundary) return false
-
-    return !handleKeys.some(handleKey => traversableBoundaryKeys.has(handleKey))
-  }
-
-  private isRuntimeFlowBoundary(handleId: number) {
-    const db = AcApDocManager.instance.curDocument?.database
-    if (!db) return false
-
-    for (const handleKey of handleKeysFromNumber(handleId)) {
-      const entity = db.tables.blockTable.getEntityById(handleKey) as
-        | LayerNamedEntity
-        | undefined
-      const layerName = entity?.layer ?? entity?.layerName
-      if (isFlowBoundaryLayerName(layerName)) return true
-    }
-
-    return false
+    if (!flowGraphIndex.valveKeys.has(handleKey)) return false
+    return !traversableBoundaryKeys.has(handleKey)
   }
 
   private isFlowBoundaryObject(objectId: AcDbObjectId) {
-    const handleKeys = handleKeysFromObjectId(objectId)
-    if (handleKeys.some(handleKey => flowBoundaryHandleKeys.has(handleKey))) {
-      return true
-    }
-
-    const db = AcApDocManager.instance.curDocument?.database
-    const entity = db?.tables.blockTable.getEntityById(objectId) as
-      | LayerNamedEntity
-      | undefined
-    const layerName = entity?.layer ?? entity?.layerName
-    return isFlowBoundaryLayerName(layerName)
+    return handleKeysFromObjectId(objectId).some(handleKey => {
+      const normalized = normalizeFlowHandle(handleKey)
+      return normalized ? flowGraphIndex.valveKeys.has(normalized) : false
+    })
   }
 
   private resolveObjectIdByHandleKey(handleKey: string) {
@@ -3569,7 +3247,7 @@ class CadViewerApp {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
       const traversal = this.isFlowBoundaryObject(ownerId)
         ? this.getFlowConnectionTraversal(ownerId)
-        : { connectedHandles: new Set<number>(), traversalEdges: [] }
+        : { connectedHandles: new Set<number>() }
       this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
       this.openHighlightGroups.set(
         ownerId,
@@ -3686,7 +3364,7 @@ class CadViewerApp {
       )
       const highlightedIds = ownerId
         ? this.openHighlightGroups.get(ownerId) ??
-          this.getOpenHighlightObjectIds(ownerId)
+        this.getOpenHighlightObjectIds(ownerId)
         : new Set([entityId])
       highlightedIds.forEach(id => entityStyles.set(String(id), style))
     })
@@ -3984,7 +3662,7 @@ class CadViewerApp {
         }
         const traversal = this.isFlowBoundaryObject(ownerId)
           ? this.getFlowConnectionTraversal(ownerId)
-          : { connectedHandles: new Set<number>(), traversalEdges: [] }
+          : { connectedHandles: new Set<number>() }
         this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
         this.openHighlightGroups.set(
           ownerId,

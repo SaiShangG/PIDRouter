@@ -20,7 +20,7 @@ const nodeStatus = (
 }
 
 const edgeKey = (left: string, right: string) =>
-  `${left}|${right}`
+  left.localeCompare(right) <= 0 ? `${left}|${right}` : `${right}|${left}`
 
 const valveState = (
   states: ValveRuntimeStateInput,
@@ -30,7 +30,7 @@ const valveState = (
   return states.has(key) ? 'open' : 'closed'
 }
 
-/** Traverses one valve through outgoing connections and returns a debug tree. */
+/** Traverses one valve through the undirected Document graph. */
 export const traverseFlowFromValve = (
   graph: FlowGraphIndex,
   startKey: string,
@@ -117,7 +117,7 @@ export const traverseFlowFromValve = (
         continue
       }
 
-      if (neighbor.kind === 'line') highlighted.add(neighborKey)
+      highlighted.add(neighborKey)
       queue.push({ key: neighborKey, tree: child })
     }
   }
