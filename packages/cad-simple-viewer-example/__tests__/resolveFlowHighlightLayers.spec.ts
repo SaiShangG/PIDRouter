@@ -35,18 +35,20 @@ describe('resolveFlowHighlightLayers', () => {
       id: 'water-path',
       name: 'Water path',
       handleKeys: ['shared'],
+      priority: 20,
       styleSource: { kind: 'utility', utilityId: 'water' }
     }
     const steam: FlowPathStatus = {
       id: 'steam-path',
       name: 'Steam path',
       handleKeys: ['shared'],
+      priority: 10,
       styleSource: { kind: 'utility', utilityId: 'steam' }
     }
     return { profile, water, steam }
   }
 
-  it('preserves independent Utility styles in valve-open order', () => {
+  it('selects the highest-priority flow style for a shared entity', () => {
     const { profile, water, steam } = createFixture()
 
     expect(resolveFlowHighlightLayers(profile, [water, steam])).toEqual([
@@ -59,27 +61,23 @@ describe('resolveFlowHighlightLayers', () => {
           opacity: 0.7,
           source: 'utility'
         })
-      },
-      {
-        id: 'steam-path',
-        renderOrder: 10001,
-        style: expect.objectContaining({
-          color: 0xef6c00,
-          lineWidthPx: 5,
-          opacity: 0.45,
-          source: 'utility'
-        })
       }
     ])
   })
 
-  it('removes a closed path and moves a reopened path to the top', () => {
+  it('uses a stable ID tie-breaker when priorities match', () => {
+    const { profile, water, steam } = createFixture()
+    const equalPriorityWater = { ...water, priority: 10 }
+
+    expect(resolveFlowHighlightLayers(profile, [steam, equalPriorityWater])
+      .map(layer => layer.id)).toEqual(['steam-path'])
+  })
+
+  it('uses the active flow path before priority', () => {
     const { profile, water, steam } = createFixture()
 
-    expect(resolveFlowHighlightLayers(profile, [steam]).map(layer => layer.id))
-      .toEqual(['steam-path'])
-    expect(resolveFlowHighlightLayers(profile, [steam, water]).map(layer => layer.id))
-      .toEqual(['steam-path', 'water-path'])
+    expect(resolveFlowHighlightLayers(profile, [water, steam], undefined, undefined, 'steam-path')
+      .map(layer => layer.id)).toEqual(['steam-path'])
   })
 
   it('collapses flow layers when a configured device style has precedence', () => {

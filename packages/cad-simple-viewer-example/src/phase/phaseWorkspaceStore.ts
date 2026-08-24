@@ -393,8 +393,7 @@ const normalizeFlowPaths = (
                 : undefined
           }
           : undefined
-    return [
-      {
+    return [{
         id:
           typeof candidate.id === 'string' && candidate.id
             ? candidate.id
@@ -408,11 +407,14 @@ const normalizeFlowPaths = (
             (handle): handle is string => typeof handle === 'string'
           )
           : [],
+        ...(typeof candidate.priority === 'number' &&
+        Number.isFinite(candidate.priority)
+          ? { priority: candidate.priority }
+          : {}),
         styleSource,
         utilityId,
         styleOverride
-      }
-    ]
+      }]
   })
 }
 

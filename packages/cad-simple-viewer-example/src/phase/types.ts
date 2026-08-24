@@ -50,6 +50,7 @@ export interface FlowPathStatus {
   id: string
   name: string
   handleKeys: string[]
+  priority?: number
   styleSource?: FlowPathStyleSource
   utilityId?: string
   styleOverride?: Partial<HighlightStyle>
@@ -81,6 +82,7 @@ export interface DeviceState {
 
 export interface FlowStateSnapshot {
   flowPaths: FlowPathStatus[]
+  activeFlowPathId?: string
   deviceStates?: Record<string, DeviceState>
 }
 

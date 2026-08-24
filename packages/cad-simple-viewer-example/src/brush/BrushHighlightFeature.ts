@@ -15,7 +15,10 @@ export interface BrushHighlightOverlay {
 
 export interface BrushHighlightFeatureOptions {
   getView(): AcEdBaseView | undefined
-  getHighlightStyle(): ResolvedEntityPresentation
+  getHighlightStyle(
+    objectId?: AcDbObjectId,
+    fallbackStyle?: ResolvedEntityPresentation
+  ): ResolvedEntityPresentation
   createOverlay(
     objectIds: readonly AcDbObjectId[],
     style: ResolvedEntityPresentation
@@ -281,7 +284,12 @@ export class BrushHighlightFeature {
       if (!style) return
       const idsToHighlight = ids.filter(id => !this.brushStyles.has(id))
       if (idsToHighlight.length === 0) return
-      idsToHighlight.forEach(id => this.brushStyles.set(id, style))
+      idsToHighlight.forEach(id => {
+        this.brushStyles.set(
+          id,
+          this.options.getHighlightStyle(id, style)
+        )
+      })
       this.syncOverlays()
       return
     }

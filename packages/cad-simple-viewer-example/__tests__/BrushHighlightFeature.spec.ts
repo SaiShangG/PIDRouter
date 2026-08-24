@@ -268,4 +268,45 @@ describe('BrushHighlightFeature', () => {
     )
     feature.dispose()
   })
+
+  it('uses an object-specific valve style while painting the surrounding flow', () => {
+    const { canvas, view, overlays } = createView()
+    const flowStyle: ResolvedEntityPresentation = {
+      key: 'flow',
+      color: 0x112233,
+      lineWidthPx: 3,
+      opacity: 1,
+      visible: true,
+      source: 'utility'
+    }
+    const valveStyle: ResolvedEntityPresentation = {
+      key: 'valve',
+      color: 0x445566,
+      lineWidthPx: 4,
+      opacity: 1,
+      visible: true,
+      source: 'device'
+    }
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getHighlightStyle: (objectId, fallbackStyle) =>
+        objectId === 'B' ? valveStyle : fallbackStyle ?? flowStyle,
+      createOverlay: (ids, style) => {
+        const overlay = { ids: [...ids], style, disposed: false }
+        overlays.push(overlay)
+        return { dispose: () => { overlay.disposed = true } }
+      }
+    })
+
+    feature.activate('paint')
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
+
+    const activeOverlays = overlays.filter(item => !item.disposed)
+    expect(activeOverlays).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ids: ['B'], style: valveStyle })
+    ]))
+    expect(feature.highlightedIds).toEqual(['B'])
+    feature.dispose()
+  })
 })

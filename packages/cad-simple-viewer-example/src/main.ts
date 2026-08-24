@@ -902,6 +902,7 @@ class CadViewerApp {
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
   private openHighlightConnections = new Map<AcDbObjectId, Set<number>>()
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
+  private activeFlowPathId?: string
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
   private pendingValveStyleSources = new Map<string, FlowPathStyleSource>()
   private readonly phasePresentationController = new PhasePresentationController()
@@ -2129,7 +2130,18 @@ class CadViewerApp {
   private setupBrushHighlightFeature() {
     this.brushHighlightFeature = new BrushHighlightFeature({
       getView: () => AcApDocManager.instance.curView,
-      getHighlightStyle: () => this.resolveBrushHighlightStyle(),
+      getHighlightStyle: (objectId, fallbackStyle) => {
+        const deviceState = objectId
+          ? this.valveDeviceStates.get(objectId)
+          : undefined
+        if (deviceState) {
+          return resolveEntityPresentation(
+            this.getActivePresentationProfile(),
+            { deviceState }
+          )
+        }
+        return fallbackStyle ?? this.resolveBrushHighlightStyle()
+      },
       createOverlay: (objectIds, style) =>
         this.createBrushHighlightOverlay(objectIds, style),
       setOperationCursor: (view, operation) => {
@@ -3603,12 +3615,12 @@ class CadViewerApp {
 
   private getOpenFlowBoundaryKeys() {
     const keys = getOpenValveHandleKeys(this.valveDeviceStates.values())
-    ;[...keys].forEach(handleKey => {
-      const handle = Number.parseInt(handleKey, 16)
-      if (Number.isFinite(handle)) {
-        handleKeysFromNumber(handle).forEach(alias => keys.add(alias))
-      }
-    })
+      ;[...keys].forEach(handleKey => {
+        const handle = Number.parseInt(handleKey, 16)
+        if (Number.isFinite(handle)) {
+          handleKeysFromNumber(handle).forEach(alias => keys.add(alias))
+        }
+      })
     return keys
   }
 
@@ -3717,6 +3729,7 @@ class CadViewerApp {
       this.pendingValveStyleSources.delete(handleKey)
       return
     }
+    this.removeOpenHighlightRootsForIds(new Set([ownerId]))
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
       label: this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ?? handleKey,
@@ -3752,6 +3765,24 @@ class CadViewerApp {
     })
     this.recomputeOpenHighlightGroups()
     this.captureLoadedPhaseState()
+  }
+
+  private removeOpenHighlightRootsForIds(ids: ReadonlySet<AcDbObjectId>) {
+    let removedHighlight = false
+    ids.forEach(id => {
+      const roots = this.openHighlightRoots.get(id)
+      if (!roots) return
+      roots.forEach(root => {
+        root.removeFromParent()
+        this.disposePreviewRoot(root)
+      })
+      this.openHighlightRoots.delete(id)
+      removedHighlight = true
+    })
+    if (removedHighlight) {
+      AcApDocManager.instance.curView.isDirty = true
+    }
+    return removedHighlight
   }
 
   private recomputeOpenHighlightGroups() {
@@ -3849,20 +3880,36 @@ class CadViewerApp {
     const flowState = this.getLoadedFlowState()
     if (!draft || !flowState) return []
     const entityStyles = new Map<string, ResolvedEntityPresentation>()
+    const flowPathsByEntity = new Map<string, FlowPathStatus[]>()
     for (const flowPath of flowState.flowPaths) {
       flowPath.handleKeys.forEach(handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
         if (!ownerId) return
-        const style = resolveEntityPresentation(draft.presentationProfile, {
-          flowPath
-        })
-        if (!style.visible) return
-        const highlightedIds =
-          this.openHighlightGroups.get(ownerId) ??
-          this.getOpenHighlightObjectIds(ownerId)
-        highlightedIds.forEach(id => entityStyles.set(String(id), style))
+        const key = String(ownerId)
+        const paths = flowPathsByEntity.get(key) ?? []
+        paths.push(flowPath)
+        flowPathsByEntity.set(key, paths)
       })
     }
+    flowPathsByEntity.forEach((flowPaths, entityId) => {
+      const layers = resolveFlowHighlightLayers(
+        draft.presentationProfile,
+        flowPaths,
+        undefined,
+        undefined,
+        flowState.activeFlowPathId
+      )
+      const style = layers[0]?.style
+      if (!style?.visible) return
+      const ownerId = [...this.openHighlightGroups.keys()].find(
+        candidateId => String(candidateId) === entityId
+      )
+      const highlightedIds = ownerId
+        ? this.openHighlightGroups.get(ownerId) ??
+          this.getOpenHighlightObjectIds(ownerId)
+        : new Set([entityId])
+      highlightedIds.forEach(id => entityStyles.set(String(id), style))
+    })
     Object.values(flowState.deviceStates ?? {}).forEach(deviceState => {
       const objectId = this.resolveObjectIdByHandleKey(deviceState.key)
       if (!objectId) return
@@ -3971,6 +4018,15 @@ class CadViewerApp {
     }))
   }
 
+  private captureActiveFlowPathId() {
+    return this.activeFlowPathId &&
+      [...this.openHighlightPaths.values()].some(
+        flowPath => flowPath.id === this.activeFlowPathId
+      )
+      ? this.activeFlowPathId
+      : undefined
+  }
+
   private captureDeviceStates(): Record<string, DeviceState> | undefined {
     const entries = [...this.valveDeviceStates.values()].map(deviceState => [
       deviceState.key,
@@ -3992,7 +4048,13 @@ class CadViewerApp {
       const flowPath = this.openHighlightPaths.get(ownerId)
       if (flowPath) flowPaths.push(flowPath)
     })
-    return resolveFlowHighlightLayers(profile, flowPaths, deviceState)
+    return resolveFlowHighlightLayers(
+      profile,
+      flowPaths,
+      deviceState,
+      undefined,
+      this.activeFlowPathId
+    )
   }
 
   private removeOpenHighlight(ids?: AcDbObjectId[]) {
@@ -4003,20 +4065,15 @@ class CadViewerApp {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
       this.openHighlightPaths.clear()
+      this.activeFlowPathId = undefined
       this.valveDeviceStates.clear()
       this.pendingValveStyleSources.clear()
     }
 
     idsToRemove.forEach(id => {
-      const roots = this.openHighlightRoots.get(id)
-      if (!roots) return
-
-      roots.forEach(root => {
-        root.removeFromParent()
-        this.disposePreviewRoot(root)
-      })
-      this.openHighlightRoots.delete(id)
-      removedHighlight = true
+      if (this.removeOpenHighlightRootsForIds(new Set([id]))) {
+        removedHighlight = true
+      }
     })
 
     if (removedHighlight) {
@@ -4037,6 +4094,9 @@ class CadViewerApp {
     const nextState = {
       flowState: {
         flowPaths: this.captureFlowPaths(),
+        ...(this.captureActiveFlowPathId()
+          ? { activeFlowPathId: this.captureActiveFlowPathId() }
+          : {}),
         ...(this.captureDeviceStates()
           ? { deviceStates: this.captureDeviceStates() }
           : {})
@@ -4134,6 +4194,7 @@ class CadViewerApp {
       this.valveDeviceStates.set(ownerId, { ...deviceState })
       if (deviceState.mode === 'open') restoredValveKeys.add(deviceState.key)
     })
+    this.activeFlowPathId = phase.flowState.activeFlowPathId
     phase.flowState.flowPaths.forEach(flowPath => {
       flowPath.handleKeys.forEach(handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)

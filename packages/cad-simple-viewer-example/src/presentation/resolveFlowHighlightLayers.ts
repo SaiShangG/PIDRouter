@@ -8,6 +8,7 @@ import {
   type ResolvedEntityPresentation,
   resolveEntityPresentation
 } from './presentationStyleResolver'
+import { resolvePrimaryFlowHighlight } from './resolveEntityHighlight'
 
 const FLOW_HIGHLIGHT_RENDER_ORDER = 10000
 
@@ -21,7 +22,8 @@ export const resolveFlowHighlightLayers = (
   profile: PresentationProfile,
   flowPaths: readonly FlowPathStatus[],
   deviceState?: DeviceState,
-  diagnosticStyle?: HighlightStyle
+  diagnosticStyle?: HighlightStyle,
+  activeFlowPathId?: string
 ): FlowHighlightLayer[] => {
   const overridingStyle = resolveEntityPresentation(profile, {
     deviceState,
@@ -45,9 +47,19 @@ export const resolveFlowHighlightLayers = (
       : []
   }
 
-  return flowPaths.map((flowPath, index) => ({
-    id: flowPath.id,
-    renderOrder: FLOW_HIGHLIGHT_RENDER_ORDER + index,
-    style: resolveEntityPresentation(profile, { flowPath })
-  }))
+  const primaryFlow = resolvePrimaryFlowHighlight(
+    flowPaths.map(flowPath => ({
+      flowPathId: flowPath.id,
+      priority: flowPath.priority ?? 0,
+      style: resolveEntityPresentation(profile, { flowPath })
+    })),
+    activeFlowPathId
+  )
+  return primaryFlow
+    ? [{
+      id: primaryFlow.flowPathId,
+      renderOrder: FLOW_HIGHLIGHT_RENDER_ORDER,
+      style: primaryFlow.style
+    }]
+    : []
 }
