@@ -27,6 +27,7 @@ export interface BrushHighlightFeatureOptions {
   radiusPx?: number
   sampleSpacingPx?: number
   onActiveChanged?(): void
+  onEntitiesChanged?(operation: BrushOperation, objectIds: readonly AcDbObjectId[]): void
 }
 
 const DEFAULT_RADIUS_PX = 8
@@ -47,6 +48,7 @@ export class BrushHighlightFeature {
   private previousCursor?: AcEdCorsorType
   private pointerId?: number
   private strokeStyle?: ResolvedEntityPresentation
+  private readonly strokeHitIds = new Set<AcDbObjectId>()
   private lastCanvasPoint?: { x: number; y: number }
   private disposed = false
 
@@ -201,6 +203,7 @@ export class BrushHighlightFeature {
     }
     this.suppressEvent(event)
     this.pointerId = event.pointerId
+    this.strokeHitIds.clear()
     this.strokeStyle =
       this.operation === 'paint' ? this.options.getHighlightStyle() : undefined
     this.lastCanvasPoint = this.toCanvasPoint(event)
@@ -291,13 +294,18 @@ export class BrushHighlightFeature {
         )
       })
       this.syncOverlays()
+      this.options.onEntitiesChanged?.('paint', idsToHighlight)
       return
     }
 
     const idsToErase = ids.filter(id => this.brushStyles.has(id))
-    if (idsToErase.length === 0) return
     idsToErase.forEach(id => this.brushStyles.delete(id))
-    this.syncOverlays()
+    if (idsToErase.length > 0) this.syncOverlays()
+    const idsToReport = ids.filter(id => !this.strokeHitIds.has(id))
+    idsToReport.forEach(id => this.strokeHitIds.add(id))
+    if (idsToReport.length > 0) {
+      this.options.onEntitiesChanged?.('erase', idsToReport)
+    }
   }
 
   private syncOverlays() {

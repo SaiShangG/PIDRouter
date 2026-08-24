@@ -168,6 +168,40 @@ describe('BrushHighlightFeature', () => {
     expect(view.mode).toBe(SELECTION_VIEW_MODE)
   })
 
+  it('reports painted and erased hit objects to the host', () => {
+    const { canvas, view } = createView()
+    const changes: Array<{ operation: BrushOperation; ids: AcDbObjectId[] }> = []
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getHighlightStyle: () => ({
+        key: 'purple-flow',
+        color: 0x9c27b0,
+        lineWidthPx: 3.5,
+        opacity: 1,
+        visible: true,
+        source: 'default'
+      }),
+      createOverlay: () => null,
+      onEntitiesChanged: (operation, ids) => {
+        changes.push({ operation, ids: [...ids] })
+      }
+    })
+
+    feature.activate('paint')
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
+
+    feature.activate('erase')
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
+
+    expect(changes).toEqual([
+      { operation: 'paint', ids: ['A'] },
+      { operation: 'erase', ids: ['B'] }
+    ])
+    feature.dispose()
+  })
+
   it('does not remove a normal selection highlight while erasing', () => {
     const { canvas, view, overlays, selectionSet } = createView()
     const feature = new BrushHighlightFeature({

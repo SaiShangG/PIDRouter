@@ -412,6 +412,8 @@ class CadViewerApp {
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
   private activeFlowPathId?: string
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
+  private readonly manualHighlightedIds = new Set<AcDbObjectId>()
+  private readonly manualHiddenIds = new Set<AcDbObjectId>()
   private pendingValveStyleSources = new Map<string, FlowPathStyleSource>()
   private readonly phasePresentationController = new PhasePresentationController()
   private phaseStore = new PhaseWorkspaceStore()
@@ -1639,7 +1641,19 @@ class CadViewerApp {
   private setupBrushHighlightFeature() {
     this.brushHighlightFeature = new BrushHighlightFeature({
       getView: () => AcApDocManager.instance.curView,
-      getHighlightStyle: (objectId, fallbackStyle) => {
+      getHighlightStyle: objectId => {
+        const primaryValveHandle = objectId
+          ? this.getPrimaryFlowHandleForObject(objectId)
+          : undefined
+        if (primaryValveHandle) {
+          return resolveEntityPresentation(this.getActivePresentationProfile(), {
+            deviceState: {
+              key: primaryValveHandle,
+              label: this.valveDebugFeature?.graph.nodes.get(primaryValveHandle)?.label ?? primaryValveHandle,
+              mode: 'open'
+            }
+          })
+        }
         const deviceState = objectId
           ? this.valveDeviceStates.get(objectId)
           : undefined
@@ -1649,12 +1663,15 @@ class CadViewerApp {
             { deviceState }
           )
         }
-        return fallbackStyle ?? this.resolveBrushHighlightStyle()
+        return this.resolveBrushHighlightStyle()
       },
       createOverlay: (objectIds, style) =>
         this.createBrushHighlightOverlay(objectIds, style),
       setOperationCursor: (view, operation) => {
         view.canvas.style.cursor = this.createBrushCursor(operation)
+      },
+      onEntitiesChanged: (operation, objectIds) => {
+        this.handleBrushEntitiesChanged(operation, objectIds)
       }
     })
     this.brushHighlightFeature.attach()
@@ -1757,6 +1774,43 @@ class CadViewerApp {
     return resolveEntityPresentation(profile, { flowPath })
   }
 
+  private handleBrushEntitiesChanged(
+    operation: BrushOperation,
+    objectIds: readonly AcDbObjectId[]
+  ) {
+    objectIds.forEach(objectId => {
+      if (operation === 'paint') {
+        this.manualHighlightedIds.add(objectId)
+        this.manualHiddenIds.delete(objectId)
+      } else {
+        this.manualHighlightedIds.delete(objectId)
+        this.manualHiddenIds.add(objectId)
+      }
+    })
+    this.syncOpenHighlightRoots()
+  }
+
+  private getPrimaryFlowHandleForObject(objectId: AcDbObjectId) {
+    for (const handleKey of handleKeysFromObjectId(objectId)) {
+      const normalized = normalizeFlowHandle(handleKey)
+      if (!normalized) continue
+      if (flowGraphIndex.valveKeys.has(normalized)) return normalized
+
+      const primary = flowGraphIndex.primaryHandleByCadHandle.get(normalized)
+      if (primary && flowGraphIndex.valveKeys.has(primary)) {
+        const valveObjectId = this.resolveObjectIdByHandleKey(primary)
+        if (valveObjectId === objectId) return primary
+      }
+    }
+    return undefined
+  }
+
+  private clearManualBrushState() {
+    this.manualHighlightedIds.clear()
+    this.manualHiddenIds.clear()
+    this.brushHighlightFeature?.reset()
+  }
+
   private createBrushHighlightOverlay(
     objectIds: readonly AcDbObjectId[],
     style: ResolvedEntityPresentation
@@ -1774,7 +1828,8 @@ class CadViewerApp {
     upgradePreviewWideLines(root, style, view.width, view.height)
     this.phasePresentationController.apply(
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
-      style
+      style,
+      20000
     )
       ; (layout.internalObject as LayoutObjectHost).add(root)
     view.isDirty = true
@@ -3497,8 +3552,31 @@ class CadViewerApp {
     objectId: AcDbObjectId,
     draft = this.getLoadedHighlightStyleDraft()
   ): FlowHighlightLayer[] {
+    if (this.manualHiddenIds.has(objectId)) return []
     const profile =
       draft?.presentationProfile ?? createDefaultPresentationProfile()
+    if (this.manualHighlightedIds.has(objectId)) {
+      const primaryValveHandle = this.getPrimaryFlowHandleForObject(objectId)
+      if (primaryValveHandle) {
+        const style = resolveEntityPresentation(profile, {
+          deviceState: {
+            key: primaryValveHandle,
+            label: this.valveDebugFeature?.graph.nodes.get(primaryValveHandle)?.label ?? primaryValveHandle,
+            mode: 'open'
+          }
+        })
+        return [{
+          id: `manual:valve:${objectId}`,
+          renderOrder: 20000,
+          style
+        }]
+      }
+      return [{
+        id: `manual:brush:${objectId}`,
+        renderOrder: 20000,
+        style: this.resolveBrushHighlightStyle()
+      }]
+    }
     const deviceState = this.valveDeviceStates.get(objectId)
     const flowPaths: FlowPathStatus[] = []
     this.openHighlightGroups.forEach((group, ownerId) => {
@@ -3980,7 +4058,7 @@ class CadViewerApp {
 
   private resetPhaseRuntimeState(preserveHighlightRoots = false) {
     this.valveDebugFeature?.reset()
-    this.brushHighlightFeature?.reset()
+    this.clearManualBrushState()
     if (preserveHighlightRoots) {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
