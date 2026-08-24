@@ -80,6 +80,15 @@ export const clonePresentationProfile = (
 const cloneFlowPath = (flowPath: FlowPathStatus): FlowPathStatus => ({
   ...flowPath,
   handleKeys: [...flowPath.handleKeys],
+  styleSource:
+    flowPath.styleSource?.kind === 'custom'
+      ? {
+        kind: 'custom',
+        style: cloneHighlightStyle(flowPath.styleSource.style)
+      }
+      : flowPath.styleSource
+        ? { ...flowPath.styleSource }
+        : undefined,
   styleOverride: flowPath.styleOverride
     ? { ...flowPath.styleOverride }
     : undefined
@@ -269,29 +278,29 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
   const seenUtilityIds = new Set<string>()
   const utilities = Array.isArray(value.utilities)
     ? value.utilities.flatMap((candidate, index) => {
-        if (!isRecord(candidate)) return []
-        const baseId =
-          typeof candidate.id === 'string' && candidate.id.trim()
-            ? candidate.id.trim()
-            : `utility-${index + 1}`
-        let id = baseId
-        let suffix = 2
-        while (seenUtilityIds.has(id)) id = `${baseId}-${suffix++}`
-        seenUtilityIds.add(id)
-        return [
-          {
-            id,
-            name:
-              typeof candidate.name === 'string' && candidate.name.trim()
-                ? candidate.name.trim()
-                : id,
-            style: normalizeStyle(candidate.style, defaults.defaultFlowStyle),
-            enabled:
-              typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
-            order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
-          }
-        ]
-      })
+      if (!isRecord(candidate)) return []
+      const baseId =
+        typeof candidate.id === 'string' && candidate.id.trim()
+          ? candidate.id.trim()
+          : `utility-${index + 1}`
+      let id = baseId
+      let suffix = 2
+      while (seenUtilityIds.has(id)) id = `${baseId}-${suffix++}`
+      seenUtilityIds.add(id)
+      return [
+        {
+          id,
+          name:
+            typeof candidate.name === 'string' && candidate.name.trim()
+              ? candidate.name.trim()
+              : id,
+          style: normalizeStyle(candidate.style, defaults.defaultFlowStyle),
+          enabled:
+            typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
+          order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
+        }
+      ]
+    })
     : []
   const dimmedBaseStyle = isRecord(value.dimmedBaseStyle)
     ? value.dimmedBaseStyle
@@ -348,6 +357,23 @@ const normalizeFlowPaths = (
     const styleOverride = isRecord(candidate.styleOverride)
       ? normalizeStyle(candidate.styleOverride, profile.defaultFlowStyle)
       : undefined
+    const source = isRecord(candidate.styleSource) ? candidate.styleSource : {}
+    const styleSource =
+      source.kind === 'custom'
+        ? {
+          kind: 'custom' as const,
+          style: normalizeStyle(source.style, profile.defaultFlowStyle)
+        }
+        : source.kind === 'utility'
+          ? {
+            kind: 'utility' as const,
+            utilityId:
+              typeof source.utilityId === 'string' &&
+                utilityIds.has(source.utilityId)
+                ? source.utilityId
+                : undefined
+          }
+          : undefined
     return [
       {
         id:
@@ -360,9 +386,10 @@ const normalizeFlowPaths = (
             : `${DEFAULT_FLOW_PATH_NAME} ${index + 1}`,
         handleKeys: Array.isArray(candidate.handleKeys)
           ? candidate.handleKeys.filter(
-              (handle): handle is string => typeof handle === 'string'
-            )
+            (handle): handle is string => typeof handle === 'string'
+          )
           : [],
+        styleSource,
         utilityId,
         styleOverride
       }
@@ -376,10 +403,10 @@ const migrateDrawing = (
 ): PhaseDrawingAssociation =>
   drawingAssets[phase.drawingAssetId]
     ? {
-        kind: 'assigned',
-        assetId: phase.drawingAssetId,
-        displayName: phase.drawingDisplayName
-      }
+      kind: 'assigned',
+      assetId: phase.drawingAssetId,
+      displayName: phase.drawingDisplayName
+    }
     : { kind: 'unassigned' }
 
 const migratePhase = (
@@ -394,12 +421,12 @@ const migratePhase = (
   flowState: {
     flowPaths: phase.flowState.openBoundaryHandleKeys.length
       ? [
-          {
-            id: `flow-default-${phase.id}`,
-            name: DEFAULT_FLOW_PATH_NAME,
-            handleKeys: [...phase.flowState.openBoundaryHandleKeys]
-          }
-        ]
+        {
+          id: `flow-default-${phase.id}`,
+          name: DEFAULT_FLOW_PATH_NAME,
+          handleKeys: [...phase.flowState.openBoundaryHandleKeys]
+        }
+      ]
       : []
   },
   createdAt: phase.createdAt,
@@ -464,39 +491,39 @@ const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => (
 })
 
 const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => ({
-      version: PHASE_WORKSPACE_SCHEMA_VERSION,
-      activeProcessId: legacy.activeProcessId,
-      drawingAssets: Object.fromEntries(
-        Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
-      ),
-      processes: legacy.processes.map(process => ({
-        ...process,
-        presentationProfile: createDefaultPresentationProfile(),
-        sequences: process.sequences.map(sequence => ({
-          ...sequence,
-          phases: sequence.phases.map(phase => ({
-            id: phase.id,
-            number: phase.number,
-            name: phase.name,
-            drawing: { ...phase.drawing },
-            sourcePhaseId: phase.sourcePhaseId,
-            flowState: {
-              flowPaths: phase.flowState.openBoundaryHandleKeys.length
-                ? [
-                    {
-                      id: `flow-default-${phase.id}`,
-                      name: DEFAULT_FLOW_PATH_NAME,
-                      handleKeys: [...phase.flowState.openBoundaryHandleKeys]
-                    }
-                  ]
-                : []
-            },
-            createdAt: phase.createdAt,
-            updatedAt: phase.updatedAt
-          }))
-        }))
+  version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  activeProcessId: legacy.activeProcessId,
+  drawingAssets: Object.fromEntries(
+    Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
+  ),
+  processes: legacy.processes.map(process => ({
+    ...process,
+    presentationProfile: createDefaultPresentationProfile(),
+    sequences: process.sequences.map(sequence => ({
+      ...sequence,
+      phases: sequence.phases.map(phase => ({
+        id: phase.id,
+        number: phase.number,
+        name: phase.name,
+        drawing: { ...phase.drawing },
+        sourcePhaseId: phase.sourcePhaseId,
+        flowState: {
+          flowPaths: phase.flowState.openBoundaryHandleKeys.length
+            ? [
+              {
+                id: `flow-default-${phase.id}`,
+                name: DEFAULT_FLOW_PATH_NAME,
+                handleKeys: [...phase.flowState.openBoundaryHandleKeys]
+              }
+            ]
+            : []
+        },
+        createdAt: phase.createdAt,
+        updatedAt: phase.updatedAt
       }))
-    })
+    }))
+  }))
+})
 
 const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
   ...state,
@@ -853,6 +880,13 @@ export class PhaseWorkspaceStore {
         for (const flowPath of phase.flowState.flowPaths) {
           if (flowPath.utilityId && !utilityIds.has(flowPath.utilityId)) {
             delete flowPath.utilityId
+          }
+          if (
+            flowPath.styleSource?.kind === 'utility' &&
+            flowPath.styleSource.utilityId &&
+            !utilityIds.has(flowPath.styleSource.utilityId)
+          ) {
+            delete flowPath.styleSource.utilityId
           }
         }
       }

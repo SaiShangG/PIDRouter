@@ -30,6 +30,10 @@ export interface UtilityStyleDefinition {
   order: number
 }
 
+export type FlowPathStyleSource =
+  | { kind: 'utility'; utilityId?: string }
+  | { kind: 'custom'; style: HighlightStyle }
+
 export interface PresentationProfile {
   defaultFlowStyle: HighlightStyle
   unknownDeviceStyle: HighlightStyle | null
@@ -46,6 +50,7 @@ export interface FlowPathStatus {
   id: string
   name: string
   handleKeys: string[]
+  styleSource?: FlowPathStyleSource
   utilityId?: string
   styleOverride?: Partial<HighlightStyle>
 }

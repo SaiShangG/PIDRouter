@@ -123,7 +123,7 @@ export function injectPhaseWorkspaceStyles() {
     .flow-style-row { grid-template-columns: minmax(110px, 1fr) minmax(130px, .8fr) minmax(150px, 1.3fr) auto; }
     .flow-style-row > .highlight-checkbox { grid-column: 1 / 3; }
     .utility-style-row { grid-template-columns: minmax(130px, 1fr) auto minmax(220px, 1.4fr) repeat(3, 28px); }
-    .highlight-style-controls { display: grid; grid-template-columns: 34px minmax(82px, 1fr) 68px 20px; align-items: center; gap: 6px; min-width: 0; }
+    .highlight-style-controls { display: grid; grid-template-columns: 34px minmax(82px, 1fr) 62px 68px 20px; align-items: center; gap: 6px; min-width: 0; }
     .phase-workspace .highlight-style-controls input[type='color'], .phase-workspace-modal .highlight-style-controls input[type='color'] { width: 34px; min-height: 30px; padding: 2px; }
     .phase-workspace .highlight-style-controls input[type='checkbox'], .phase-workspace .highlight-checkbox input[type='checkbox'], .phase-workspace-modal .highlight-style-controls input[type='checkbox'], .phase-workspace-modal .highlight-checkbox input[type='checkbox'] { width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
     .highlight-checkbox { display: inline-flex; align-items: center; gap: 6px; color: #53676e; font-size: 11px; font-weight: 650; }
@@ -132,6 +132,20 @@ export function injectPhaseWorkspaceStyles() {
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }
     .highlight-default-field { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.2fr); align-items: center; gap: 12px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; font-weight: 650; }
     .highlight-style-actions { padding: 10px 16px 16px; border-top: 1px solid #dbe3e5; }
+    .style-source-dialog { width: min(560px, 100%); }
+    .style-source-body { display: grid; gap: 16px; padding: 16px; }
+    .style-source-segments { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border: 1px solid #cbd7d9; border-radius: 6px; background: #eef3f3; }
+    .phase-workspace-modal .style-source-segments button { border: 0; background: transparent; color: #53676e; font-size: 12px; font-weight: 700; }
+    .phase-workspace-modal .style-source-segments button[aria-checked='true'] { color: #fff; background: var(--app-accent, #087b58); }
+    .style-source-controls { display: grid; gap: 12px; }
+    .style-source-controls > label { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 12px; color: #53676e; font-size: 12px; font-weight: 650; }
+    .style-source-color-inputs, .style-source-range-inputs { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 8px; }
+    .style-source-range-inputs { grid-template-columns: minmax(0, 1fr) 48px; }
+    .phase-workspace-modal .style-source-color-inputs input[type='color'] { width: 44px; padding: 2px; }
+    .style-source-range-inputs output { color: #263b42; font: 12px/1.2 "IBM Plex Mono", monospace; text-align: right; }
+    .style-source-preview { display: grid; grid-template-columns: minmax(80px, 1fr) auto; align-items: center; gap: 12px; min-height: 46px; padding: 10px 12px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; }
+    .style-source-preview > span:first-child { display: block; min-height: 1px; border-radius: 1px; }
+    .style-source-actions { padding: 10px 16px 16px; border-top: 1px solid #dbe3e5; }
     .phase-workspace [hidden] { display: none; }
     @media (max-width: 600px) {
       .phase-workspace-modal { align-items: end; padding: 10px; }
@@ -141,9 +155,11 @@ export function injectPhaseWorkspaceStyles() {
       .highlight-style-content { min-height: 240px; padding: 10px; }
       .flow-style-row, .utility-style-row, .highlight-device-row, .highlight-default-field { grid-template-columns: 1fr; }
       .flow-style-row > .highlight-checkbox { grid-column: auto; }
-      .highlight-style-controls { grid-template-columns: 34px minmax(80px, 1fr) 64px 20px; }
+      .highlight-style-controls { grid-template-columns: 34px minmax(80px, 1fr) 58px 64px 20px; }
       .highlight-style-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
       .highlight-style-actions button { min-width: 0; }
+      .style-source-segments { grid-auto-flow: row; }
+      .style-source-controls > label { grid-template-columns: 1fr; }
     }
   `
   document.head.append(style)

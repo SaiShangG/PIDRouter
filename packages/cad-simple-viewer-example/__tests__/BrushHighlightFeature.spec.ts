@@ -231,4 +231,41 @@ describe('BrushHighlightFeature', () => {
     expect(activeOverlay[activeOverlay.length - 1]?.style.color).toBe(0x9c27b0)
     feature.dispose()
   })
+
+  it('freezes the style for each stroke when presets change', () => {
+    const { canvas, view, overlays } = createView()
+    let color = 0x112233
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getHighlightStyle: () => ({
+        key: color.toString(16),
+        color,
+        lineWidthPx: 3,
+        opacity: 1,
+        visible: true,
+        source: 'utility'
+      }),
+      createOverlay: (ids, style) => {
+        const overlay = { ids: [...ids], style, disposed: false }
+        overlays.push(overlay)
+        return { dispose: () => { overlay.disposed = true } }
+      }
+    })
+
+    feature.activate('paint')
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
+    color = 0x445566
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
+
+    const activeOverlays = overlays.filter(item => !item.disposed)
+    expect(activeOverlays).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ids: ['A'], style: expect.objectContaining({ color: 0x112233 }) }),
+        expect.objectContaining({ ids: ['B'], style: expect.objectContaining({ color: 0x445566 }) })
+      ])
+    )
+    feature.dispose()
+  })
 })

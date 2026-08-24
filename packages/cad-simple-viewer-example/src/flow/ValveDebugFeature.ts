@@ -33,6 +33,12 @@ export interface ValveDebugFeatureOptions {
   zoomToObject?(objectId: AcDbObjectId): boolean
   getLabels(locale: ValveDebugLocale): ValveDebugPanelLabels
   getLocale(): ValveDebugLocale
+  requestStateChange?(
+    handleKey: string,
+    state: ValveRuntimeState
+  ): boolean | Promise<boolean>
+  onStateChanged?(handleKey: string, state: ValveRuntimeState): void
+  renderPathOverlay?: boolean
 }
 
 const MENU_STYLE_ID = 'valve-debug-context-menu-styles'
@@ -176,11 +182,11 @@ export class ValveDebugFeature {
     this.menuActions.className = 'valve-debug-context-menu-actions'
     this.openMenuAction = this.createMenuAction('open', () => {
       const key = this.openMenuAction.dataset.handleKey
-      if (key) this.setValveState(key, 'open')
+      if (key) this.requestValveState(key, 'open')
     })
     this.closeMenuAction = this.createMenuAction('close', () => {
       const key = this.closeMenuAction.dataset.handleKey
-      if (key) this.setValveState(key, 'closed')
+      if (key) this.requestValveState(key, 'closed')
     })
     this.menuActions.append(this.openMenuAction, this.closeMenuAction)
     this.contextMenu.append(this.menuTitle, this.menuActions)
@@ -215,6 +221,16 @@ export class ValveDebugFeature {
     this.disposePathOverlay()
     this.disposeLocatorOverlay()
     this.renderPanel()
+  }
+
+  restoreOpenStates(handleKeys: readonly string[]) {
+    this.states.clear()
+    handleKeys.forEach(key => {
+      if (this.graph.valveKeys.has(key)) this.states.set(key, 'open')
+    })
+    const restoredKeys = [...this.states.keys()]
+    this.activeKey = restoredKeys[restoredKeys.length - 1]
+    this.recomputeResults()
   }
 
   setLocale(locale: ValveDebugLocale) {
@@ -315,6 +331,23 @@ export class ValveDebugFeature {
     this.activeKey = key
     this.closeMenu()
     this.recomputeResults()
+    this.options.onStateChanged?.(key, state)
+  }
+
+  private requestValveState(key: string, state: ValveRuntimeState) {
+    if (this.states.get(key) === state) {
+      this.closeMenu()
+      return
+    }
+    const confirmation = this.options.requestStateChange?.(key, state)
+    this.closeMenu()
+    if (confirmation instanceof Promise) {
+      void confirmation.then(confirmed => {
+        if (confirmed && !this.disposed) this.setValveState(key, state)
+      })
+      return
+    }
+    if (confirmation !== false) this.setValveState(key, state)
   }
 
   private createMenuAction(action: 'open' | 'close', onClick: () => void) {
@@ -353,6 +386,7 @@ export class ValveDebugFeature {
 
   private renderHighlights() {
     this.disposePathOverlay()
+    if (this.options.renderPathOverlay === false) return
     const openResults = [...this.states.entries()]
       .filter(([, state]) => state === 'open')
       .map(([key]) => this.results.get(key) ?? traverseFlowFromValve(this.graph, key, this.states))

@@ -67,14 +67,25 @@ export const resolveEntityPresentation = (
   context: PresentationResolutionContext = {}
 ): ResolvedEntityPresentation => {
   let source: PresentationSource = 'default'
-  let style: HighlightStyle = context.flowPath
-    ? { ...profile.defaultFlowStyle, ...context.flowPath.styleOverride }
-    : profile.defaultFlowStyle
-  if (context.flowPath) source = 'flow'
-  const utility = context.flowPath?.utilityId
+  const flowPath = context.flowPath
+  const customStyle =
+    flowPath?.styleSource?.kind === 'custom'
+      ? flowPath.styleSource.style
+      : flowPath?.styleSource == null && flowPath?.styleOverride
+        ? { ...profile.defaultFlowStyle, ...flowPath.styleOverride }
+        : undefined
+  let style: HighlightStyle = customStyle ?? profile.defaultFlowStyle
+  if (flowPath) source = 'flow'
+  const utilityId =
+    flowPath?.styleSource?.kind === 'utility'
+      ? flowPath.styleSource.utilityId
+      : flowPath?.styleSource == null && !customStyle
+        ? flowPath?.utilityId
+        : undefined
+  const utility = utilityId
     ? profile.utilities.find(
-        item => item.id === context.flowPath?.utilityId && item.enabled
-      )
+      item => item.id === utilityId && item.enabled
+    )
     : undefined
   if (utility) {
     style = utility.style

@@ -90,4 +90,55 @@ describe('ValveDebugFeature', () => {
     expect(overlays.find(item => item.kind === 'path')?.disposed).toBe(true)
     feature.dispose()
   })
+
+  it('keeps a valve closed when style selection is canceled', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const onStateChanged = jest.fn()
+    const feature = new ValveDebugFeature({
+      panelHost: host,
+      graphDocument: {
+        Dsl: { Entities: { $values: [{ Handle: 1, $type: 'Demo.Block, Demo' }] } },
+        Map: { Maps: { $values: [] } },
+        Org: {
+          Areas: {
+            $values: [
+              { Components: { $values: [{ Handle: 1, Id: 'V-1', Name: 'Valve' }] } }
+            ]
+          }
+        }
+      },
+      getView: () => ({
+        canvas,
+        width: 100,
+        height: 100,
+        viewportToCanvas: point => point,
+        pick: () => [{ id: 'V1' }],
+        screenToWorld: point => point,
+        zoomTo: () => undefined,
+        isDirty: false
+      }),
+      resolveObjectId: key => key,
+      resolveHandleKeys: () => ['1'],
+      createOverlay: () => null,
+      getLabels: locale => defaultValveDebugLabels(locale),
+      getLocale: () => 'en',
+      requestStateChange: async () => false,
+      onStateChanged
+    })
+
+    feature.attach()
+    canvas.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
+    )
+    document
+      .querySelector<HTMLButtonElement>('[data-valve-action="open"]')!
+      .click()
+    await Promise.resolve()
+
+    expect(onStateChanged).not.toHaveBeenCalled()
+    expect(host.querySelector('.valve-debug-tree-label')).toBeNull()
+    feature.dispose()
+  })
 })

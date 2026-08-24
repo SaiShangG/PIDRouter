@@ -14,6 +14,7 @@ export interface HighlightStyleDialogOptions {
   value: HighlightStyleDraft
   getLocale?: () => AppLocale
   createId?: () => string
+  onApply?(value: HighlightStyleDraft): void
   onClose(): void
 }
 
@@ -52,7 +53,7 @@ export class HighlightStyleDialog {
     this.render()
   }
 
-  private emitPreview() {}
+  private emitPreview() { }
 
   open() {
     if (!this.element.isConnected) document.body.append(this.element)
@@ -115,8 +116,11 @@ export class HighlightStyleDialog {
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions highlight-style-actions'
     const cancel = this.button('取消', () => this.close())
-    const apply = this.button('应用', () => undefined)
-    const applyClose = this.button('应用并关闭', () => this.close())
+    const apply = this.button('应用', () => this.options.onApply?.(cloneDraft(this.draft)))
+    const applyClose = this.button('应用并关闭', () => {
+      this.options.onApply?.(cloneDraft(this.draft))
+      this.close()
+    })
     apply.classList.add('phase-workspace-primary')
     applyClose.classList.add('phase-workspace-primary')
     footer.append(cancel, apply, applyClose)
@@ -265,14 +269,14 @@ export class HighlightStyleDialog {
         })
         const up = this.iconButton('上移 Utility', ArrowUp, () => {
           if (index === 0) return
-          ;[utilities[index - 1].order, utility.order] = [utility.order, utilities[index - 1].order]
+            ;[utilities[index - 1].order, utility.order] = [utility.order, utilities[index - 1].order]
           this.emitPreview()
           this.render()
         })
         up.disabled = index === 0
         const down = this.iconButton('下移 Utility', ArrowDown, () => {
           if (index === utilities.length - 1) return
-          ;[utilities[index + 1].order, utility.order] = [utility.order, utilities[index + 1].order]
+            ;[utilities[index + 1].order, utility.order] = [utility.order, utilities[index + 1].order]
           this.emitPreview()
           this.render()
         })
@@ -378,7 +382,18 @@ export class HighlightStyleDialog {
     visible.disabled = disabled
     visible.setAttribute('aria-label', '显示高亮')
     visible.addEventListener('change', () => change({ visible: visible.checked }))
-    group.append(color, hex, width, visible)
+    const opacity = document.createElement('input')
+    opacity.type = 'number'
+    opacity.min = '0'
+    opacity.max = '1'
+    opacity.step = '0.05'
+    opacity.value = String(style.opacity)
+    opacity.disabled = disabled
+    opacity.setAttribute('aria-label', '高亮透明度')
+    opacity.addEventListener('input', () =>
+      change({ opacity: Math.min(1, Math.max(0, Number(opacity.value))) })
+    )
+    group.append(color, hex, opacity, width, visible)
     return group
   }
 

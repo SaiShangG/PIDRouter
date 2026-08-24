@@ -15,7 +15,7 @@ export interface BrushHighlightOverlay {
 
 export interface BrushHighlightFeatureOptions {
   getView(): AcEdBaseView | undefined
-  getHighlightStyle(objectId: AcDbObjectId): ResolvedEntityPresentation
+  getHighlightStyle(): ResolvedEntityPresentation
   createOverlay(
     objectIds: readonly AcDbObjectId[],
     style: ResolvedEntityPresentation
@@ -32,7 +32,10 @@ const DEFAULT_SAMPLE_SPACING_PX = 6
 export class BrushHighlightFeature {
   private readonly radiusPx: number
   private readonly sampleSpacingPx: number
-  private readonly brushIds = new Set<AcDbObjectId>()
+  private readonly brushStyles = new Map<
+    AcDbObjectId,
+    ResolvedEntityPresentation
+  >()
   private readonly overlays = new Set<BrushHighlightOverlay>()
   private attachedView?: AcEdBaseView
   private active = false
@@ -40,6 +43,7 @@ export class BrushHighlightFeature {
   private previousMode?: AcEdViewMode
   private previousCursor?: AcEdCorsorType
   private pointerId?: number
+  private strokeStyle?: ResolvedEntityPresentation
   private lastCanvasPoint?: { x: number; y: number }
   private disposed = false
 
@@ -112,7 +116,7 @@ export class BrushHighlightFeature {
   reset() {
     this.deactivate()
     this.disposeOverlays()
-    this.brushIds.clear()
+    this.brushStyles.clear()
   }
 
   dispose() {
@@ -131,7 +135,7 @@ export class BrushHighlightFeature {
   }
 
   get highlightedIds() {
-    return [...this.brushIds]
+    return [...this.brushStyles.keys()]
   }
 
   private addPointerListeners() {
@@ -160,6 +164,7 @@ export class BrushHighlightFeature {
     const canvas = this.attachedView?.canvas
     const pointerId = this.pointerId
     this.pointerId = undefined
+    this.strokeStyle = undefined
     this.lastCanvasPoint = undefined
     if (
       canvas &&
@@ -193,6 +198,8 @@ export class BrushHighlightFeature {
     }
     this.suppressEvent(event)
     this.pointerId = event.pointerId
+    this.strokeStyle =
+      this.operation === 'paint' ? this.options.getHighlightStyle() : undefined
     this.lastCanvasPoint = this.toCanvasPoint(event)
     this.attachedView?.canvas.setPointerCapture?.(event.pointerId)
     this.applyAt(this.lastCanvasPoint)
@@ -270,29 +277,30 @@ export class BrushHighlightFeature {
     if (ids.length === 0) return
 
     if (this.operation === 'paint') {
-      const idsToHighlight = ids.filter(id => !this.brushIds.has(id))
+      const style = this.strokeStyle
+      if (!style) return
+      const idsToHighlight = ids.filter(id => !this.brushStyles.has(id))
       if (idsToHighlight.length === 0) return
-      idsToHighlight.forEach(id => this.brushIds.add(id))
+      idsToHighlight.forEach(id => this.brushStyles.set(id, style))
       this.syncOverlays()
       return
     }
 
-    const idsToErase = ids.filter(id => this.brushIds.has(id))
+    const idsToErase = ids.filter(id => this.brushStyles.has(id))
     if (idsToErase.length === 0) return
-    idsToErase.forEach(id => this.brushIds.delete(id))
+    idsToErase.forEach(id => this.brushStyles.delete(id))
     this.syncOverlays()
   }
 
   private syncOverlays() {
     this.disposeOverlays()
-    if (this.brushIds.size === 0) return
+    if (this.brushStyles.size === 0) return
 
     const groups = new Map<
       string,
       { ids: AcDbObjectId[]; style: ResolvedEntityPresentation }
     >()
-    this.brushIds.forEach(objectId => {
-      const style = this.options.getHighlightStyle(objectId)
+    this.brushStyles.forEach((style, objectId) => {
       const group = groups.get(style.key)
       if (group) {
         group.ids.push(objectId)

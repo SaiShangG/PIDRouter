@@ -62,6 +62,23 @@ pnpm preview
 
 The build copies parser workers and `viewer-runtime.iife.js` into `dist/` (see `vite.config.ts`).
 
+### Backend API
+
+The ProcessAssistant API address can be changed after deployment without
+rebuilding the application. Edit `dist/config.js` and set the server protocol,
+IP address, and port:
+
+```js
+window.PID_VIEWER_CONFIG = {
+  processAssistantApiUrl: 'http://192.168.1.100:5153'
+}
+```
+
+A non-empty runtime value takes precedence over
+`VITE_PROCESS_ASSISTANT_API_URL`. Keep the value empty to use the build-time
+setting (default: `http://localhost:5153`). The backend must allow the deployed
+frontend origin through CORS when they use different origins.
+
 ## Usage
 
 1. Start the dev server and open the URL shown in the terminal.

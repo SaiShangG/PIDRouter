@@ -6,7 +6,7 @@ import {
 } from '../src/presentation/presentationStyleResolver'
 
 describe('presentationStyleResolver', () => {
-  it('applies global device, utility, and default precedence', () => {
+  it('applies explicit utility, custom, device, and default precedence', () => {
     const profile = createDefaultPresentationProfile()
     profile.utilities.push({
       id: 'water',
@@ -24,16 +24,16 @@ describe('presentationStyleResolver', () => {
     }
 
     expect(resolveEntityPresentation(profile, { flowPath })).toMatchObject({
-      color: 0x112233,
-      lineWidthPx: 2,
-      source: 'utility'
+      color: 0x445566,
+      lineWidthPx: 3,
+      source: 'flow'
     })
     expect(
       resolveEntityPresentation(profile, {
         flowPath,
         deviceState: { key: '1a', label: 'XV-1', mode: 'closed' }
       })
-    ).toMatchObject({ color: 0x112233, source: 'utility' })
+    ).toMatchObject({ color: 0x445566, source: 'flow' })
     profile.deviceStyles.valve.closed = {
       color: 0xd32f2f,
       lineWidthPx: 3,
@@ -48,18 +48,33 @@ describe('presentationStyleResolver', () => {
     ).toMatchObject({ color: 0xd32f2f, source: 'device' })
     expect(
       resolveEntityPresentation(profile, {
-        flowPath: { ...flowPath, utilityId: 'missing', styleOverride: undefined }
+        flowPath: {
+          ...flowPath,
+          styleSource: { kind: 'utility', utilityId: 'water' }
+        }
       })
-    ).toMatchObject({ color: 0x00c853, source: 'flow' })
+    ).toMatchObject({ color: 0x112233, lineWidthPx: 2, source: 'utility' })
     expect(
       resolveEntityPresentation(profile, {
         flowPath: {
           ...flowPath,
-          utilityId: undefined,
-          styleOverride: { color: 0x9c27b0, lineWidthPx: 3.5 }
+          styleSource: {
+            kind: 'custom',
+            style: {
+              color: 0x9c27b0,
+              lineWidthPx: 3.5,
+              opacity: 0.6,
+              visible: true
+            }
+          }
         }
       })
-    ).toMatchObject({ color: 0x9c27b0, lineWidthPx: 3.5, source: 'flow' })
+    ).toMatchObject({
+      color: 0x9c27b0,
+      lineWidthPx: 3.5,
+      opacity: 0.6,
+      source: 'flow'
+    })
   })
 
   it('clamps style fields and produces stable keys', () => {

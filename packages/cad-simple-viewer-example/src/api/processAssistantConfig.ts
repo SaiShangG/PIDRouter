@@ -3,7 +3,21 @@ export interface ProcessAssistantConfig {
   projectId: number
 }
 
+declare global {
+  interface Window {
+    PID_VIEWER_CONFIG?: {
+      processAssistantApiUrl?: string
+    }
+  }
+}
+
+const runtimeApiUrl =
+  typeof window === 'undefined'
+    ? ''
+    : window.PID_VIEWER_CONFIG?.processAssistantApiUrl?.trim() || ''
+
 export const PROCESS_ASSISTANT_TARGET_URL =
+  runtimeApiUrl ||
   import.meta.env.VITE_PROCESS_ASSISTANT_API_URL?.trim() ||
   'http://localhost:5153'
 

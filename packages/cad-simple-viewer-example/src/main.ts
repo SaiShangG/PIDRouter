@@ -93,12 +93,18 @@ import {
   PhaseWorkspacePanel
 } from './phase/PhaseWorkspacePanel'
 import { PhaseWorkspaceRepository } from './phase/phaseWorkspaceRepository'
-import { PhaseWorkspaceStore } from './phase/phaseWorkspaceStore'
+import {
+  createDefaultPresentationProfile,
+  PhaseWorkspaceStore
+} from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
 import type {
+  DeviceState,
   DrawingAssetRef,
   FlowPathStatus,
-  FlowStateSnapshot
+  FlowPathStyleSource,
+  FlowStateSnapshot,
+  PresentationProfile
 } from './phase/types'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
 import {
@@ -107,9 +113,14 @@ import {
 } from './presentation/HighlightStyleDialog'
 import { PhasePresentationController } from './presentation/PhasePresentationController'
 import {
+  normalizeHighlightStyle,
   type ResolvedEntityPresentation,
   resolveEntityPresentation
 } from './presentation/presentationStyleResolver'
+import {
+  StyleSourceDialog,
+  type StyleSourceSelection
+} from './presentation/StyleSourceDialog'
 import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
 import { ProcessAssistantProjectRepository } from './project/ProcessAssistantProjectRepository'
 import { ProjectManagementModal } from './project/ProjectManagementModal'
@@ -137,6 +148,8 @@ const EXAMPLE_COMMAND_ALIASES = {
 
 const ACTIVE_PROJECT_STORAGE_KEY =
   'cad-simple-viewer-example-active-project-id'
+const BRUSH_STYLE_STORAGE_KEY =
+  'cad-simple-viewer-example-brush-style-source'
 
 const areEqualNumberSets = (
   left: readonly number[] | undefined,
@@ -880,6 +893,9 @@ class CadViewerApp {
   private openHighlightRoots = new Map<AcDbObjectId, PreviewRoot>()
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
   private openHighlightConnections = new Map<AcDbObjectId, Set<number>>()
+  private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
+  private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
+  private pendingValveStyleSources = new Map<string, FlowPathStyleSource>()
   private readonly phasePresentationController = new PhasePresentationController()
   private phaseStore = new PhaseWorkspaceStore()
   private phaseRepository?: PhaseWorkspaceRepository
@@ -925,6 +941,7 @@ class CadViewerApp {
   private activeProjectId?: number
   private valveDebugFeature?: ReturnType<typeof createValveDebugFeature>
   private brushHighlightFeature?: BrushHighlightFeature
+  private brushStyleSelection?: StyleSourceSelection
 
   constructor() {
     this.container = document.getElementById('cad-container') as HTMLDivElement
@@ -1756,7 +1773,7 @@ class CadViewerApp {
                 icon.append(createPhaseIcon(Brush))
                 return icon
               },
-              action: () => this.brushHighlightFeature?.activate('paint')
+              action: () => this.openBrushStyleDialog()
             },
             {
               id: 'brush-erase',
@@ -2091,7 +2108,12 @@ class CadViewerApp {
         this.createValveDebugOverlay(objectIds, kind),
       zoomToObject: objectId => this.zoomToValveDebugObject(objectId),
       getLabels: locale => defaultValveDebugLabels(locale),
-      getLocale: () => this.appLocale as ValveDebugLocale
+      getLocale: () => this.appLocale as ValveDebugLocale,
+      requestStateChange: (handleKey, state) =>
+        state === 'open' ? this.requestValveFlowStyle(handleKey) : true,
+      onStateChanged: (handleKey, state) =>
+        this.handleValveStateChanged(handleKey, state),
+      renderPathOverlay: false
     })
     this.valveDebugFeature.attach()
   }
@@ -2099,8 +2121,7 @@ class CadViewerApp {
   private setupBrushHighlightFeature() {
     this.brushHighlightFeature = new BrushHighlightFeature({
       getView: () => AcApDocManager.instance.curView,
-      getHighlightStyle: objectId =>
-        this.resolveBrushHighlightStyle(objectId),
+      getHighlightStyle: () => this.resolveBrushHighlightStyle(),
       createOverlay: (objectIds, style) =>
         this.createBrushHighlightOverlay(objectIds, style),
       setOperationCursor: (view, operation) => {
@@ -2108,6 +2129,66 @@ class CadViewerApp {
       }
     })
     this.brushHighlightFeature.attach()
+  }
+
+  private openBrushStyleDialog() {
+    const profile = this.getActivePresentationProfile()
+    document.querySelector('.style-source-modal')?.remove()
+    const dialog = new StyleSourceDialog({
+      mode: 'brush',
+      profile,
+      initialValue:
+        this.brushStyleSelection ?? this.loadBrushStyleSelection(profile),
+      getLocale: () => this.appLocale,
+      onApply: selection => {
+        this.brushStyleSelection = selection
+        localStorage.setItem(BRUSH_STYLE_STORAGE_KEY, JSON.stringify(selection))
+        this.brushHighlightFeature?.activate('paint')
+      },
+      onClose: () => undefined
+    })
+    dialog.open()
+  }
+
+  private loadBrushStyleSelection(
+    profile: PresentationProfile
+  ): StyleSourceSelection {
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem(BRUSH_STYLE_STORAGE_KEY) ?? 'null'
+      ) as Partial<StyleSourceSelection> | null
+      if (stored?.kind === 'custom' && 'style' in stored && stored.style) {
+        return {
+          kind: 'custom',
+          style: normalizeHighlightStyle(stored.style)
+        }
+      }
+      if (
+        stored?.kind === 'valve-state' &&
+        'state' in stored &&
+        (stored.state === 'open' ||
+          stored.state === 'closed' ||
+          stored.state === 'pulse') &&
+        profile.deviceStyles.valve[stored.state]
+      ) {
+        return { kind: 'valve-state', state: stored.state }
+      }
+      if (stored?.kind === 'utility' && 'utilityId' in stored) {
+        return {
+          kind: 'utility',
+          utilityId:
+            typeof stored.utilityId === 'string'
+              ? stored.utilityId
+              : undefined
+        }
+      }
+    } catch {
+      localStorage.removeItem(BRUSH_STYLE_STORAGE_KEY)
+    }
+    return {
+      kind: 'custom',
+      style: { ...CONNECTED_FLOW_STYLE }
+    }
   }
 
   private createBrushCursor(operation: BrushOperation) {
@@ -2119,13 +2200,32 @@ class CadViewerApp {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`
   }
 
-  private resolveBrushHighlightStyle(objectId: AcDbObjectId) {
-    return this.resolvePresentationForObjectId(objectId, undefined, {
-      id: `brush-${String(objectId)}`,
+  private resolveBrushHighlightStyle() {
+    const profile = this.getActivePresentationProfile()
+    const selection =
+      this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
+    if (selection.kind === 'valve-state') {
+      return resolveEntityPresentation(profile, {
+        deviceState: {
+          key: `brush-valve-${selection.state}`,
+          label: 'Brush',
+          mode: selection.state
+        }
+      })
+    }
+    const flowPath: FlowPathStatus = {
+      id: 'brush-current',
       name: 'Brush',
-      handleKeys: handleKeysFromObjectId(objectId),
-      styleOverride: { ...CONNECTED_FLOW_STYLE }
-    })
+      handleKeys: [],
+      styleSource:
+        selection.kind === 'custom'
+          ? { kind: 'custom', style: { ...selection.style } }
+          : {
+            kind: 'utility',
+            utilityId: selection.utilityId
+          }
+    }
+    return resolveEntityPresentation(profile, { flowPath })
   }
 
   private createBrushHighlightOverlay(
@@ -3541,6 +3641,99 @@ class CadViewerApp {
     return entity?.objectId
   }
 
+  private getActivePresentationProfile(): PresentationProfile {
+    const state = this.phaseStore.snapshot()
+    return (
+      state.processes.find(process => process.id === state.activeProcessId)
+        ?.presentationProfile ?? createDefaultPresentationProfile()
+    )
+  }
+
+  private requestValveFlowStyle(handleKey: string): Promise<boolean> {
+    if (!this.loadedPhase) {
+      this.showMessage('请先激活一个 Phase', 'error')
+      return Promise.resolve(false)
+    }
+    const profile = this.getActivePresentationProfile()
+    return new Promise(resolve => {
+      let settled = false
+      const finish = (confirmed: boolean) => {
+        if (settled) return
+        settled = true
+        resolve(confirmed)
+      }
+      document.querySelector('.style-source-modal')?.remove()
+      const dialog = new StyleSourceDialog({
+        mode: 'flow',
+        profile,
+        getLocale: () => this.appLocale,
+        onApply: selection => {
+          this.pendingValveStyleSources.set(
+            handleKey,
+            selection.kind === 'custom'
+              ? { kind: 'custom', style: { ...selection.style } }
+              : {
+                kind: 'utility',
+                utilityId:
+                  selection.kind === 'utility'
+                    ? selection.utilityId
+                    : undefined
+              }
+          )
+          finish(true)
+        },
+        onClose: () => finish(false)
+      })
+      dialog.open()
+    })
+  }
+
+  private handleValveStateChanged(
+    handleKey: string,
+    state: 'open' | 'closed'
+  ) {
+    const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+    if (!ownerId) {
+      this.pendingValveStyleSources.delete(handleKey)
+      return
+    }
+    this.valveDeviceStates.set(ownerId, {
+      key: handleKey,
+      label: this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ?? handleKey,
+      mode: state
+    })
+    if (state === 'closed') {
+      this.openHighlightGroups.delete(ownerId)
+      this.openHighlightConnections.delete(ownerId)
+      this.openHighlightPaths.delete(ownerId)
+      this.syncOpenHighlightRoots()
+      this.captureLoadedPhaseState()
+      return
+    }
+
+    const styleSource = this.pendingValveStyleSources.get(handleKey) ?? {
+      kind: 'utility' as const
+    }
+    this.pendingValveStyleSources.delete(handleKey)
+    const traversal = this.getFlowConnectionTraversal(ownerId)
+    this.openHighlightGroups.delete(ownerId)
+    this.openHighlightConnections.delete(ownerId)
+    this.openHighlightPaths.delete(ownerId)
+    this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
+    this.openHighlightGroups.set(
+      ownerId,
+      this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+    )
+    this.openHighlightPaths.set(ownerId, {
+      id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
+      name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
+      handleKeys: [handleKey],
+      styleSource
+    })
+    this.syncOpenHighlightRoots()
+    this.captureLoadedPhaseState()
+  }
+
   private recomputeOpenHighlightGroups() {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
       this.openHighlightGroups.set(
@@ -3590,6 +3783,12 @@ class CadViewerApp {
       changedHighlight = true
     })
 
+    this.openHighlightRoots.forEach((root, id) => {
+      if (!desiredIds.has(id)) return
+      this.applyOpenHighlightStyle(root, id)
+      changedHighlight = true
+    })
+
     if (changedHighlight) {
       view.isDirty = true
     }
@@ -3600,6 +3799,7 @@ class CadViewerApp {
     this.openHighlightGroups.forEach(group => {
       group.forEach(id => ids.add(id))
     })
+    this.valveDeviceStates.forEach((_, id) => ids.add(id))
     return ids
   }
 
@@ -3607,10 +3807,7 @@ class CadViewerApp {
     const draft = this.getLoadedHighlightStyleDraft()
     const flowState = this.getLoadedFlowState()
     if (!draft || !flowState) return []
-    const groups = new Map<
-      string,
-      { entityIds: Set<string>; style: ResolvedEntityPresentation }
-    >()
+    const entityStyles = new Map<string, ResolvedEntityPresentation>()
     for (const flowPath of flowState.flowPaths) {
       flowPath.handleKeys.forEach(handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
@@ -3619,15 +3816,21 @@ class CadViewerApp {
           flowPath
         })
         if (!style.visible) return
-        const group = groups.get(style.key) ?? { entityIds: new Set(), style }
         const highlightedIds =
           this.openHighlightGroups.get(ownerId) ??
           this.getOpenHighlightObjectIds(ownerId)
-        highlightedIds.forEach(id => group.entityIds.add(String(id)))
-        groups.set(style.key, group)
-
+        highlightedIds.forEach(id => entityStyles.set(String(id), style))
       })
     }
+    const groups = new Map<
+      string,
+      { entityIds: Set<string>; style: ResolvedEntityPresentation }
+    >()
+    entityStyles.forEach((style, entityId) => {
+      const group = groups.get(style.key) ?? { entityIds: new Set(), style }
+      group.entityIds.add(entityId)
+      groups.set(style.key, group)
+    })
     return [...groups.values()].map(({ entityIds, style }) => ({
       entityIds,
       strokeColor: style.color,
@@ -3668,18 +3871,50 @@ class CadViewerApp {
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
+      onApply: draft => {
+        void this.savePresentationProfile(processId, draft.presentationProfile)
+      },
       onClose: () => undefined
     })
     dialog.open()
   }
 
+  private async savePresentationProfile(
+    processId: string,
+    profile: PresentationProfile
+  ) {
+    try {
+      this.phaseStore.updatePresentationProfile(processId, profile)
+      this.phaseStore.persist()
+      const process = this.phaseStore
+        .snapshot()
+        .processes.find(item => item.id === processId)
+      if (process && this.phaseRepository) {
+        await this.phaseRepository.updateProcess(process)
+      }
+      this.syncOpenHighlightRoots()
+      this.phasePanel?.render()
+      this.showMessage('高亮样式已保存', 'success')
+    } catch (error) {
+      log.error('Failed to save highlight styles:', error)
+      this.showMessage('高亮样式保存失败', 'error')
+    }
+  }
+
   private captureFlowPaths(): FlowStateSnapshot['flowPaths'] {
     if (!this.loadedPhase) return []
-    return [...this.openHighlightConnections.keys()].map(ownerId => ({
-      id: `flow-${this.loadedPhase!.phaseId}-${String(ownerId)}`,
-      name: '默认流路',
-      handleKeys: handleKeysFromObjectId(ownerId),
-      styleOverride: { ...CONNECTED_FLOW_STYLE }
+    return [...this.openHighlightPaths.values()].map(flowPath => ({
+      ...flowPath,
+      handleKeys: [...flowPath.handleKeys],
+      styleSource:
+        flowPath.styleSource?.kind === 'custom'
+          ? {
+            kind: 'custom',
+            style: { ...flowPath.styleSource.style }
+          }
+          : flowPath.styleSource
+            ? { ...flowPath.styleSource }
+            : undefined
     }))
   }
 
@@ -3689,41 +3924,20 @@ class CadViewerApp {
     flowPath?: FlowPathStatus
   ): ResolvedEntityPresentation {
     const profile =
-      draft?.presentationProfile ??
-      {
-        defaultFlowStyle: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true },
-        unknownDeviceStyle: { color: 0x546e7a, lineWidthPx: 2, opacity: 1, visible: true },
-        dimmedBaseStyle: { color: 0x9e9e9e, opacity: 0.35 },
-        deviceStyles: {
-          valve: {
-            open: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true },
-            closed: { color: 0xd32f2f, lineWidthPx: 3, opacity: 1, visible: true },
-            pulse: { color: 0xf9a825, lineWidthPx: 3, opacity: 1, visible: true }
-          },
-          motor: {
-            start: { color: 0x00796b, lineWidthPx: 3, opacity: 1, visible: true },
-            stop: { color: 0x616161, lineWidthPx: 2, opacity: 1, visible: true }
-          },
-          processEquipment: {
-            active: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true }
-          }
-        },
-        deviceStylesInitialized: true,
-        utilities: []
-      }
+      draft?.presentationProfile ?? createDefaultPresentationProfile()
+    const deviceState = this.valveDeviceStates.get(objectId)
 
-    for (const [ownerId, group] of this.openHighlightGroups) {
+    for (const [ownerId, group] of [...this.openHighlightGroups].reverse()) {
       if (!group.has(objectId)) continue
-      const ownerHandleKeys = handleKeysFromObjectId(ownerId)
-      const flowPath = {
-        id: `flow-runtime-${String(ownerId)}`,
-        name: '默认流路',
-        handleKeys: ownerHandleKeys,
-        styleOverride: { ...CONNECTED_FLOW_STYLE }
+      const runtimeFlowPath = this.openHighlightPaths.get(ownerId)
+      if (runtimeFlowPath) {
+        return resolveEntityPresentation(profile, {
+          flowPath: runtimeFlowPath,
+          deviceState
+        })
       }
-      return resolveEntityPresentation(profile, { flowPath })
     }
-    return resolveEntityPresentation(profile, flowPath ? { flowPath } : undefined)
+    return resolveEntityPresentation(profile, { flowPath, deviceState })
   }
 
   private removeOpenHighlight(ids?: AcDbObjectId[]) {
@@ -3733,6 +3947,9 @@ class CadViewerApp {
     if (!ids) {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
+      this.openHighlightPaths.clear()
+      this.valveDeviceStates.clear()
+      this.pendingValveStyleSources.clear()
     }
 
     idsToRemove.forEach(id => {
@@ -3847,9 +4064,14 @@ class CadViewerApp {
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
 
-    phase.flowState.flowPaths.flatMap(flowPath => flowPath.handleKeys).forEach(handleKey => {
-      const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-      if (ownerId) {
+    const restoredValveKeys: string[] = []
+    phase.flowState.flowPaths.forEach(flowPath => {
+      flowPath.handleKeys.forEach(handleKey => {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        if (!ownerId) {
+          log.warn(`Unable to restore phase highlight handle: ${handleKey}`)
+          return
+        }
         const traversal = this.isFlowBoundaryObject(ownerId)
           ? this.getFlowConnectionTraversal(ownerId)
           : { connectedHandles: new Set<number>(), traversalEdges: [] }
@@ -3858,11 +4080,33 @@ class CadViewerApp {
           ownerId,
           this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
         )
-      } else {
-        log.warn(`Unable to restore phase highlight handle: ${handleKey}`)
-      }
+        this.openHighlightPaths.set(ownerId, {
+          ...flowPath,
+          handleKeys: [handleKey],
+          styleSource:
+            flowPath.styleSource?.kind === 'custom'
+              ? {
+                kind: 'custom',
+                style: { ...flowPath.styleSource.style }
+              }
+              : flowPath.styleSource
+                ? { ...flowPath.styleSource }
+                : undefined
+        })
+        if (this.isFlowBoundaryObject(ownerId)) {
+          restoredValveKeys.push(handleKey)
+          this.valveDeviceStates.set(ownerId, {
+            key: handleKey,
+            label:
+              this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
+              handleKey,
+            mode: 'open'
+          })
+        }
+      })
     })
     this.recomputeOpenHighlightGroups()
+    this.valveDebugFeature?.restoreOpenStates(restoredValveKeys)
     this.loadedPhase = {
       processId,
       sequenceId,
@@ -3881,15 +4125,16 @@ class CadViewerApp {
 
   private applyOpenHighlightStyle(root: PreviewRoot, objectId: AcDbObjectId) {
     const view = AcApDocManager.instance.curView
+    const style = this.resolvePresentationForObjectId(objectId)
     upgradePreviewWideLines(
       root,
-      this.resolvePresentationForObjectId(objectId),
+      style,
       view.width,
       view.height
     )
     this.phasePresentationController.apply(
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
-      this.resolvePresentationForObjectId(objectId)
+      style
     )
   }
 
@@ -4155,6 +4400,9 @@ class CadViewerApp {
     if (preserveHighlightRoots) {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
+      this.openHighlightPaths.clear()
+      this.valveDeviceStates.clear()
+      this.pendingValveStyleSources.clear()
     } else {
       this.removeOpenHighlight()
     }

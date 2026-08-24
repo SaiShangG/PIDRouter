@@ -2,18 +2,18 @@ import {
   PHASE_WORKSPACE_STORAGE_KEY,
   PhaseWorkspaceStore
 } from '../src/phase/phaseWorkspaceStore'
-import type { DrawingAssetRef } from '../src/phase/types'
+import type { DrawingAssetRef, FlowPathStatus } from '../src/phase/types'
 
 const flowState = (handleKeys: string[] = []) => ({
   flowPaths: handleKeys.length
     ? [
-        {
-          id: 'flow-1',
-          name: 'Main route',
-          handleKeys: [...handleKeys],
-          styleOverride: { color: 0x123456, lineWidthPx: 4 }
-        }
-      ]
+      {
+        id: 'flow-1',
+        name: 'Main route',
+        handleKeys: [...handleKeys],
+        styleOverride: { color: 0x123456, lineWidthPx: 4 }
+      }
+    ]
     : []
 })
 
@@ -112,20 +112,20 @@ describe('PhaseWorkspaceStore', () => {
       getItem: jest.fn((key: string) =>
         key === PHASE_WORKSPACE_STORAGE_KEY
           ? JSON.stringify({
-              version: 1,
-              processes: [
-                {
-                  id: 'process-1',
-                  name: 'CIP',
-                  phases: [legacyPhase],
-                  activePhaseId: legacyPhase.id,
-                  createdAt: '2026-08-10T00:00:00.000Z',
-                  updatedAt: '2026-08-10T00:00:00.000Z'
-                }
-              ],
-              drawingAssets: { [drawing.id]: drawing },
-              activeProcessId: 'process-1'
-            })
+            version: 1,
+            processes: [
+              {
+                id: 'process-1',
+                name: 'CIP',
+                phases: [legacyPhase],
+                activePhaseId: legacyPhase.id,
+                createdAt: '2026-08-10T00:00:00.000Z',
+                updatedAt: '2026-08-10T00:00:00.000Z'
+              }
+            ],
+            drawingAssets: { [drawing.id]: drawing },
+            activeProcessId: 'process-1'
+          })
           : null
       )
     }
@@ -221,6 +221,42 @@ describe('PhaseWorkspaceStore', () => {
     expect(storedFirst.flowState.flowPaths[0].handleKeys).toEqual(['1a', '2b'])
     expect(storedFirst.flowState.flowPaths[0].styleOverride?.color).toBe(0x123456)
     expect(historical.sourcePhaseId).toBe(first.id)
+  })
+
+  it('clones explicit custom flow styles without shared references', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Custom route',
+      source: { kind: 'unassigned' }
+    })
+    const flowPath: FlowPathStatus = {
+      id: 'flow-custom',
+      name: 'Custom route',
+      handleKeys: ['1a'],
+      styleSource: {
+        kind: 'custom',
+        style: {
+          color: 0x123456,
+          lineWidthPx: 4,
+          opacity: 0.5,
+          visible: true
+        }
+      }
+    }
+    store.updatePhaseState(process.id, sequence.id, phase.id, {
+      flowState: { flowPaths: [flowPath] }
+    })
+
+      ; (flowPath.styleSource as Extract<NonNullable<FlowPathStatus['styleSource']>, { kind: 'custom' }>).style.color = 0xffffff
+
+    expect(
+      store.snapshot().processes[0].sequences[0].phases[0].flowState.flowPaths[0]
+        .styleSource
+    ).toMatchObject({ kind: 'custom', style: { color: 0x123456 } })
   })
 
   it('copies a phase across sequences without sharing mutable state', () => {
