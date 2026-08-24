@@ -49,7 +49,9 @@ const collectValveComponents = (document: FlowConnectionDocumentInput) => {
     { id?: string; name?: string; areaId?: string }
   >()
 
-  document.Org?.Areas?.$values?.forEach(area => {
+  const areas = document.Org?.Areas
+  const areaList = Array.isArray(areas) ? areas : areas?.$values ?? []
+  areaList.forEach(area => {
     area.Components?.$values?.forEach(component => {
       if (component.Handle == null || component.Handle < 0) return
       if (component.Name?.trim().toUpperCase() !== 'VALVE') return

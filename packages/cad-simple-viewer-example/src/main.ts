@@ -74,7 +74,7 @@ import {
   defaultValveDebugLabels,
   type ValveDebugLocale
 } from './flow/ValveDebugFeature'
-import flowConnectionJsonText from './FlowConnection/1.json?raw'
+import flowConnectionJsonText from './FlowConnection/Document.json?raw'
 import {
   type AppLocale,
   loadAppLocale,
@@ -226,6 +226,7 @@ interface FlowConnectionBBox {
 
 interface FlowConnectionArea {
   Id?: string
+  BoundingBox?: FlowConnectionBBox
   BBox?: FlowConnectionBBox
   Components?: {
     $values?: FlowConnectionComponent[]
@@ -239,6 +240,7 @@ interface FlowConnectionComponent {
 }
 
 interface FlowConnectionDocument {
+  Areas?: FlowConnectionArea[]
   Dsl?: {
     Entities?: {
       $values?: FlowConnectionEntity[]
@@ -252,8 +254,17 @@ interface FlowConnectionDocument {
   Org?: {
     Areas?: {
       $values?: FlowConnectionArea[]
-    }
+    } | FlowConnectionArea[]
   }
+}
+
+const getFlowConnectionAreas = (document: FlowConnectionDocument) => {
+  if (document.Areas) return document.Areas
+
+  const areasValue = document.Org?.Areas
+  return Array.isArray(areasValue)
+    ? areasValue
+    : areasValue?.$values ?? []
 }
 
 interface FlowConnectionBounds {
@@ -275,11 +286,6 @@ const CONNECTED_FLOW_STYLE = {
 // retaining it for bounds lookup.
 const PHI_RASTER_LAYER_NAME = '$PHI_RASTER'
 const PDF_EXCLUDED_LAYERS = [PHI_RASTER_LAYER_NAME]
-const PDF_PID_RASTER_LAYERS = [PHI_RASTER_LAYER_NAME]
-const PDF_PID_SEARCH_PADDING_RATIO = 0.55
-const PDF_PID_SEARCH_MIN_PADDING = 600
-const PDF_PID_FINAL_PADDING_RATIO = 0.06
-const PDF_PID_FINAL_MIN_PADDING = 80
 
 const uniqueHandleKeys = (keys: string[]) => {
   return [
@@ -314,9 +320,9 @@ const isFiniteNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-const parseFlowConnectionDocument = (): FlowConnectionDocument => {
+const parseFlowConnectionDocument = (jsonText: string): FlowConnectionDocument => {
   try {
-    return JSON.parse(flowConnectionJsonText) as FlowConnectionDocument
+    return JSON.parse(jsonText) as FlowConnectionDocument
   } catch (parseError) {
     log.warn('Failed to parse flow connection json:', parseError)
     return {}
@@ -458,7 +464,7 @@ const buildFlowBoundaryHandleKeys = (document: FlowConnectionDocument) => {
     collectFlowBoundaryHandleKeys(entity, boundaryHandleKeys)
   })
 
-  document.Org?.Areas?.$values?.forEach(area => {
+  getFlowConnectionAreas(document).forEach(area => {
     area.Components?.$values?.forEach(component => {
       const name = component.Name?.trim().toUpperCase() ?? ''
       if (!name.includes('VALVE') && !name.includes('PUMP')) return
@@ -487,36 +493,15 @@ const buildFlowEdgeHandleKeys = (document: FlowConnectionDocument) => {
   return edgeHandleKeys
 }
 
-const collectFlowConnectionGraphHandles = (document: FlowConnectionDocument) => {
-  const handles = new Set<number>()
-  const maps = document.Map?.Maps?.$values ?? []
-
-  maps.forEach(mapItem => {
-    const edges = mapItem.Graph?.Edges?.$values ?? []
-    edges.forEach(edge => {
-      if (edge.From != null && edge.From >= 0) {
-        handles.add(Math.trunc(edge.From))
-      }
-      edge.To?.$values?.forEach(handle => {
-        if (handle >= 0) {
-          handles.add(Math.trunc(handle))
-        }
-      })
-    })
-  })
-
-  return handles
-}
-
 const resolveFlowConnectionAreaBounds = (
   document: FlowConnectionDocument
 ): FlowConnectionBounds | null => {
-  const areas = document.Org?.Areas?.$values ?? []
+  const areas = getFlowConnectionAreas(document)
   let bounds: FlowConnectionBounds | null = null
 
   areas.forEach(area => {
-    const min = area.BBox?.Min
-    const max = area.BBox?.Max
+    const min = (area.BoundingBox ?? area.BBox)?.Min
+    const max = (area.BoundingBox ?? area.BBox)?.Max
     if (
       !isFiniteNumber(min?.X) ||
       !isFiniteNumber(min?.Y) ||
@@ -531,200 +516,6 @@ const resolveFlowConnectionAreaBounds = (
   })
 
   return bounds
-}
-
-const resolveFlowConnectionPidBounds = (
-  document: FlowConnectionDocument
-): FlowConnectionBounds | null => {
-  const areaBounds = resolveFlowConnectionAreaBounds(document)
-  if (!areaBounds) {
-    return null
-  }
-
-  const graphHandles = collectFlowConnectionGraphHandles(document)
-  let seedBounds: FlowConnectionBounds | null = null
-
-  const visitGraphEntity = (
-    entity: FlowConnectionEntity,
-    offsetX: number,
-    offsetY: number,
-    includeParent: boolean
-  ) => {
-    const includeEntity =
-      includeParent ||
-      (entity.Handle != null && graphHandles.has(Math.trunc(entity.Handle)))
-
-    if (includeEntity) {
-      seedBounds = expandBoundsWithEntity(
-        seedBounds,
-        entity,
-        offsetX,
-        offsetY,
-        areaBounds
-      )
-    }
-
-    const nextOffsetX = offsetX + (entity.Position?.X ?? 0)
-    const nextOffsetY = offsetY + (entity.Position?.Y ?? 0)
-    entity.Items?.$values?.forEach(item => {
-      visitGraphEntity(item, nextOffsetX, nextOffsetY, includeEntity)
-    })
-  }
-
-  document.Dsl?.Entities?.$values?.forEach(entity => {
-    visitGraphEntity(entity, 0, 0, false)
-  })
-
-  if (!seedBounds) {
-    return null
-  }
-
-  const searchBounds = clampBounds(
-    expandBounds(
-      seedBounds,
-      PDF_PID_SEARCH_PADDING_RATIO,
-      PDF_PID_SEARCH_MIN_PADDING
-    ),
-    areaBounds
-  )
-  let bounds: FlowConnectionBounds | null = null
-
-  const visitNearbyEntity = (
-    entity: FlowConnectionEntity,
-    offsetX: number,
-    offsetY: number,
-    skipParent: boolean
-  ) => {
-    const skipEntity = skipParent || isPdfLayerExcluded(entity.LayerName)
-    if (!skipEntity) {
-      const entityBounds = expandBoundsWithEntity(
-        null,
-        entity,
-        offsetX,
-        offsetY,
-        areaBounds
-      )
-      if (entityBounds && intersectsBounds(entityBounds, searchBounds)) {
-        bounds = mergeBounds(bounds, entityBounds)
-      }
-    }
-
-    const nextOffsetX = offsetX + (entity.Position?.X ?? 0)
-    const nextOffsetY = offsetY + (entity.Position?.Y ?? 0)
-    entity.Items?.$values?.forEach(item => {
-      visitNearbyEntity(item, nextOffsetX, nextOffsetY, skipEntity)
-    })
-  }
-
-  document.Dsl?.Entities?.$values?.forEach(entity => {
-    visitNearbyEntity(entity, 0, 0, false)
-  })
-
-  return bounds
-    ? clampBounds(
-      expandBounds(
-        bounds,
-        PDF_PID_FINAL_PADDING_RATIO,
-        PDF_PID_FINAL_MIN_PADDING
-      ),
-      areaBounds
-    )
-    : searchBounds
-}
-
-const isPdfLayerExcluded = (layerName?: string) => {
-  const normalized = layerName?.trim().toUpperCase()
-  if (!normalized) {
-    return false
-  }
-
-  return PDF_PID_RASTER_LAYERS.some(
-    layer => layer.trim().toUpperCase() === normalized
-  )
-}
-
-const expandBoundsWithEntity = (
-  bounds: FlowConnectionBounds | null,
-  entity: FlowConnectionEntity,
-  offsetX: number,
-  offsetY: number,
-  areaBounds: FlowConnectionBounds
-) => {
-  let nextBounds = bounds
-
-  entity.Points?.$values?.forEach(point => {
-    nextBounds = expandBoundsWithAreaPoint(
-      nextBounds,
-      point.X,
-      point.Y,
-      offsetX,
-      offsetY,
-      areaBounds
-    )
-  })
-
-  if (entity.Center) {
-    const radius = isFiniteNumber(entity.Radius) ? entity.Radius : 0
-    nextBounds = expandBoundsWithAreaPoint(
-      nextBounds,
-      entity.Center.X,
-      entity.Center.Y,
-      offsetX - radius,
-      offsetY - radius,
-      areaBounds
-    )
-    nextBounds = expandBoundsWithAreaPoint(
-      nextBounds,
-      entity.Center.X,
-      entity.Center.Y,
-      offsetX + radius,
-      offsetY + radius,
-      areaBounds
-    )
-  }
-
-  if (entity.Position) {
-    const height = isFiniteNumber(entity.Height) ? entity.Height : 0
-    nextBounds = expandBoundsWithAreaPoint(
-      nextBounds,
-      entity.Position.X,
-      entity.Position.Y,
-      offsetX - height,
-      offsetY - height,
-      areaBounds
-    )
-    nextBounds = expandBoundsWithAreaPoint(
-      nextBounds,
-      entity.Position.X,
-      entity.Position.Y,
-      offsetX + height,
-      offsetY + height,
-      areaBounds
-    )
-  }
-
-  return nextBounds
-}
-
-const expandBoundsWithAreaPoint = (
-  bounds: FlowConnectionBounds | null,
-  x: number | undefined,
-  y: number | undefined,
-  offsetX: number,
-  offsetY: number,
-  areaBounds: FlowConnectionBounds
-) => {
-  if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
-    return bounds
-  }
-
-  const worldX = x + offsetX
-  const worldY = y + offsetY
-  if (!isPointInsideBounds(worldX, worldY, areaBounds)) {
-    return bounds
-  }
-
-  return expandBoundsWithPoint(bounds, worldX, worldY)
 }
 
 const expandBoundsWithPoint = (
@@ -753,67 +544,50 @@ const mergeBounds = (
     : nextBounds
 }
 
-const expandBounds = (
-  bounds: FlowConnectionBounds,
-  ratio: number,
-  minPadding: number
-) => {
-  const padding = Math.max(
-    minPadding,
-    Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * ratio
-  )
-  return {
-    minX: bounds.minX - padding,
-    minY: bounds.minY - padding,
-    maxX: bounds.maxX + padding,
-    maxY: bounds.maxY + padding
+let flowConnectionDocument = parseFlowConnectionDocument(
+  flowConnectionJsonText
+)
+let flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
+let flowConnectionLogIndex = buildFlowConnectionLogIndex(flowConnectionDocument)
+let flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(flowConnectionDocument)
+let flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
+let flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
+
+const useFlowConnectionDocument = () => {
+  flowConnectionDocument = parseFlowConnectionDocument(flowConnectionJsonText)
+  flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
+  flowConnectionLogIndex = buildFlowConnectionLogIndex(flowConnectionDocument)
+  flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(flowConnectionDocument)
+  flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
+  flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
+}
+
+const getFlowConnectionViewBox = () => {
+  if (!flowConnectionPidBounds) return undefined
+
+  return new AcGeBox2d()
+    .expandByPoint({ x: flowConnectionPidBounds.minX, y: flowConnectionPidBounds.minY })
+    .expandByPoint({ x: flowConnectionPidBounds.maxX, y: flowConnectionPidBounds.maxY })
+}
+
+const selectFlowConnectionDocumentAndView = () => {
+  useFlowConnectionDocument()
+  const viewBox = getFlowConnectionViewBox()
+  if (!viewBox) return
+
+  const zoomToDrawing = () => {
+    const view = AcApDocManager.instance.curView
+    if (!view) return
+    view.zoomTo(viewBox, 1)
   }
-}
 
-const clampBounds = (
-  bounds: FlowConnectionBounds,
-  outer: FlowConnectionBounds
-) => {
-  return {
-    minX: Math.max(bounds.minX, outer.minX),
-    minY: Math.max(bounds.minY, outer.minY),
-    maxX: Math.min(bounds.maxX, outer.maxX),
-    maxY: Math.min(bounds.maxY, outer.maxY)
-  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      zoomToDrawing()
+      window.setTimeout(zoomToDrawing, 250)
+    })
+  })
 }
-
-const isPointInsideBounds = (
-  x: number,
-  y: number,
-  bounds: FlowConnectionBounds
-) => {
-  return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY
-}
-
-const intersectsBounds = (
-  left: FlowConnectionBounds,
-  right: FlowConnectionBounds
-) => {
-  return !(
-    left.maxX < right.minX ||
-    left.minX > right.maxX ||
-    left.maxY < right.minY ||
-    left.minY > right.maxY
-  )
-}
-
-const flowConnectionDocument = parseFlowConnectionDocument()
-const flowConnectionIndex = buildFlowConnectionIndex(flowConnectionDocument)
-const flowConnectionLogIndex = buildFlowConnectionLogIndex(
-  flowConnectionDocument
-)
-const flowBoundaryHandleKeys = buildFlowBoundaryHandleKeys(
-  flowConnectionDocument
-)
-const flowEdgeHandleKeys = buildFlowEdgeHandleKeys(flowConnectionDocument)
-const flowConnectionPidBounds = resolveFlowConnectionPidBounds(
-  flowConnectionDocument
-)
 
 type ColorWritable = {
   set(value: number): void
@@ -1171,6 +945,7 @@ class CadViewerApp {
         }
       )
       if (!success) throw new Error(`无法打开 ${record.name}`)
+      selectFlowConnectionDocumentAndView()
       this.predefinedButtons.forEach(item => item.classList.remove('active'))
       document.title = record.name
       this.showMessage(`Successfully loaded: ${record.name}`, 'success')
@@ -3492,11 +3267,13 @@ class CadViewerApp {
           const content = await this.drawingLibraryRepository.getContent(
             backendFileMatch[1]
           )
-          return AcApDocManager.instance.openDocument(
+          const success = await AcApDocManager.instance.openDocument(
             drawing.sourceName,
             content,
             options
           )
+          if (success) selectFlowConnectionDocumentAndView()
+          return success
         } catch (error) {
           log.warn(
             `Failed to open backend drawing ${drawing.id} as binary content:`,
@@ -3504,19 +3281,22 @@ class CadViewerApp {
           )
         }
       }
-      return drawing.url
+      const success = drawing.url
         ? AcApDocManager.instance.openUrl(drawing.url, options)
         : false
+      if (success) selectFlowConnectionDocumentAndView()
+      return success
     }
     if (drawing.kind === 'local') {
       const stored = await this.drawingAssetStore.get(drawing.id)
-      return stored
-        ? AcApDocManager.instance.openDocument(
-          stored.fileName,
-          stored.content,
-          options
-        )
-        : false
+      if (!stored) return false
+      const success = await AcApDocManager.instance.openDocument(
+        stored.fileName,
+        stored.content,
+        options
+      )
+      if (success) selectFlowConnectionDocumentAndView()
+      return success
     }
     const cmd = new AcApQNewCmd()
     await cmd.execute(AcApDocManager.instance.context)
@@ -4452,6 +4232,7 @@ class CadViewerApp {
       )
 
       if (success) {
+        selectFlowConnectionDocumentAndView()
         this.predefinedButtons.forEach(item => item.classList.remove('active'))
         this.updateFileSidebarSubtitle('Tap to browse sample files')
         this.showMessage(`Successfully loaded: ${file.name}`, 'success')

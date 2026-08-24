@@ -17,6 +17,20 @@ export interface FlowConnectionEntityInput {
 }
 
 export interface FlowConnectionDocumentInput {
+  Areas?: Array<{
+    Id?: string
+    BoundingBox?: {
+      Min?: { X?: number; Y?: number; Z?: number }
+      Max?: { X?: number; Y?: number; Z?: number }
+    }
+    Components?: {
+      $values?: Array<{
+        Handle?: number
+        Id?: string
+        Name?: string
+      }>
+    }
+  }>
   Dsl?: {
     Entities?: { $values?: FlowConnectionEntityInput[] }
   }
@@ -39,7 +53,16 @@ export interface FlowConnectionDocumentInput {
           }>
         }
       }>
-    }
+    } | Array<{
+      Id?: string
+      Components?: {
+        $values?: Array<{
+          Handle?: number
+          Id?: string
+          Name?: string
+        }>
+      }
+    }>
   }
 }
 
