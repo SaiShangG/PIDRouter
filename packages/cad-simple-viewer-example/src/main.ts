@@ -64,6 +64,7 @@ import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyl
 import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssistantDrawingRepository'
 import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
+import { getOpenValveHandleKeys } from './flow/openValveStates'
 import type {
   ValveDebugOverlay,
   ValveDebugView
@@ -117,6 +118,10 @@ import {
   type ResolvedEntityPresentation,
   resolveEntityPresentation
 } from './presentation/presentationStyleResolver'
+import {
+  type FlowHighlightLayer,
+  resolveFlowHighlightLayers
+} from './presentation/resolveFlowHighlightLayers'
 import {
   StyleSourceDialog,
   type StyleSourceSelection
@@ -890,7 +895,10 @@ class CadViewerApp {
   private isInitialized = false
   private hasOpenedFile = false
   private isLoadingFile = false
-  private openHighlightRoots = new Map<AcDbObjectId, PreviewRoot>()
+  private openHighlightRoots = new Map<
+    AcDbObjectId,
+    Map<string, PreviewRoot>
+  >()
   private openHighlightGroups = new Map<AcDbObjectId, Set<AcDbObjectId>>()
   private openHighlightConnections = new Map<AcDbObjectId, Set<number>>()
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
@@ -3537,7 +3545,8 @@ class CadViewerApp {
     const traversalEdgeKeys = new Set<string>()
     const visitedHandleKeys = new Set<string>()
     const pendingHandleKeys = handleKeysFromObjectId(objectId)
-    const traversableBoundaryKeys = new Set(pendingHandleKeys)
+    const traversableBoundaryKeys = this.getOpenFlowBoundaryKeys()
+    pendingHandleKeys.forEach(handleKey => traversableBoundaryKeys.add(handleKey))
 
     while (pendingHandleKeys.length > 0) {
       const handleKey = pendingHandleKeys.shift()
@@ -3590,6 +3599,17 @@ class CadViewerApp {
       connectedHandles,
       traversalEdges
     }
+  }
+
+  private getOpenFlowBoundaryKeys() {
+    const keys = getOpenValveHandleKeys(this.valveDeviceStates.values())
+    ;[...keys].forEach(handleKey => {
+      const handle = Number.parseInt(handleKey, 16)
+      if (Number.isFinite(handle)) {
+        handleKeysFromNumber(handle).forEach(alias => keys.add(alias))
+      }
+    })
+    return keys
   }
 
   private isClosedFlowBoundary(
@@ -3706,7 +3726,7 @@ class CadViewerApp {
       this.openHighlightGroups.delete(ownerId)
       this.openHighlightConnections.delete(ownerId)
       this.openHighlightPaths.delete(ownerId)
-      this.syncOpenHighlightRoots()
+      this.recomputeOpenHighlightGroups()
       this.captureLoadedPhaseState()
       return
     }
@@ -3730,18 +3750,19 @@ class CadViewerApp {
       handleKeys: [handleKey],
       styleSource
     })
-    this.syncOpenHighlightRoots()
+    this.recomputeOpenHighlightGroups()
     this.captureLoadedPhaseState()
   }
 
   private recomputeOpenHighlightGroups() {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
+      const traversal = this.isFlowBoundaryObject(ownerId)
+        ? this.getFlowConnectionTraversal(ownerId)
+        : { connectedHandles: new Set<number>(), traversalEdges: [] }
+      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
       this.openHighlightGroups.set(
         ownerId,
-        this.getOpenHighlightObjectIds(
-          ownerId,
-          this.openHighlightConnections.get(ownerId)
-        )
+        this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
       )
     })
     this.syncOpenHighlightRoots()
@@ -3759,34 +3780,54 @@ class CadViewerApp {
     let changedHighlight = false
 
     idsToRemove.forEach(id => {
-      const root = this.openHighlightRoots.get(id)
-      if (!root) return
+      const roots = this.openHighlightRoots.get(id)
+      if (!roots) return
 
-      root.removeFromParent()
-      this.disposePreviewRoot(root)
+      roots.forEach(root => {
+        root.removeFromParent()
+        this.disposePreviewRoot(root)
+      })
       this.openHighlightRoots.delete(id)
       changedHighlight = true
     })
 
     desiredIds.forEach(id => {
-      if (this.openHighlightRoots.has(id)) return
+      const desiredLayers = this.resolveHighlightLayersForObjectId(id)
+      const roots = this.openHighlightRoots.get(id) ?? new Map<string, PreviewRoot>()
+      const desiredLayerIds = new Set(desiredLayers.map(layer => layer.id))
 
-      const root = layout.createEntityPreviewRoot([id], {
-        missingEntity: 'skip'
-      }) as PreviewRoot | null
-      if (!root) return
+      roots.forEach((root, layerId) => {
+        if (desiredLayerIds.has(layerId)) return
+        root.removeFromParent()
+        this.disposePreviewRoot(root)
+        roots.delete(layerId)
+        changedHighlight = true
+      })
 
-      root.name = 'SelectionOpenHighlight'
-      this.applyOpenHighlightStyle(root, id)
-        ; (layout.internalObject as LayoutObjectHost).add(root)
-      this.openHighlightRoots.set(id, root)
-      changedHighlight = true
-    })
+      desiredLayers.forEach(layer => {
+        let root = roots.get(layer.id)
+        if (!root) {
+          const createdRoot = layout.createEntityPreviewRoot([id], {
+            missingEntity: 'skip'
+          }) as PreviewRoot | null
+          if (!createdRoot) return
 
-    this.openHighlightRoots.forEach((root, id) => {
-      if (!desiredIds.has(id)) return
-      this.applyOpenHighlightStyle(root, id)
-      changedHighlight = true
+          root = createdRoot
+          root.name = `SelectionOpenHighlight:${layer.id}`
+          upgradePreviewWideLines(root, layer.style, view.width, view.height)
+            ; (layout.internalObject as LayoutObjectHost).add(root)
+          roots.set(layer.id, root)
+          changedHighlight = true
+        }
+        this.applyOpenHighlightStyle(root, layer)
+        changedHighlight = true
+      })
+
+      if (roots.size > 0) {
+        this.openHighlightRoots.set(id, roots)
+      } else {
+        this.openHighlightRoots.delete(id)
+      }
     })
 
     if (changedHighlight) {
@@ -3938,26 +3979,20 @@ class CadViewerApp {
     return entries.length > 0 ? Object.fromEntries(entries) : undefined
   }
 
-  private resolvePresentationForObjectId(
+  private resolveHighlightLayersForObjectId(
     objectId: AcDbObjectId,
-    draft = this.getLoadedHighlightStyleDraft(),
-    flowPath?: FlowPathStatus
-  ): ResolvedEntityPresentation {
+    draft = this.getLoadedHighlightStyleDraft()
+  ): FlowHighlightLayer[] {
     const profile =
       draft?.presentationProfile ?? createDefaultPresentationProfile()
     const deviceState = this.valveDeviceStates.get(objectId)
-
-    for (const [ownerId, group] of [...this.openHighlightGroups].reverse()) {
-      if (!group.has(objectId)) continue
-      const runtimeFlowPath = this.openHighlightPaths.get(ownerId)
-      if (runtimeFlowPath) {
-        return resolveEntityPresentation(profile, {
-          flowPath: runtimeFlowPath,
-          deviceState
-        })
-      }
-    }
-    return resolveEntityPresentation(profile, { flowPath, deviceState })
+    const flowPaths: FlowPathStatus[] = []
+    this.openHighlightGroups.forEach((group, ownerId) => {
+      if (!group.has(objectId)) return
+      const flowPath = this.openHighlightPaths.get(ownerId)
+      if (flowPath) flowPaths.push(flowPath)
+    })
+    return resolveFlowHighlightLayers(profile, flowPaths, deviceState)
   }
 
   private removeOpenHighlight(ids?: AcDbObjectId[]) {
@@ -3973,11 +4008,13 @@ class CadViewerApp {
     }
 
     idsToRemove.forEach(id => {
-      const root = this.openHighlightRoots.get(id)
-      if (!root) return
+      const roots = this.openHighlightRoots.get(id)
+      if (!roots) return
 
-      root.removeFromParent()
-      this.disposePreviewRoot(root)
+      roots.forEach(root => {
+        root.removeFromParent()
+        this.disposePreviewRoot(root)
+      })
       this.openHighlightRoots.delete(id)
       removedHighlight = true
     })
@@ -4157,18 +4194,11 @@ class CadViewerApp {
     return true
   }
 
-  private applyOpenHighlightStyle(root: PreviewRoot, objectId: AcDbObjectId) {
-    const view = AcApDocManager.instance.curView
-    const style = this.resolvePresentationForObjectId(objectId)
-    upgradePreviewWideLines(
-      root,
-      style,
-      view.width,
-      view.height
-    )
+  private applyOpenHighlightStyle(root: PreviewRoot, layer: FlowHighlightLayer) {
     this.phasePresentationController.apply(
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
-      style
+      layer.style,
+      layer.renderOrder
     )
   }
 

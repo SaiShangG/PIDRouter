@@ -48,4 +48,30 @@ describe('PhasePresentationController', () => {
     expect(shared.color.set).not.toHaveBeenCalled()
     expect(shared.linewidth).toBe(1)
   })
+
+  it('applies the requested render order to the root and its children', () => {
+    const child = {
+      renderOrder: 0,
+      material: null,
+      traverse: jest.fn()
+    }
+    const root = {
+      renderOrder: 0,
+      visible: true,
+      traverse: (callback: (object: typeof child) => void) => callback(child)
+    }
+    const controller = new PhasePresentationController()
+
+    controller.apply(root, {
+      key: 'utility-layer',
+      source: 'utility',
+      color: 0x00c853,
+      lineWidthPx: 3,
+      opacity: 1,
+      visible: true
+    }, 10002)
+
+    expect(root.renderOrder).toBe(10002)
+    expect(child.renderOrder).toBe(10002)
+  })
 })

@@ -29,12 +29,16 @@ export class PhasePresentationController {
   private viewportWidth = 1
   private viewportHeight = 1
 
-  apply(root: PresentationObject, style: ResolvedEntityPresentation) {
+  apply(
+    root: PresentationObject,
+    style: ResolvedEntityPresentation,
+    renderOrder = 10000
+  ) {
     this.roots.add(root)
-    root.renderOrder = 10000
+    root.renderOrder = renderOrder
     root.visible = style.visible
     root.traverse(object => {
-      object.renderOrder = 10000
+      object.renderOrder = renderOrder
       object.visible = style.visible
       const materials = Array.isArray(object.material)
         ? object.material
