@@ -3,7 +3,10 @@
 import type { AcDbObjectId } from '@mlightcad/data-model'
 import type { AcEdBaseView } from '@mlightcad/cad-simple-viewer'
 
-import { BrushHighlightFeature } from '../src/brush/BrushHighlightFeature'
+import {
+  BrushHighlightFeature,
+  type BrushOperation
+} from '../src/brush/BrushHighlightFeature'
 import type { ResolvedEntityPresentation } from '../src/presentation/presentationStyleResolver'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
@@ -82,6 +85,7 @@ const createView = () => {
     },
     setCursor: (value: number) => {
       cursor = value
+      canvas.style.cursor = value === 0 ? 'crosshair' : `cursor-${value}`
     }
   } as unknown as AcEdBaseView
 
@@ -89,6 +93,38 @@ const createView = () => {
 }
 
 describe('BrushHighlightFeature', () => {
+  it('uses an operation-specific cursor and restores it after deactivation', () => {
+    const { canvas, view } = createView()
+    const cursors: Record<BrushOperation, string> = {
+      paint: 'brush-cursor',
+      erase: 'eraser-cursor'
+    }
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getHighlightStyle: () => ({
+        key: 'purple-flow',
+        color: 0x9c27b0,
+        lineWidthPx: 3.5,
+        opacity: 1,
+        visible: true,
+        source: 'default'
+      }),
+      createOverlay: () => null,
+      setOperationCursor: (cursorView, operation) => {
+        cursorView.canvas.style.cursor = cursors[operation]
+      }
+    })
+
+    expect(feature.activate('paint')).toBe(true)
+    expect(canvas.style.cursor).toBe('brush-cursor')
+
+    expect(feature.activate('erase')).toBe(true)
+    expect(canvas.style.cursor).toBe('eraser-cursor')
+
+    feature.deactivate()
+    expect(canvas.style.cursor).toBe('crosshair')
+  })
+
   it('highlights interpolated hits and erases only brush highlights', () => {
     const { canvas, view, overlays } = createView()
     const feature = new BrushHighlightFeature({

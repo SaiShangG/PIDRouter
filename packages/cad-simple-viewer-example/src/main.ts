@@ -48,7 +48,8 @@ import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import {
   BrushHighlightFeature,
-  type BrushHighlightOverlay
+  type BrushHighlightOverlay,
+  type BrushOperation
 } from './brush/BrushHighlightFeature'
 import { setupCompactPhaseSidebar } from './compactPhaseSidebar'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
@@ -2101,9 +2102,21 @@ class CadViewerApp {
       getHighlightStyle: objectId =>
         this.resolveBrushHighlightStyle(objectId),
       createOverlay: (objectIds, style) =>
-        this.createBrushHighlightOverlay(objectIds, style)
+        this.createBrushHighlightOverlay(objectIds, style),
+      setOperationCursor: (view, operation) => {
+        view.canvas.style.cursor = this.createBrushCursor(operation)
+      }
     })
     this.brushHighlightFeature.attach()
+  }
+
+  private createBrushCursor(operation: BrushOperation) {
+    const icon = createPhaseIcon(operation === 'paint' ? Brush : Eraser)
+    icon.setAttribute('width', '24')
+    icon.setAttribute('height', '24')
+    icon.setAttribute('stroke', '#17262b')
+    const svg = icon.outerHTML.replace(/currentColor/g, '#17262b')
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`
   }
 
   private resolveBrushHighlightStyle(objectId: AcDbObjectId) {

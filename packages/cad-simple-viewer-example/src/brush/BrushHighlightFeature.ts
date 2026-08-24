@@ -20,6 +20,7 @@ export interface BrushHighlightFeatureOptions {
     objectIds: readonly AcDbObjectId[],
     style: ResolvedEntityPresentation
   ): BrushHighlightOverlay | null
+  setOperationCursor?(view: AcEdBaseView, operation: BrushOperation): void
   radiusPx?: number
   sampleSpacingPx?: number
   onActiveChanged?(): void
@@ -83,6 +84,7 @@ export class BrushHighlightFeature {
       this.addPointerListeners()
       document.addEventListener('keydown', this.handleKeyDown, true)
     }
+    this.options.setOperationCursor?.(view, this.operation)
     this.options.onActiveChanged?.()
     return true
   }
