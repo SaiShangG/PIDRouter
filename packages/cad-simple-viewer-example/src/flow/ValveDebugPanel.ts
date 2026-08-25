@@ -191,6 +191,34 @@ const injectStyles = () => {
       padding: 0;
       min-width: 0;
     }
+    .valve-debug-tree-row {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      align-items: center;
+      min-width: 0;
+    }
+    .valve-debug-tree-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--valve-debug-muted);
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .valve-debug-tree-toggle:hover,
+    .valve-debug-tree-toggle:focus-visible {
+      color: var(--valve-debug-accent);
+      outline: none;
+    }
+    .valve-debug-tree-toggle-placeholder {
+      width: 16px;
+      height: 1px;
+    }
     .valve-debug-tree-node {
       display: grid;
       grid-template-columns: 22px minmax(0, 1fr) minmax(44px, 26%);
@@ -291,6 +319,7 @@ export class ValveDebugPanel {
   private resizeStartX = 0
   private resizeStartWidth = DEFAULT_PANEL_WIDTH
   private unavailableKeys = new Set<string>()
+  private collapsedBranchKeys = new Set<string>()
 
   constructor(
     host: HTMLElement,
@@ -443,10 +472,35 @@ export class ValveDebugPanel {
   private appendTreeNode(node: FlowDebugTreeNode, parent: HTMLOListElement) {
     const item = document.createElement('li')
     item.className = 'valve-debug-tree-item'
+    const row = document.createElement('div')
+    row.className = 'valve-debug-tree-row'
+    row.style.paddingLeft = `${node.depth * 14}px`
+    const hasChildren = node.children.length > 0
+    const isExpanded = !this.collapsedBranchKeys.has(node.key)
+    const toggle = hasChildren
+      ? document.createElement('button')
+      : document.createElement('span')
+    toggle.className = hasChildren
+      ? 'valve-debug-tree-toggle'
+      : 'valve-debug-tree-toggle-placeholder'
+    if (toggle instanceof HTMLButtonElement) {
+      toggle.type = 'button'
+      toggle.textContent = isExpanded ? '▾' : '▸'
+      toggle.dataset.branchKey = node.key
+      toggle.setAttribute('aria-expanded', String(isExpanded))
+      toggle.setAttribute(
+        'aria-label',
+        `${isExpanded ? this.labels.collapseBranch : this.labels.expandBranch}: ${node.node.label}`
+      )
+      toggle.addEventListener('click', () => {
+        if (isExpanded) this.collapsedBranchKeys.add(node.key)
+        else this.collapsedBranchKeys.delete(node.key)
+        this.renderBranch(item, node)
+      })
+    }
     const button = document.createElement('button')
     button.className = 'valve-debug-tree-node'
     button.type = 'button'
-    button.style.paddingLeft = `${6 + node.depth * 14}px`
     button.dataset.handleKey = node.key
     button.title = `${node.node.label} · ${node.key}`
     button.addEventListener('click', () => this.callbacks.onNodeClick(node.key))
@@ -477,15 +531,25 @@ export class ValveDebugPanel {
       ? this.labels.locateUnavailable
       : this.statusLabel(node.status)
     button.append(icon, main, status)
-    item.append(button)
+    row.append(toggle, button)
+    item.append(row)
 
-    if (node.children.length > 0) {
-      const children = document.createElement('ol')
-      children.className = 'valve-debug-panel-tree is-nested'
-      node.children.forEach(child => this.appendTreeNode(child, children))
-      item.append(children)
-    }
+    if (hasChildren && isExpanded) this.appendBranchChildren(item, node)
     parent.append(item)
+  }
+
+  private renderBranch(item: HTMLLIElement, node: FlowDebugTreeNode) {
+    const parent = item.parentElement as HTMLOListElement
+    const replacement = document.createElement('ol')
+    this.appendTreeNode(node, replacement)
+    parent.replaceChild(replacement.firstElementChild!, item)
+  }
+
+  private appendBranchChildren(item: HTMLLIElement, node: FlowDebugTreeNode) {
+    const children = document.createElement('ol')
+    children.className = 'valve-debug-panel-tree is-nested'
+    node.children.forEach(child => this.appendTreeNode(child, children))
+    item.append(children)
   }
 
   private statusLabel(status: FlowDebugTreeNode['status']) {

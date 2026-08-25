@@ -150,6 +150,8 @@ export interface ValveDebugPanelLabels {
   missing: string
   collapse: string
   expand: string
+  collapseBranch: string
+  expandBranch: string
   resize?: string
 }
 

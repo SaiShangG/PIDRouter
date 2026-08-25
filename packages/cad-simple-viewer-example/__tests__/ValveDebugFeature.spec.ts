@@ -70,7 +70,7 @@ describe('ValveDebugFeature', () => {
     expect(closeButton.disabled).toBe(true)
 
     openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    expect(host.querySelector('.valve-debug-tree-label')?.textContent).toBe('V-1')
+    expect(host.querySelector('.valve-debug-tree-label')?.textContent).toBe('1')
     expect(overlays.some(item => item.kind === 'path' && item.ids.includes('1') && item.ids.includes('2'))).toBe(true)
     host.querySelector<HTMLButtonElement>('[data-handle-key="2"]')?.click()
     expect(zoomCalls).toBe(0)

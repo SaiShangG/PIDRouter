@@ -119,6 +119,8 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       missing: 'Missing',
       collapse: 'Collapse valve debug panel',
       expand: 'Expand valve debug panel',
+      collapseBranch: 'Collapse branch',
+      expandBranch: 'Expand branch',
       resize: 'Resize valve debug panel'
     }
     : {
@@ -140,6 +142,8 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       missing: '缺失',
       collapse: '折叠阀门调试面板',
       expand: '展开阀门调试面板',
+      collapseBranch: '折叠分支',
+      expandBranch: '展开分支',
       resize: '调整阀门调试面板宽度'
     }
 

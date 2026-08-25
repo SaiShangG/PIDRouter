@@ -37,6 +37,16 @@ describe('ValveDebugPanel', () => {
     host.querySelector<HTMLButtonElement>('[data-handle-key="1B"]')?.click()
     expect(clicked).toEqual(['1B'])
 
+    const branchToggle = host.querySelector<HTMLButtonElement>('[data-branch-key="1A"]')!
+    expect(branchToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(branchToggle.getAttribute('aria-label')).toBe('Collapse branch: V-1')
+    branchToggle.click()
+    expect(host.querySelector('[data-handle-key="1B"]')).toBeNull()
+    expect(host.querySelector('[data-branch-key="1A"]')?.getAttribute('aria-expanded')).toBe('false')
+    host.querySelector<HTMLButtonElement>('[data-branch-key="1A"]')?.click()
+    expect(host.querySelector('[data-handle-key="1B"]')).not.toBeNull()
+    expect(host.querySelector('[data-branch-key="1B"]')).toBeNull()
+
     panel.setCollapsed(true)
     expect(panel.element.classList.contains('is-collapsed')).toBe(true)
     expect(panel.element.querySelector('.valve-debug-panel-body')?.matches(':not([hidden])')).toBe(true)

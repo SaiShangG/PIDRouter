@@ -20,19 +20,19 @@ describe('flowGraph', () => {
         Areas: [{
           Id: 'A-1',
           ControlModules: [
-            { CadHandle: 2, Id: 'V-2', Name: 'Valve' },
+            { CadHandle: 26, Id: 'V-26', Name: 'Valve' },
             { CadHandle: 5, Id: 'P-5', Name: 'Pump' }
           ],
-          ContainCadEntityHandles: [2, 3, 4, 5, 6]
+          ContainCadEntityHandles: [26, 3, 4, 5, 6]
         }],
         Map: {
           Graph: {
-            Vertices: [2, 3, 4, 5, 6],
+            Vertices: [26, 3, 4, 5, 6],
             Edges: [
-              { Source: 2, Target: 3 },
+              { Source: 26, Target: 3 },
               { Source: 3, Target: 4 },
               { Source: 4, Target: 5 },
-              { Source: 2, Target: 6 },
+              { Source: 26, Target: 6 },
               { Source: 5, Target: 6 }
             ]
           }
@@ -40,12 +40,13 @@ describe('flowGraph', () => {
       })
     )
 
-    expect(graph.nodes.get('2')?.kind).toBe('valve')
-    expect(graph.nodes.get('2')?.label).toBe('V-2')
+    expect(graph.nodes.get('1A')?.kind).toBe('valve')
+    expect(graph.nodes.get('1A')?.label).toBe('26')
+    expect(graph.nodes.get('1A')?.componentId).toBe('V-26')
     expect(graph.nodes.get('5')?.kind).toBe('pump')
-    expect(graph.valveKeys).toEqual(new Set(['2']))
+    expect(graph.valveKeys).toEqual(new Set(['1A']))
     expect(graph.pumpKeys).toEqual(new Set(['5']))
-    expect(graph.primaryHandleByCadHandle.get('3')).toBe('2')
+    expect(graph.primaryHandleByCadHandle.get('3')).toBe('1A')
     expect(graph.primaryHandleByCadHandle.get('4')).toBe('5')
     expect(graph.primaryHandleByCadHandle.has('6')).toBe(false)
   })

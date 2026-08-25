@@ -64,16 +64,12 @@ const createNode = (
 ): FlowGraphNode => {
   const handle = Number.parseInt(key, 16)
   const kind: FlowGraphNodeKind = module?.deviceType ?? 'line'
-  const label =
-    normalizeLabel(module?.Id) ??
-    normalizeLabel(module?.Name) ??
-    key
 
   return {
     key,
     handle,
     kind,
-    label,
+    label: handle.toString(10),
     componentId: normalizeLabel(module?.Id),
     componentName: normalizeLabel(module?.Name),
     missingEntity: !existsInDocument
