@@ -56,9 +56,10 @@ describe('ProcessAssistantProjectRepository', () => {
     expect(api.get).toHaveBeenCalledWith(4)
   })
 
-  it('creates through add-v2 and reloads the backend DTO', async () => {
+  it('creates through add-v2, persists its payload, and reloads the backend DTO', async () => {
     const { api, repository } = createHarness()
     api.addV2.mockResolvedValue(7)
+    api.update.mockResolvedValue(undefined)
     api.get.mockResolvedValue({
       id: 7,
       name: 'New Project',
@@ -86,7 +87,22 @@ describe('ProcessAssistantProjectRepository', () => {
       description: 'Description',
       fileIds: [8, 9]
     })
+    expect(api.update).toHaveBeenCalledWith(7, {
+      id: 7,
+      name: 'New Project',
+      jsonData: JSON.stringify({
+        name: 'New Project',
+        description: 'Description',
+        fileIds: [8, 9]
+      })
+    })
     expect(api.get).toHaveBeenCalledWith(7)
+    expect(api.addV2.mock.invocationCallOrder[0]).toBeLessThan(
+      api.update.mock.invocationCallOrder[0]
+    )
+    expect(api.update.mock.invocationCallOrder[0]).toBeLessThan(
+      api.get.mock.invocationCallOrder[0]
+    )
   })
 
   it('updates with versioned jsonData and delegates delete', async () => {

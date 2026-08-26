@@ -80,6 +80,11 @@ export class ProcessAssistantProjectRepository implements ProjectRepository {
   async create(input: ProjectInput): Promise<ProjectRecord> {
     const normalized = normalizeInput(input)
     const id = await this.api.addV2(normalized)
+    await this.api.update(id, {
+      id,
+      name: normalized.name,
+      jsonData: JSON.stringify(normalized)
+    })
     return this.get(id)
   }
 
