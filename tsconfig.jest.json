@@ -6,6 +6,10 @@
     "allowJs": true,
     "resolveJsonModule": true,
     "noEmit": true,
+    "types": [
+      "jest",
+      "node"
+    ],
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },

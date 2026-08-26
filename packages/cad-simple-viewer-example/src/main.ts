@@ -61,6 +61,7 @@ import {
 import { DrawingLibraryModal } from './drawing-library/DrawingLibraryModal'
 import { injectDrawingLibraryStyles } from './drawing-library/drawingLibraryStyles'
 import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyles'
+import { extractPdiArchive } from './drawing-library/pdiArchive'
 import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssistantDrawingRepository'
 import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
@@ -79,7 +80,6 @@ import {
   defaultValveDebugLabels,
   type ValveDebugLocale
 } from './flow/ValveDebugFeature'
-import flowConnectionJsonText from './FlowConnection/Document.json?raw'
 import {
   type AppLocale,
   loadAppLocale,
@@ -289,14 +289,14 @@ const mergeBounds = (
     : nextBounds
 }
 
-let flowConnectionDocument = parseFlowConnectionDocument(
-  flowConnectionJsonText
-)
+let flowConnectionDocument: FlowConnectionDocumentInput = {}
 let flowGraphIndex = buildFlowGraphIndex(flowConnectionDocument)
 let flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
 
-const useFlowConnectionDocument = () => {
-  flowConnectionDocument = parseFlowConnectionDocument(flowConnectionJsonText)
+const useFlowConnectionDocument = (jsonText?: string) => {
+  flowConnectionDocument = jsonText
+    ? parseFlowConnectionDocument(jsonText)
+    : {}
   flowGraphIndex = buildFlowGraphIndex(flowConnectionDocument)
   flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
 }
@@ -309,8 +309,8 @@ const getFlowConnectionViewBox = () => {
     .expandByPoint({ x: flowConnectionPidBounds.maxX, y: flowConnectionPidBounds.maxY })
 }
 
-const selectFlowConnectionDocumentAndView = () => {
-  useFlowConnectionDocument()
+const selectFlowConnectionDocumentAndView = (jsonText?: string) => {
+  useFlowConnectionDocument(jsonText)
   const viewBox = getFlowConnectionViewBox()
   if (!viewBox) return
 
@@ -3053,21 +3053,25 @@ class CadViewerApp {
       const backendFileMatch = /^file:(\d+)$/.exec(drawing.id)
       if (backendFileMatch) {
         try {
-          const content = await this.drawingLibraryRepository.getContent(
+          const pdiContent = await this.drawingLibraryRepository.getContent(
             backendFileMatch[1]
           )
+          const extracted = await extractPdiArchive(pdiContent)
+          useFlowConnectionDocument(extracted.flowConnectionJsonText)
           const success = await AcApDocManager.instance.openDocument(
-            drawing.sourceName,
-            content,
+            extracted.cadFileName,
+            extracted.cadContent,
             options
           )
-          if (success) selectFlowConnectionDocumentAndView()
+          if (success) {
+            selectFlowConnectionDocumentAndView(
+              extracted.flowConnectionJsonText
+            )
+          }
           return success
         } catch (error) {
-          log.warn(
-            `Failed to open backend drawing ${drawing.id} as binary content:`,
-            error
-          )
+          log.error(`Failed to open PDI drawing ${drawing.id}:`, error)
+          throw error
         }
       }
       const success = drawing.url

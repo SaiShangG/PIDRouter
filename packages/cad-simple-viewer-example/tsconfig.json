@@ -20,10 +20,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "jest"
     ]
   },
   "include": [
-    "src"
+    "src",
+    "__tests__"
   ]
 }
