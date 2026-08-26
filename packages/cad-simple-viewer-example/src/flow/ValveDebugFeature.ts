@@ -150,7 +150,7 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
 export const defaultValveDebugLabels = getLabels
 
 export class ValveDebugFeature {
-  readonly graph: FlowGraphIndex
+  graph: FlowGraphIndex
   readonly panel: ValveDebugPanel
   private readonly states = new Map<string, ValveRuntimeState>()
   private readonly results = new Map<string, ReturnType<typeof traverseFlowFromValve>>()
@@ -215,6 +215,13 @@ export class ValveDebugFeature {
     }
     this.attachedCanvas = canvas
     canvas.addEventListener('contextmenu', this.handleContextMenu, true)
+    console.log('[ValveDebugFeature] Attached context menu listener', { canvas })
+  }
+
+  setGraphDocument(document: FlowConnectionDocumentInput) {
+    if (this.disposed) return
+    this.graph = buildFlowGraphIndex(document)
+    this.reset()
   }
 
   reset() {
@@ -272,20 +279,49 @@ export class ValveDebugFeature {
   }
 
   private readonly handleContextMenu = (event: MouseEvent) => {
+    console.log('[ValveDebugFeature] Right-click received', {
+      target: event.target,
+      currentTarget: event.currentTarget,
+      clientX: event.clientX,
+      clientY: event.clientY
+    })
     const view = this.options.getView()
-    if (!view || event.currentTarget !== view.canvas) return
+    if (!view) {
+      console.warn('[ValveDebugFeature] Right-click ignored: no active view')
+      return
+    }
+    if (event.currentTarget !== view.canvas) {
+      console.warn('[ValveDebugFeature] Right-click ignored: canvas mismatch')
+      return
+    }
     const canvasPoint = view.viewportToCanvas({ x: event.clientX, y: event.clientY })
     const worldPoint = view.screenToWorld(canvasPoint)
-    const hit = view
-      .pick(worldPoint)
+    const pickedItems = view.pick(worldPoint, undefined, true)
+    const candidateHandleKeys = pickedItems.flatMap(item => this.getCandidateHandleKeys(item.id))
+    const hit = pickedItems
       .flatMap(item => this.getCandidateHandleKeys(item.id))
       .map(key => this.resolveValveKey(key))
       .find((key): key is string => key != null)
-    if (!hit) return
+    if (!hit) {
+      console.warn('[ValveDebugFeature] Right-click did not resolve to a valve', {
+        canvasPoint,
+        worldPoint,
+        pickedIds: pickedItems.map(item => String(item.id)),
+        candidateHandleKeys,
+        valveKeys: [...this.graph.valveKeys]
+      })
+      return
+    }
 
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
+    console.log('[ValveDebugFeature] Right-click selected valve', {
+      key: hit,
+      label: this.graph.nodes.get(hit)?.label ?? hit,
+      clientX: event.clientX,
+      clientY: event.clientY
+    })
     this.openMenu(hit, event.clientX, event.clientY)
   }
 

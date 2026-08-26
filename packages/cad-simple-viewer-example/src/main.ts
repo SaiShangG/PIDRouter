@@ -3062,6 +3062,7 @@ class CadViewerApp {
           )
           const extracted = await extractPdiArchive(pdiContent)
           useFlowConnectionDocument(extracted.flowConnectionJsonText)
+          this.valveDebugFeature?.setGraphDocument(flowConnectionDocument)
           const success = await AcApDocManager.instance.openDocument(
             extracted.cadFileName,
             extracted.cadContent,

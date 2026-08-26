@@ -125,7 +125,11 @@ export interface ValveDebugView {
   width: number
   height: number
   viewportToCanvas(point: { x: number; y: number }): { x: number; y: number }
-  pick(point: { x: number; y: number }): Array<{ id: AcDbObjectId }>
+  pick(
+    point: { x: number; y: number },
+    hitRadius?: number,
+    pickOneOnly?: boolean
+  ): Array<{ id: AcDbObjectId }>
   screenToWorld(point: { x: number; y: number }): { x: number; y: number }
   zoomTo(box: unknown, margin?: number): void
   isDirty: boolean
