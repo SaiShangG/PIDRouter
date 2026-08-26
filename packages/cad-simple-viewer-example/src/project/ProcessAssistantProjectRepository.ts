@@ -5,6 +5,9 @@ import type { ProjectInput, ProjectRecord, ProjectRepository } from './types'
 interface ProjectJsonData {
   schemaVersion: 1
   description: string
+}
+
+interface ProjectJsonDataUpdate extends ProjectJsonData {
   fileIds: number[]
 }
 
@@ -23,24 +26,34 @@ const normalizeInput = (input: ProjectInput): ProjectInput => {
 }
 
 const parseJsonData = (value: string | null | undefined): ProjectJsonData => {
-  if (!value) return { schemaVersion: 1, description: '', fileIds: [] }
+  if (!value) return { schemaVersion: 1, description: '' }
   try {
     const parsed: unknown = JSON.parse(value)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { schemaVersion: 1, description: '', fileIds: [] }
+      return { schemaVersion: 1, description: '' }
     }
     const data = parsed as Record<string, unknown>
     return {
       schemaVersion: 1,
-      description: typeof data.description === 'string' ? data.description : '',
-      fileIds: Array.isArray(data.fileIds)
-        ? normalizeFileIds(
-          data.fileIds.filter((value): value is number => typeof value === 'number')
-        )
-        : []
+      description: typeof data.description === 'string' ? data.description : ''
     }
   } catch {
-    return { schemaVersion: 1, description: '', fileIds: [] }
+    return { schemaVersion: 1, description: '' }
+  }
+}
+
+const parseFileIds = (value: number[] | string | null | undefined): number[] => {
+  if (Array.isArray(value)) return normalizeFileIds(value)
+  if (!value?.trim()) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? normalizeFileIds(
+        parsed.filter((item): item is number => typeof item === 'number')
+      )
+      : []
+  } catch {
+    return []
   }
 }
 
@@ -49,7 +62,7 @@ const serializeJsonData = (input: ProjectInput): string =>
     schemaVersion: 1,
     description: input.description,
     fileIds: input.fileIds
-  } satisfies ProjectJsonData)
+  } satisfies ProjectJsonDataUpdate)
 
 const toProjectRecord = (project: ProjectDto): ProjectRecord | undefined => {
   if (!Number.isInteger(project.id) || (project.id ?? 0) < 1) return undefined
@@ -58,7 +71,7 @@ const toProjectRecord = (project: ProjectDto): ProjectRecord | undefined => {
     id: project.id!,
     name: project.name?.trim() || `Project ${project.id}`,
     description: data.description,
-    fileIds: data.fileIds
+    fileIds: parseFileIds(project.fileIds)
   }
 }
 
@@ -80,11 +93,6 @@ export class ProcessAssistantProjectRepository implements ProjectRepository {
   async create(input: ProjectInput): Promise<ProjectRecord> {
     const normalized = normalizeInput(input)
     const id = await this.api.addV2(normalized)
-    await this.api.update(id, {
-      id,
-      name: normalized.name,
-      jsonData: JSON.stringify(normalized)
-    })
     return this.get(id)
   }
 

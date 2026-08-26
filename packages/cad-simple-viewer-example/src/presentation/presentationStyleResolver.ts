@@ -1,5 +1,6 @@
 import type {
   DeviceState,
+  DeviceStateStyleDefinition,
   FlowPathStatus,
   HighlightStyle,
   PresentationProfile
@@ -39,6 +40,14 @@ const resolveDeviceStyle = (
   profile: PresentationProfile,
   state?: DeviceState
 ): HighlightStyle | undefined => {
+  const configuredState = profile.devices
+    .flatMap(device => device.states)
+    .find(candidate => candidate.key === (state?.stateKey ?? state?.mode))
+  if (configuredState) {
+    return configuredState.enabled
+      ? deviceStateStyle(configuredState)
+      : undefined
+  }
   switch (state?.mode) {
     case 'open':
       return profile.deviceStyles.valve.open ?? undefined
@@ -58,6 +67,15 @@ const resolveDeviceStyle = (
       return undefined
   }
 }
+
+const deviceStateStyle = (
+  state: DeviceStateStyleDefinition
+): HighlightStyle => ({
+  color: state.color,
+  lineWidthPx: state.lineWidthPx,
+  opacity: state.opacity,
+  visible: true
+})
 
 const styleKey = (style: HighlightStyle) =>
   `${style.color.toString(16).padStart(6, '0')}:${style.lineWidthPx}:${style.opacity}:${style.visible ? 1 : 0}`

@@ -118,7 +118,10 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .highlight-style-tabs button, .phase-workspace-modal .highlight-style-tabs button { min-height: 34px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: #53676e; font-size: 12px; font-weight: 700; }
     .phase-workspace .highlight-style-tabs button[aria-selected='true'], .phase-workspace-modal .highlight-style-tabs button[aria-selected='true'] { border-bottom-color: var(--app-accent, #087b58); color: var(--app-success-text, #075d43); }
     .highlight-style-content { min-height: 300px; max-height: min(520px, calc(100vh - 220px)); overflow: auto; padding: 16px; }
-    .highlight-style-list, .highlight-defaults, .highlight-device-table { display: grid; gap: 9px; }
+    .highlight-style-list, .highlight-device-table { display: grid; gap: 12px; }
+    .highlight-device-card { display: grid; gap: 8px; padding: 10px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; }
+    .highlight-device-card > header { display: grid; grid-template-columns: minmax(0, 1fr) 28px; gap: 8px; align-items: center; }
+    .highlight-device-card > header input { min-width: 0; font-weight: 700; }
     .highlight-style-row { display: grid; align-items: center; gap: 8px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; }
     .flow-style-row { grid-template-columns: minmax(110px, 1fr) minmax(130px, .8fr) minmax(150px, 1.3fr) auto; }
     .flow-style-row > .highlight-checkbox { grid-column: 1 / 3; }
@@ -127,7 +130,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .highlight-style-controls input[type='color'], .phase-workspace-modal .highlight-style-controls input[type='color'] { width: 34px; min-height: 30px; padding: 2px; }
     .phase-workspace .highlight-style-controls input[type='checkbox'], .phase-workspace .highlight-checkbox input[type='checkbox'], .phase-workspace-modal .highlight-style-controls input[type='checkbox'], .phase-workspace-modal .highlight-checkbox input[type='checkbox'] { width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
     .highlight-checkbox { display: inline-flex; align-items: center; gap: 6px; color: #53676e; font-size: 11px; font-weight: 650; }
-    .highlight-device-row { display: grid; grid-template-columns: 100px 76px minmax(220px, 1fr) 28px; align-items: center; gap: 10px; padding: 8px 9px; border-bottom: 1px solid #e1e7e8; }
+    .highlight-device-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(120px, 1fr) auto minmax(220px, 1.4fr) 28px; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e1e7e8; }
     .highlight-device-row strong { color: #075d43; font-size: 10px; }
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }
     .highlight-default-field { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.2fr); align-items: center; gap: 12px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; font-weight: 650; }

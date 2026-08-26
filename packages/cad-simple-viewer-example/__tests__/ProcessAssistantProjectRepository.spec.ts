@@ -13,16 +13,17 @@ const createHarness = () => {
 }
 
 describe('ProcessAssistantProjectRepository', () => {
-  it('maps Project DTO jsonData and skips invalid IDs', async () => {
+  it('maps top-level fileIds and ignores jsonData.fileIds', async () => {
     const { api, repository } = createHarness()
     api.list.mockResolvedValue([
       {
         id: 4,
         name: 'CIP',
+        fileIds: '[2, 2, -1, 3]',
         jsonData: JSON.stringify({
           schemaVersion: 1,
           description: 'Cleaning',
-          fileIds: [2, 2, -1, 3]
+          fileIds: [99]
         })
       },
       { name: 'Missing ID' },
@@ -40,10 +41,11 @@ describe('ProcessAssistantProjectRepository', () => {
     api.get.mockResolvedValue({
       id: 4,
       name: 'CIP',
+      fileIds: [2, 3],
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Cleaning',
-        fileIds: [2, 3]
+        fileIds: [99]
       })
     })
 
@@ -56,17 +58,17 @@ describe('ProcessAssistantProjectRepository', () => {
     expect(api.get).toHaveBeenCalledWith(4)
   })
 
-  it('creates through add-v2, persists its payload, and reloads the backend DTO', async () => {
+  it('creates through add-v2 and reloads the backend DTO without updating it', async () => {
     const { api, repository } = createHarness()
     api.addV2.mockResolvedValue(7)
-    api.update.mockResolvedValue(undefined)
     api.get.mockResolvedValue({
       id: 7,
       name: 'New Project',
+      fileIds: '[8,9]',
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Description',
-        fileIds: [8, 9]
+        fileIds: [99]
       })
     })
 
@@ -87,22 +89,8 @@ describe('ProcessAssistantProjectRepository', () => {
       description: 'Description',
       fileIds: [8, 9]
     })
-    expect(api.update).toHaveBeenCalledWith(7, {
-      id: 7,
-      name: 'New Project',
-      jsonData: JSON.stringify({
-        name: 'New Project',
-        description: 'Description',
-        fileIds: [8, 9]
-      })
-    })
+    expect(api.update).not.toHaveBeenCalled()
     expect(api.get).toHaveBeenCalledWith(7)
-    expect(api.addV2.mock.invocationCallOrder[0]).toBeLessThan(
-      api.update.mock.invocationCallOrder[0]
-    )
-    expect(api.update.mock.invocationCallOrder[0]).toBeLessThan(
-      api.get.mock.invocationCallOrder[0]
-    )
   })
 
   it('updates with versioned jsonData and delegates delete', async () => {
@@ -111,10 +99,11 @@ describe('ProcessAssistantProjectRepository', () => {
     api.get.mockResolvedValue({
       id: 3,
       name: 'Updated',
+      fileIds: [5],
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Details',
-        fileIds: [5]
+        fileIds: [99]
       })
     })
     api.delete.mockResolvedValue(undefined)

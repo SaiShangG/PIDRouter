@@ -1637,6 +1637,20 @@ class CadViewerApp {
         state === 'open' ? this.requestValveFlowStyle(handleKey) : true,
       onStateChanged: (handleKey, state) =>
         this.handleValveStateChanged(handleKey, state),
+      getConfiguredStates: () =>
+        this.getActivePresentationProfile().devices.flatMap(device => device.states),
+      requestConfiguredStateChange: (handleKey, state) => {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        if (!ownerId) return false
+        this.valveDeviceStates.set(ownerId, {
+          key: handleKey,
+          label: state.displayName,
+          mode: state.key === 'closed' ? 'closed' : 'open',
+          stateKey: state.key
+        })
+        this.captureLoadedPhaseState()
+        return true
+      },
       renderPathOverlay: false
     })
     this.valveDebugFeature.attach()

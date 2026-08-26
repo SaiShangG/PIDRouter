@@ -1,5 +1,6 @@
 import type { AcDbObjectId } from '@mlightcad/data-model'
 
+import type { DeviceStateStyleDefinition } from '../phase/types'
 import { buildFlowGraphIndex, normalizeFlowHandle } from './flowGraph'
 import {
   countFlowTreeNodes,
@@ -38,6 +39,11 @@ export interface ValveDebugFeatureOptions {
     state: ValveRuntimeState
   ): boolean | Promise<boolean>
   onStateChanged?(handleKey: string, state: ValveRuntimeState): void
+  getConfiguredStates?(): readonly DeviceStateStyleDefinition[]
+  requestConfiguredStateChange?(
+    handleKey: string,
+    state: DeviceStateStyleDefinition
+  ): boolean | Promise<boolean>
   renderPathOverlay?: boolean
 }
 
@@ -159,6 +165,7 @@ export class ValveDebugFeature {
   private readonly menuActions: HTMLDivElement
   private readonly openMenuAction: HTMLButtonElement
   private readonly closeMenuAction: HTMLButtonElement
+  private configuredMenuActions: HTMLButtonElement[] = []
   private attachedCanvas?: HTMLCanvasElement
   private activeKey?: string
   private pathOverlay?: ValveDebugOverlay
@@ -362,6 +369,7 @@ export class ValveDebugFeature {
     this.contextMenu.hidden = true
     delete this.openMenuAction.dataset.handleKey
     delete this.closeMenuAction.dataset.handleKey
+    this.configuredMenuActions.forEach(action => delete action.dataset.handleKey)
   }
 
   private setValveState(key: string, state: ValveRuntimeState) {
@@ -413,6 +421,33 @@ export class ValveDebugFeature {
     this.closeMenuAction.dataset.handleKey = key
     this.openMenuAction.disabled = state === 'open'
     this.closeMenuAction.disabled = state === 'closed'
+    this.configuredMenuActions.forEach(action => action.remove())
+    this.configuredMenuActions = (this.options.getConfiguredStates?.() ?? [])
+      .filter(candidate => candidate.enabled)
+      .map(candidate => {
+        const action = this.createMenuAction('open', () => {
+          const handleKey = action.dataset.handleKey
+          if (!handleKey) return
+          const confirmation = this.options.requestConfiguredStateChange?.(
+            handleKey,
+            candidate
+          )
+          this.closeMenu()
+          if (confirmation instanceof Promise) {
+            void confirmation.then(confirmed => {
+              if (confirmed && !this.disposed) this.options.onStateChanged?.(handleKey, 'open')
+            })
+          } else if (confirmation !== false) {
+            this.options.onStateChanged?.(handleKey, 'open')
+          }
+        })
+        action.textContent = candidate.displayName
+        action.dataset.handleKey = key
+        action.dataset.configuredStateId = candidate.id
+        action.disabled = false
+        this.menuActions.append(action)
+        return action
+      })
   }
 
   private recomputeResults() {

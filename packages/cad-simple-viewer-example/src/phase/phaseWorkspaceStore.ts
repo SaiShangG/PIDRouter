@@ -2,6 +2,8 @@ import {
   type CreatePhaseInput,
   type DeviceMode,
   type DeviceState,
+  type DeviceStateStyleDefinition,
+  type DeviceStyleDefinition,
   type DrawingAssetRef,
   type FlowPathStatus,
   type HighlightStyle,
@@ -42,6 +44,7 @@ export const createDefaultPresentationProfile = (): PresentationProfile => ({
     processEquipment: { active: null }
   },
   deviceStylesInitialized: true,
+  devices: [],
   utilities: []
 })
 
@@ -73,6 +76,10 @@ export const clonePresentationProfile = (
     }
   },
   deviceStylesInitialized: profile.deviceStylesInitialized,
+  devices: profile.devices.map(device => ({
+    ...device,
+    states: device.states.map(state => ({ ...state }))
+  })),
   utilities: profile.utilities.map(utility => ({
     ...utility,
     style: cloneHighlightStyle(utility.style)
@@ -280,6 +287,94 @@ const normalizeStyle = (
   }
 }
 
+const uniqueId = (candidate: unknown, fallback: string, seen: Set<string>) => {
+  const base =
+    typeof candidate === 'string' && candidate.trim()
+      ? candidate.trim()
+      : fallback
+  let id = base
+  let suffix = 2
+  while (seen.has(id)) id = `${base}-${suffix++}`
+  seen.add(id)
+  return id
+}
+
+const normalizeDeviceState = (
+  value: unknown,
+  index: number,
+  seenIds: Set<string>,
+  fallbackKey = `state-${index + 1}`
+): DeviceStateStyleDefinition | undefined => {
+  if (!isRecord(value)) return undefined
+  const key =
+    typeof value.key === 'string' && value.key.trim()
+      ? value.key.trim()
+      : fallbackKey
+  return {
+    id: uniqueId(value.id, key, seenIds),
+    key,
+    displayName:
+      typeof value.displayName === 'string' && value.displayName.trim()
+        ? value.displayName.trim()
+        : key,
+    color: Math.round(clamp(value.color, 0x00c853, 0, 0xffffff)),
+    lineWidthPx: clamp(value.lineWidthPx, 3, 1, 12),
+    opacity: clamp(value.opacity, 1, 0, 1),
+    enabled:
+      typeof value.enabled === 'boolean'
+        ? value.enabled
+        : typeof value.visible === 'boolean'
+          ? value.visible
+          : true,
+    order: clamp(value.order, index, 0, Number.MAX_SAFE_INTEGER)
+  }
+}
+
+const normalizeDevices = (value: unknown): DeviceStyleDefinition[] => {
+  if (!Array.isArray(value)) return []
+  const seenDeviceIds = new Set<string>()
+  return value.flatMap((candidate, index) => {
+    if (!isRecord(candidate)) return []
+    const id = uniqueId(candidate.id, `device-${index + 1}`, seenDeviceIds)
+    const seenStateIds = new Set<string>()
+    const states = Array.isArray(candidate.states)
+      ? candidate.states.flatMap((state, stateIndex) => {
+        const normalized = normalizeDeviceState(state, stateIndex, seenStateIds)
+        return normalized ? [normalized] : []
+      })
+      : []
+    return [{
+      id,
+      name:
+        typeof candidate.name === 'string' && candidate.name.trim()
+          ? candidate.name.trim()
+          : id,
+      states,
+      order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
+    }]
+  })
+}
+
+const migrateLegacyDevices = (value: Record<string, unknown>) => {
+  const legacyStyle = (candidate: unknown, fallback: HighlightStyle) =>
+    candidate == null ? null : normalizeStyle(candidate, fallback)
+  const deviceStates: Array<[string, string, string, HighlightStyle | null]> = [
+    ['valve', '阀门', 'open', isRecord(value.deviceStyles) && isRecord(value.deviceStyles.valve) ? legacyStyle(value.deviceStyles.valve.open, createHighlightStyle(0x00c853, 3)) : null],
+    ['valve', '阀门', 'closed', isRecord(value.deviceStyles) && isRecord(value.deviceStyles.valve) ? legacyStyle(value.deviceStyles.valve.closed, createHighlightStyle(0xd32f2f, 3)) : null],
+    ['valve', '阀门', 'pulse', isRecord(value.deviceStyles) && isRecord(value.deviceStyles.valve) ? legacyStyle(value.deviceStyles.valve.pulse, createHighlightStyle(0xf9a825, 3)) : null],
+    ['motor', '泵/电机', 'start', isRecord(value.deviceStyles) && isRecord(value.deviceStyles.motor) ? legacyStyle(value.deviceStyles.motor.start, createHighlightStyle(0x00796b, 3)) : null],
+    ['motor', '泵/电机', 'stop', isRecord(value.deviceStyles) && isRecord(value.deviceStyles.motor) ? legacyStyle(value.deviceStyles.motor.stop, createHighlightStyle(0x616161, 2)) : null]
+  ]
+  const devices = new Map<string, DeviceStyleDefinition>()
+  deviceStates.forEach(([id, name, key, style], index) => {
+    if (!style || !isRecord(value.deviceStyles)) return
+    const device = devices.get(id) ?? { id, name, states: [], order: devices.size }
+    device.states.push({ id: `${id}-${key}`, key, displayName: key.toUpperCase(), ...style, enabled: true, order: index })
+    devices.set(id, device)
+  })
+  return [...devices.values()]
+}
+
 const normalizeProfile = (value: unknown): PresentationProfile => {
   const defaults = createDefaultPresentationProfile()
   if (!isRecord(value)) return defaults
@@ -356,6 +451,11 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       }
     },
     deviceStylesInitialized: true,
+    devices: normalizeDevices(value.devices).length
+      ? normalizeDevices(value.devices)
+      : preserveDeviceStyles
+        ? migrateLegacyDevices(value)
+        : [],
     utilities
   }
 }

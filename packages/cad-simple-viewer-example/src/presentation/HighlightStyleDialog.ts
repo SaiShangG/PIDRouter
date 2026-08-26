@@ -2,7 +2,12 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
-import type { HighlightStyle, PresentationProfile } from '../phase/types'
+import type {
+  DeviceStateStyleDefinition,
+  DeviceStyleDefinition,
+  HighlightStyle,
+  PresentationProfile
+} from '../phase/types'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
 
@@ -30,7 +35,7 @@ const parseHex = (value: string) =>
 export class HighlightStyleDialog {
   readonly element = document.createElement('div')
   private draft: HighlightStyleDraft
-  private activeTab: 'device' | 'utility' | 'defaults' = 'device'
+  private activeTab: 'device' | 'utility' = 'device'
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
@@ -89,8 +94,7 @@ export class HighlightStyleDialog {
     tabs.setAttribute('role', 'tablist')
     const labels = {
       device: '设备',
-      utility: 'Utility',
-      defaults: '默认值'
+      utility: 'Utility'
     } as const
     for (const [key, label] of Object.entries(labels)) {
       const button = document.createElement('button')
@@ -109,7 +113,6 @@ export class HighlightStyleDialog {
     content.className = 'highlight-style-content'
     if (this.activeTab === 'device') content.append(this.renderDevices())
     if (this.activeTab === 'utility') content.append(this.renderUtilities())
-    if (this.activeTab === 'defaults') content.append(this.renderDefaults())
 
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions highlight-style-actions'
@@ -128,103 +131,118 @@ export class HighlightStyleDialog {
   }
 
   private renderDevices() {
-    const table = document.createElement('div')
-    table.className = 'highlight-device-table'
-    const options = this.deviceStyleOptions()
-    options.filter(option => option.get() != null).forEach(option => {
-      const style = option.get()!
-      const row = document.createElement('div')
-      row.className = 'highlight-device-row'
-      const label = document.createElement('span')
-      label.textContent = option.device
-      const mode = document.createElement('strong')
-      mode.textContent = option.state
-      const remove = this.iconButton('删除设备状态', Trash2, () => {
-        option.set(null)
+    const section = document.createElement('section')
+    section.className = 'highlight-device-table'
+    const devices = this.draft.presentationProfile.devices
+      .sort((a, b) => a.order - b.order)
+    devices.forEach(device => {
+      const card = document.createElement('article')
+      card.className = 'highlight-device-card'
+      const header = document.createElement('header')
+      const name = document.createElement('input')
+      name.value = device.name
+      name.setAttribute('aria-label', '设备名称')
+      name.addEventListener('input', () => {
+        device.name = name.value
+        this.emitPreview()
+      })
+      const remove = this.iconButton('删除设备', Trash2, () => {
+        this.draft.presentationProfile.devices = devices.filter(item => item.id !== device.id)
         this.emitPreview()
         this.render()
       })
-      row.append(label, mode, this.styleControls(style, changed => {
-        Object.assign(style, changed)
-        this.emitPreview()
-      }), remove)
-      table.append(row)
-    })
-    const missing = options.filter(option => option.get() == null)
-    if (missing.length > 0) {
-      const creator = document.createElement('div')
-      creator.className = 'highlight-device-creator'
-      const select = document.createElement('select')
-      select.setAttribute('aria-label', '新增设备状态类型')
-      missing.forEach(option =>
-        select.add(new Option(`${option.device} · ${option.state}`, option.key))
+      header.append(name, remove)
+      card.append(header)
+      device.states.sort((a, b) => a.order - b.order).forEach(state =>
+        card.append(this.renderDeviceState(device, state))
       )
-      const add = this.button('新增设备状态', () => {
-        const option = missing.find(item => item.key === select.value)
-        if (!option) return
-        option.set({ ...option.defaultStyle })
-        this.draft.presentationProfile.deviceStylesInitialized = true
+      const addState = this.button('新增状态', () => {
+        const index = device.states.length + 1
+        device.states.push({
+          id: this.newId(`state-${index}`),
+          key: `state-${index}`,
+          displayName: `状态 ${index}`,
+          color: 0x00c853,
+          lineWidthPx: 3,
+          opacity: 1,
+          enabled: true,
+          order: device.states.length
+        })
         this.emitPreview()
         this.render()
       })
-      add.prepend(createPhaseIcon(Plus))
-      creator.append(select, add)
-      table.append(creator)
-    }
-    if (options.every(option => option.get() == null)) {
-      const empty = document.createElement('p')
-      empty.textContent = '尚未配置设备状态，默认值为 null。'
-      table.prepend(empty)
-    }
-    return table
+      addState.prepend(createPhaseIcon(Plus))
+      card.append(addState)
+      section.append(card)
+    })
+    const addDevice = this.button('新增设备', () => {
+      const index = devices.length + 1
+      devices.push({
+        id: this.newId(`device-${index}`),
+        name: `设备 ${index}`,
+        states: [],
+        order: devices.length
+      })
+      this.emitPreview()
+      this.render()
+    })
+    addDevice.prepend(createPhaseIcon(Plus))
+    section.append(addDevice)
+    return section
   }
 
-  private deviceStyleOptions() {
-    const profile = this.draft.presentationProfile
-    return [
-      {
-        key: 'valve-open', device: '阀门', state: 'OPEN',
-        get: () => profile.deviceStyles.valve.open,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.valve.open = style },
-        defaultStyle: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true }
-      },
-      {
-        key: 'valve-closed', device: '阀门', state: 'CLOSED',
-        get: () => profile.deviceStyles.valve.closed,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.valve.closed = style },
-        defaultStyle: { color: 0xd32f2f, lineWidthPx: 3, opacity: 1, visible: true }
-      },
-      {
-        key: 'valve-pulse', device: '阀门', state: 'PULSE',
-        get: () => profile.deviceStyles.valve.pulse,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.valve.pulse = style },
-        defaultStyle: { color: 0xf9a825, lineWidthPx: 3, opacity: 1, visible: true }
-      },
-      {
-        key: 'motor-start', device: '泵/电机', state: 'START',
-        get: () => profile.deviceStyles.motor.start,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.motor.start = style },
-        defaultStyle: { color: 0x00796b, lineWidthPx: 3, opacity: 1, visible: true }
-      },
-      {
-        key: 'motor-stop', device: '泵/电机', state: 'STOP',
-        get: () => profile.deviceStyles.motor.stop,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.motor.stop = style },
-        defaultStyle: { color: 0x616161, lineWidthPx: 2, opacity: 1, visible: true }
-      },
-      {
-        key: 'equipment-active', device: '其他设备', state: 'ACTIVE',
-        get: () => profile.deviceStyles.processEquipment.active,
-        set: (style: HighlightStyle | null) => { profile.deviceStyles.processEquipment.active = style },
-        defaultStyle: { color: 0x00c853, lineWidthPx: 3, opacity: 1, visible: true }
-      },
-      {
-        key: 'unknown', device: '未知设备', state: 'UNKNOWN',
-        get: () => profile.unknownDeviceStyle,
-        set: (style: HighlightStyle | null) => { profile.unknownDeviceStyle = style },
-        defaultStyle: { color: 0x546e7a, lineWidthPx: 2, opacity: 1, visible: true }
-      }
-    ]
+  private renderDeviceState(
+    device: DeviceStyleDefinition,
+    state: DeviceStateStyleDefinition
+  ) {
+    const row = document.createElement('div')
+    row.className = 'highlight-device-row'
+    const key = document.createElement('input')
+    key.value = state.key
+    key.setAttribute('aria-label', '状态 key')
+    key.addEventListener('input', () => {
+      state.key = key.value
+      this.emitPreview()
+    })
+    const displayName = document.createElement('input')
+    displayName.value = state.displayName
+    displayName.setAttribute('aria-label', '右键显示名称')
+    displayName.addEventListener('input', () => {
+      state.displayName = displayName.value
+      this.emitPreview()
+    })
+    const style = this.asHighlightStyle(state)
+    const enabled = document.createElement('input')
+    enabled.type = 'checkbox'
+    enabled.checked = state.enabled
+    enabled.setAttribute('aria-label', '启用设备状态')
+    enabled.addEventListener('change', () => {
+      state.enabled = enabled.checked
+      this.emitPreview()
+    })
+    const remove = this.iconButton('删除设备状态', Trash2, () => {
+      device.states = device.states.filter(item => item.id !== state.id)
+      this.emitPreview()
+      this.render()
+    })
+    row.append(key, displayName, this.checkboxLabel('启用', enabled), this.styleControls(style, changed => {
+      Object.assign(state, changed)
+      this.emitPreview()
+    }), remove)
+    return row
+  }
+
+  private asHighlightStyle(state: DeviceStateStyleDefinition): HighlightStyle {
+    return {
+      color: state.color,
+      lineWidthPx: state.lineWidthPx,
+      opacity: state.opacity,
+      visible: true
+    }
+  }
+
+  private newId(fallback: string) {
+    return this.options.createId?.() ?? `${fallback}-${crypto.randomUUID()}`
   }
 
   private renderUtilities() {
@@ -295,24 +313,6 @@ export class HighlightStyleDialog {
     return section
   }
 
-  private renderDefaults() {
-    const section = document.createElement('section')
-    section.className = 'highlight-defaults'
-    const opacity = document.createElement('input')
-    opacity.type = 'number'
-    opacity.min = '0'
-    opacity.max = '1'
-    opacity.step = '0.05'
-    opacity.value = String(this.draft.presentationProfile.dimmedBaseStyle.opacity)
-    opacity.setAttribute('aria-label', '非高亮内容透明度')
-    opacity.addEventListener('input', () => {
-      this.draft.presentationProfile.dimmedBaseStyle.opacity = Math.min(1, Math.max(0, Number(opacity.value)))
-      this.emitPreview()
-    })
-    section.append(this.checkboxLabel('非高亮内容透明度', opacity))
-    return section
-  }
-
   private styleControls(
     style: HighlightStyle,
     change: (style: Partial<HighlightStyle>) => void,
@@ -350,12 +350,6 @@ export class HighlightStyleDialog {
     width.addEventListener('input', () =>
       change({ lineWidthPx: Math.min(12, Math.max(1, Number(width.value))) })
     )
-    const visible = document.createElement('input')
-    visible.type = 'checkbox'
-    visible.checked = style.visible
-    visible.disabled = disabled
-    visible.setAttribute('aria-label', '显示高亮')
-    visible.addEventListener('change', () => change({ visible: visible.checked }))
     const opacity = document.createElement('input')
     opacity.type = 'number'
     opacity.min = '0'
@@ -367,7 +361,7 @@ export class HighlightStyleDialog {
     opacity.addEventListener('input', () =>
       change({ opacity: Math.min(1, Math.max(0, Number(opacity.value))) })
     )
-    group.append(color, hex, opacity, width, visible)
+    group.append(color, hex, opacity, width)
     return group
   }
 

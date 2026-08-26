@@ -11,6 +11,7 @@ export interface UploadFileDto {
 export interface ProjectDto {
   id?: number
   name?: string | null
+  fileIds?: number[] | string | null
   jsonData?: string | null
 }
 

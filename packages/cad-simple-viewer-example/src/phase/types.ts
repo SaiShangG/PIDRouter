@@ -22,6 +22,24 @@ export interface DeviceHighlightStyles {
   }
 }
 
+export interface DeviceStateStyleDefinition {
+  id: string
+  key: string
+  displayName: string
+  color: number
+  lineWidthPx: number
+  opacity: number
+  enabled: boolean
+  order: number
+}
+
+export interface DeviceStyleDefinition {
+  id: string
+  name: string
+  states: DeviceStateStyleDefinition[]
+  order: number
+}
+
 export interface UtilityStyleDefinition {
   id: string
   name: string
@@ -43,6 +61,7 @@ export interface PresentationProfile {
   }
   deviceStyles: DeviceHighlightStyles
   deviceStylesInitialized: boolean
+  devices: DeviceStyleDefinition[]
   utilities: UtilityStyleDefinition[]
 }
 
@@ -78,6 +97,7 @@ export interface DeviceState {
   key: string
   label: string
   mode: DeviceMode
+  stateKey?: string
 }
 
 export interface FlowStateSnapshot {
