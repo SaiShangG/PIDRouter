@@ -125,12 +125,17 @@ export function injectPhaseWorkspaceStyles() {
     .highlight-style-row { display: grid; align-items: center; gap: 8px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; }
     .flow-style-row { grid-template-columns: minmax(110px, 1fr) minmax(130px, .8fr) minmax(150px, 1.3fr) auto; }
     .flow-style-row > .highlight-checkbox { grid-column: 1 / 3; }
-    .utility-style-row { grid-template-columns: minmax(130px, 1fr) auto minmax(220px, 1.4fr) repeat(3, 28px); }
-    .highlight-style-controls { display: grid; grid-template-columns: 34px minmax(82px, 1fr) 62px 68px 20px; align-items: center; gap: 6px; min-width: 0; }
+    .utility-style-row { grid-template-columns: minmax(130px, .8fr) minmax(0, 2fr) 28px; }
+    .utility-style-row > .phase-icon-button { justify-self: center; align-self: center; }
+    .highlight-style-controls { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(62px, .8fr) minmax(62px, .8fr); align-items: end; gap: 6px; min-width: 0; }
+    .highlight-style-field { display: grid; grid-template-rows: auto minmax(30px, auto); gap: 3px; min-width: 0; color: #53676e; font-size: 10px; font-weight: 650; }
+    .highlight-style-field > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .highlight-style-field input { width: 100%; min-width: 0; }
     .phase-workspace .highlight-style-controls input[type='color'], .phase-workspace-modal .highlight-style-controls input[type='color'] { width: 34px; min-height: 30px; padding: 2px; }
     .phase-workspace .highlight-style-controls input[type='checkbox'], .phase-workspace .highlight-checkbox input[type='checkbox'], .phase-workspace-modal .highlight-style-controls input[type='checkbox'], .phase-workspace-modal .highlight-checkbox input[type='checkbox'] { width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
     .highlight-checkbox { display: inline-flex; align-items: center; gap: 6px; color: #53676e; font-size: 11px; font-weight: 650; }
-    .highlight-device-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(120px, 1fr) auto minmax(220px, 1.4fr) 28px; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e1e7e8; }
+    .highlight-device-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(120px, 1fr) minmax(0, 2fr) 28px; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e1e7e8; }
+    .highlight-device-row > .phase-icon-button { justify-self: center; align-self: center; }
     .highlight-device-row strong { color: #075d43; font-size: 10px; }
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }
     .highlight-default-field { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.2fr); align-items: center; gap: 12px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; font-weight: 650; }
@@ -158,7 +163,8 @@ export function injectPhaseWorkspaceStyles() {
       .highlight-style-content { min-height: 240px; padding: 10px; }
       .flow-style-row, .utility-style-row, .highlight-device-row, .highlight-default-field { grid-template-columns: 1fr; }
       .flow-style-row > .highlight-checkbox { grid-column: auto; }
-      .highlight-style-controls { grid-template-columns: 34px minmax(80px, 1fr) 58px 64px 20px; }
+      .highlight-style-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .highlight-style-field:first-child { grid-column: 1 / -1; }
       .highlight-style-actions { display: grid; grid-template-columns: repeat(3, 1fr); }
       .highlight-style-actions button { min-width: 0; }
       .style-source-segments { grid-auto-flow: row; }

@@ -423,7 +423,6 @@ export class ValveDebugFeature {
     this.closeMenuAction.disabled = state === 'closed'
     this.configuredMenuActions.forEach(action => action.remove())
     this.configuredMenuActions = (this.options.getConfiguredStates?.() ?? [])
-      .filter(candidate => candidate.enabled)
       .map(candidate => {
         const action = this.createMenuAction('open', () => {
           const handleKey = action.dataset.handleKey

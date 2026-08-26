@@ -44,9 +44,7 @@ const resolveDeviceStyle = (
     .flatMap(device => device.states)
     .find(candidate => candidate.key === (state?.stateKey ?? state?.mode))
   if (configuredState) {
-    return configuredState.enabled
-      ? deviceStateStyle(configuredState)
-      : undefined
+    return deviceStateStyle(configuredState)
   }
   switch (state?.mode) {
     case 'open':
@@ -102,7 +100,7 @@ export const resolveEntityPresentation = (
         : undefined
   const utility = utilityId
     ? profile.utilities.find(
-      item => item.id === utilityId && item.enabled
+      item => item.id === utilityId
     )
     : undefined
   if (utility) {

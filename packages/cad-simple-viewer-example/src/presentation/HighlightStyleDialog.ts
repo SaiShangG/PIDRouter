@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide'
+import { Plus, Trash2, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
@@ -8,6 +8,7 @@ import type {
   HighlightStyle,
   PresentationProfile
 } from '../phase/types'
+import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
 
@@ -37,6 +38,7 @@ export class HighlightStyleDialog {
   private draft: HighlightStyleDraft
   private activeTab: 'device' | 'utility' = 'device'
   private readonly focusController = createModalFocusController(this.element)
+  private readonly confirmationModal = new ConfirmationModal()
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
     this.draft = cloneDraft(options.value)
@@ -78,6 +80,32 @@ export class HighlightStyleDialog {
     this.options.onClose()
   }
 
+  private canApply() {
+    return this.validateDeviceStateKeys()
+  }
+
+  private validateDeviceStateKeys() {
+    let valid = true
+    this.draft.presentationProfile.devices.forEach(device => {
+      const keys = new Set<string>()
+      device.states.forEach(state => {
+        const key = state.key.trim()
+        const stateInput = [...this.element.querySelectorAll<HTMLInputElement>('[data-state-id]')]
+          .find(input => input.dataset.stateId === state.id)
+        const stateValid = Boolean(key) && !keys.has(key)
+        if (!stateValid) valid = false
+        if (stateInput) {
+          stateInput.setAttribute('aria-invalid', String(!stateValid))
+          stateInput.title = stateValid
+            ? ''
+            : '状态 key 不能为空，且同一设备内不能重复'
+        }
+        keys.add(key)
+      })
+    })
+    return valid
+  }
+
   private render() {
     this.element.replaceChildren()
     const dialog = document.createElement('section')
@@ -117,8 +145,11 @@ export class HighlightStyleDialog {
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions highlight-style-actions'
     const cancel = this.button('取消', () => this.close())
-    const apply = this.button('应用', () => this.options.onApply?.(cloneDraft(this.draft)))
+    const apply = this.button('应用', () => {
+      if (this.canApply()) this.options.onApply?.(cloneDraft(this.draft))
+    })
     const applyClose = this.button('应用并关闭', () => {
+      if (!this.canApply()) return
       this.options.onApply?.(cloneDraft(this.draft))
       this.close()
     })
@@ -147,9 +178,21 @@ export class HighlightStyleDialog {
         this.emitPreview()
       })
       const remove = this.iconButton('删除设备', Trash2, () => {
-        this.draft.presentationProfile.devices = devices.filter(item => item.id !== device.id)
-        this.emitPreview()
-        this.render()
+        const locale = this.options.getLocale?.() ?? 'zh'
+        void this.confirmationModal.confirm({
+          title: locale === 'en' ? 'Delete device' : '删除设备',
+          message: locale === 'en'
+            ? `Delete device "${device.name}" and all of its states?`
+            : `确定删除设备“${device.name}”及其全部状态吗？`,
+          confirmLabel: locale === 'en' ? 'Delete' : '删除',
+          cancelLabel: locale === 'en' ? 'Cancel' : '取消',
+          tone: 'danger'
+        }).then(confirmed => {
+          if (!confirmed) return
+          this.draft.presentationProfile.devices = devices.filter(item => item.id !== device.id)
+          this.emitPreview()
+          this.render()
+        })
       })
       header.append(name, remove)
       card.append(header)
@@ -199,9 +242,11 @@ export class HighlightStyleDialog {
     row.className = 'highlight-device-row'
     const key = document.createElement('input')
     key.value = state.key
+    key.dataset.stateId = state.id
     key.setAttribute('aria-label', '状态 key')
     key.addEventListener('input', () => {
       state.key = key.value
+      this.validateDeviceStateKeys()
       this.emitPreview()
     })
     const displayName = document.createElement('input')
@@ -212,20 +257,24 @@ export class HighlightStyleDialog {
       this.emitPreview()
     })
     const style = this.asHighlightStyle(state)
-    const enabled = document.createElement('input')
-    enabled.type = 'checkbox'
-    enabled.checked = state.enabled
-    enabled.setAttribute('aria-label', '启用设备状态')
-    enabled.addEventListener('change', () => {
-      state.enabled = enabled.checked
-      this.emitPreview()
-    })
     const remove = this.iconButton('删除设备状态', Trash2, () => {
-      device.states = device.states.filter(item => item.id !== state.id)
-      this.emitPreview()
-      this.render()
+      const locale = this.options.getLocale?.() ?? 'zh'
+      void this.confirmationModal.confirm({
+        title: locale === 'en' ? 'Delete device state' : '删除设备状态',
+        message: locale === 'en'
+          ? `Delete device state "${state.displayName}"?`
+          : `确定删除设备状态“${state.displayName}”吗？`,
+        confirmLabel: locale === 'en' ? 'Delete' : '删除',
+        cancelLabel: locale === 'en' ? 'Cancel' : '取消',
+        tone: 'danger'
+      }).then(confirmed => {
+        if (!confirmed) return
+        device.states = device.states.filter(item => item.id !== state.id)
+        this.emitPreview()
+        this.render()
+      })
     })
-    row.append(key, displayName, this.checkboxLabel('启用', enabled), this.styleControls(style, changed => {
+    row.append(this.field('状态 key', key), this.field('右键名称', displayName), this.styleControls(style, changed => {
       Object.assign(state, changed)
       this.emitPreview()
     }), remove)
@@ -253,7 +302,7 @@ export class HighlightStyleDialog {
     section.append(notice)
     this.draft.presentationProfile.utilities
       .sort((a, b) => a.order - b.order)
-      .forEach((utility, index, utilities) => {
+      .forEach(utility => {
         const row = document.createElement('div')
         row.className = 'highlight-style-row utility-style-row'
         const name = document.createElement('input')
@@ -263,37 +312,28 @@ export class HighlightStyleDialog {
           utility.name = name.value
           this.emitPreview()
         })
-        const enabled = document.createElement('input')
-        enabled.type = 'checkbox'
-        enabled.checked = utility.enabled
-        enabled.setAttribute('aria-label', '启用 Utility')
-        enabled.addEventListener('change', () => {
-          utility.enabled = enabled.checked
-          this.emitPreview()
-        })
-        const up = this.iconButton('上移 Utility', ArrowUp, () => {
-          if (index === 0) return
-            ;[utilities[index - 1].order, utility.order] = [utility.order, utilities[index - 1].order]
-          this.emitPreview()
-          this.render()
-        })
-        up.disabled = index === 0
-        const down = this.iconButton('下移 Utility', ArrowDown, () => {
-          if (index === utilities.length - 1) return
-            ;[utilities[index + 1].order, utility.order] = [utility.order, utilities[index + 1].order]
-          this.emitPreview()
-          this.render()
-        })
-        down.disabled = index === utilities.length - 1
         const remove = this.iconButton('删除 Utility', Trash2, () => {
-          this.draft.presentationProfile.utilities = utilities.filter(item => item.id !== utility.id)
-          this.emitPreview()
-          this.render()
+          const locale = this.options.getLocale?.() ?? 'zh'
+          void this.confirmationModal.confirm({
+            title: locale === 'en' ? 'Delete Utility' : '删除 Utility',
+            message: locale === 'en'
+              ? `Delete Utility "${utility.name}"?`
+              : `确定删除 Utility“${utility.name}”吗？`,
+            confirmLabel: locale === 'en' ? 'Delete' : '删除',
+            cancelLabel: locale === 'en' ? 'Cancel' : '取消',
+            tone: 'danger'
+          }).then(confirmed => {
+            if (!confirmed) return
+            this.draft.presentationProfile.utilities = this.draft.presentationProfile.utilities
+              .filter(item => item.id !== utility.id)
+            this.emitPreview()
+            this.render()
+          })
         })
-        row.append(name, this.checkboxLabel('启用', enabled), this.styleControls(utility.style, changed => {
+        row.append(this.field('Utility 名称', name), this.styleControls(utility.style, changed => {
           Object.assign(utility.style, changed)
           this.emitPreview()
-        }), up, down, remove)
+        }), remove)
         section.append(row)
       })
     const add = this.button('新增 Utility', () => {
@@ -353,24 +393,29 @@ export class HighlightStyleDialog {
     const opacity = document.createElement('input')
     opacity.type = 'number'
     opacity.min = '0'
-    opacity.max = '1'
-    opacity.step = '0.05'
-    opacity.value = String(style.opacity)
+    opacity.max = '100'
+    opacity.step = '5'
+    opacity.value = String(Math.round(style.opacity * 100))
     opacity.disabled = disabled
     opacity.setAttribute('aria-label', '高亮透明度')
     opacity.addEventListener('input', () =>
-      change({ opacity: Math.min(1, Math.max(0, Number(opacity.value))) })
+      change({ opacity: Math.min(1, Math.max(0, Number(opacity.value) / 100)) })
     )
-    group.append(color, hex, opacity, width)
+    group.append(
+      this.field('颜色', color),
+      this.field('十六进制', hex),
+      this.field('线宽 (px)', width),
+      this.field('透明度 (%)', opacity)
+    )
     return group
   }
 
-  private checkboxLabel(text: string, input: HTMLInputElement) {
+  private field(labelText: string, input: HTMLInputElement) {
     const label = document.createElement('label')
-    label.className = 'highlight-checkbox'
-    const span = document.createElement('span')
-    span.textContent = text
-    label.append(input, span)
+    label.className = 'highlight-style-field'
+    const text = document.createElement('span')
+    text.textContent = labelText
+    label.append(text, input)
     return label
   }
 

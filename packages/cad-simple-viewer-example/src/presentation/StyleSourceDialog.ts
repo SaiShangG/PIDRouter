@@ -42,7 +42,7 @@ export class StyleSourceDialog {
   private customStyle: HighlightStyle
 
   constructor(private readonly options: StyleSourceDialogOptions) {
-    const enabledUtilities = options.profile.utilities.filter(item => item.enabled)
+    const enabledUtilities = options.profile.utilities
     const initial = options.initialValue
     this.selection = initial
       ? cloneSelection(initial)
@@ -82,7 +82,7 @@ export class StyleSourceDialog {
     if (this.selection.kind === 'utility') {
       const utilityId = this.selection.utilityId
       const utilityExists = this.options.profile.utilities.some(
-        utility => utility.enabled && utility.id === utilityId
+        utility => utility.id === utilityId
       )
       if (!utilityExists) this.selection = { kind: 'utility' }
       return
@@ -183,7 +183,6 @@ export class StyleSourceDialog {
       select.setAttribute('aria-label', 'Utility 样式')
       select.add(new Option('默认流路样式', ''))
       this.options.profile.utilities
-        .filter(item => item.enabled)
         .sort((left, right) => left.order - right.order)
         .forEach(utility => select.add(new Option(utility.name, utility.id)))
       select.value = this.selection.utilityId ?? ''
@@ -308,7 +307,7 @@ export class StyleSourceDialog {
     return (
       this.options.profile.utilities.find(
         utility =>
-          utility.enabled && utility.id === utilityId
+          utility.id === utilityId
       )?.style ?? this.options.profile.defaultFlowStyle
     )
   }

@@ -121,7 +121,6 @@ describe('HighlightStyleDialog', () => {
     expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(1)
     expect(dialog.element.querySelector('[aria-label="状态 key"]')).not.toBeNull()
     expect(dialog.element.querySelector('[aria-label="右键显示名称"]')).not.toBeNull()
-    expect(dialog.element.querySelector('[aria-label="启用设备状态"]')).not.toBeNull()
     expect(
       dialog.element.querySelector<HTMLInputElement>(
         '[aria-label="高亮透明度"]'
