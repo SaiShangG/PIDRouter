@@ -494,27 +494,27 @@ const normalizeFlowPaths = (
           }
           : undefined
     return [{
-        id:
-          typeof candidate.id === 'string' && candidate.id
-            ? candidate.id
-            : `flow-${phaseId}-${index + 1}`,
-        name:
-          typeof candidate.name === 'string' && candidate.name.trim()
-            ? candidate.name.trim()
-            : `${DEFAULT_FLOW_PATH_NAME} ${index + 1}`,
-        handleKeys: Array.isArray(candidate.handleKeys)
-          ? candidate.handleKeys.filter(
-            (handle): handle is string => typeof handle === 'string'
-          )
-          : [],
-        ...(typeof candidate.priority === 'number' &&
+      id:
+        typeof candidate.id === 'string' && candidate.id
+          ? candidate.id
+          : `flow-${phaseId}-${index + 1}`,
+      name:
+        typeof candidate.name === 'string' && candidate.name.trim()
+          ? candidate.name.trim()
+          : `${DEFAULT_FLOW_PATH_NAME} ${index + 1}`,
+      handleKeys: Array.isArray(candidate.handleKeys)
+        ? candidate.handleKeys.filter(
+          (handle): handle is string => typeof handle === 'string'
+        )
+        : [],
+      ...(typeof candidate.priority === 'number' &&
         Number.isFinite(candidate.priority)
-          ? { priority: candidate.priority }
-          : {}),
-        styleSource,
-        utilityId,
-        styleOverride
-      }]
+        ? { priority: candidate.priority }
+        : {}),
+      styleSource,
+      utilityId,
+      styleOverride
+    }]
   })
 }
 
