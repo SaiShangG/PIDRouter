@@ -98,7 +98,10 @@ import {
   type NewSequenceRequest,
   PhaseWorkspacePanel
 } from './phase/PhaseWorkspacePanel'
-import { PhaseWorkspaceRepository } from './phase/phaseWorkspaceRepository'
+import {
+  PhaseWorkspaceRepository,
+  toPersistedPresentationProfile
+} from './phase/phaseWorkspaceRepository'
 import {
   createDefaultPresentationProfile,
   PhaseWorkspaceStore
@@ -3526,6 +3529,10 @@ class CadViewerApp {
         .snapshot()
         .processes.find(item => item.id === processId)
       if (process && this.phaseRepository) {
+        console.log(
+          '[PresentationProfile] Payload prepared for backend:',
+          toPersistedPresentationProfile(process.presentationProfile)
+        )
         await this.phaseRepository.updateProcess(process)
       }
       this.syncOpenHighlightRoots()

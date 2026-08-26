@@ -273,13 +273,20 @@ const clamp = (value: unknown, fallback: number, min: number, max: number) =>
     ? Math.min(max, Math.max(min, value))
     : fallback
 
+const normalizeColor = (value: unknown, fallback: number) => {
+  if (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)) {
+    return Number.parseInt(value.slice(1), 16)
+  }
+  return Math.round(clamp(value, fallback, 0, 0xffffff))
+}
+
 const normalizeStyle = (
   value: unknown,
   fallback: HighlightStyle
 ): HighlightStyle => {
   const style = isRecord(value) ? value : {}
   return {
-    color: Math.round(clamp(style.color, fallback.color, 0, 0xffffff)),
+    color: normalizeColor(style.color, fallback.color),
     lineWidthPx: clamp(style.lineWidthPx, fallback.lineWidthPx, 1, 12),
     opacity: clamp(style.opacity, fallback.opacity, 0, 1),
     visible:
@@ -311,13 +318,17 @@ const normalizeDeviceState = (
       ? value.key.trim()
       : fallbackKey
   return {
-    id: uniqueId(value.id, key, seenIds),
+    id: uniqueId(
+      value.id,
+      typeof value.stateId === 'number' ? `state-${value.stateId}` : key,
+      seenIds
+    ),
     key,
     displayName:
       typeof value.displayName === 'string' && value.displayName.trim()
         ? value.displayName.trim()
         : key,
-    color: Math.round(clamp(value.color, 0x00c853, 0, 0xffffff)),
+    color: normalizeColor(value.color, 0x00c853),
     lineWidthPx: clamp(value.lineWidthPx, 3, 1, 12),
     opacity: clamp(value.opacity, 1, 0, 1),
     enabled:
@@ -335,7 +346,13 @@ const normalizeDevices = (value: unknown): DeviceStyleDefinition[] => {
   const seenDeviceIds = new Set<string>()
   return value.flatMap((candidate, index) => {
     if (!isRecord(candidate)) return []
-    const id = uniqueId(candidate.id, `device-${index + 1}`, seenDeviceIds)
+    const id = uniqueId(
+      candidate.id,
+      typeof candidate.deviceId === 'number'
+        ? `device-${candidate.deviceId}`
+        : `device-${index + 1}`,
+      seenDeviceIds
+    )
     const seenStateIds = new Set<string>()
     const states = Array.isArray(candidate.states)
       ? candidate.states.flatMap((state, stateIndex) => {
@@ -396,7 +413,9 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       const baseId =
         typeof candidate.id === 'string' && candidate.id.trim()
           ? candidate.id.trim()
-          : `utility-${index + 1}`
+          : typeof candidate.utilityId === 'number'
+            ? `utility-${candidate.utilityId}`
+            : `utility-${index + 1}`
       let id = baseId
       let suffix = 2
       while (seenUtilityIds.has(id)) id = `${baseId}-${suffix++}`
@@ -408,7 +427,10 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
             typeof candidate.name === 'string' && candidate.name.trim()
               ? candidate.name.trim()
               : id,
-          style: normalizeStyle(candidate.style, defaults.defaultFlowStyle),
+          style: normalizeStyle(
+            candidate.style ?? candidate,
+            defaults.defaultFlowStyle
+          ),
           enabled:
             typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
           order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)

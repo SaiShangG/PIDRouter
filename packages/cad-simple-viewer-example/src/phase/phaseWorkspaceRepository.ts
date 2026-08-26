@@ -12,6 +12,31 @@ import {
   createDefaultPresentationProfile,
   PhaseWorkspaceStore
 } from './phaseWorkspaceStore'
+
+const toHexColor = (color: number) =>
+  `#${Math.round(color).toString(16).padStart(6, '0').slice(-6).toUpperCase()}`
+
+export const toPersistedPresentationProfile = (profile: PresentationProfile) => ({
+  devices: profile.devices.map((device, deviceIndex) => ({
+    deviceId: deviceIndex + 1,
+    name: device.name,
+    states: device.states.map((state, stateIndex) => ({
+      stateId: stateIndex + 1,
+      key: state.key,
+      displayName: state.displayName,
+      color: toHexColor(state.color),
+      lineWidthPx: state.lineWidthPx,
+      opacity: state.opacity
+    }))
+  })),
+  utilities: profile.utilities.map((utility, utilityIndex) => ({
+    utilityId: utilityIndex + 1,
+    name: utility.name,
+    color: toHexColor(utility.style.color),
+    lineWidthPx: utility.style.lineWidthPx,
+    opacity: utility.style.opacity
+  }))
+})
 import {
   type DeviceState,
   type DrawingAssetRef,
@@ -165,7 +190,9 @@ export class PhaseWorkspaceRepository {
         projectId: this.options.projectId,
         jsonData: JSON.stringify({
           schemaVersion: 1,
-          presentationProfile: createDefaultPresentationProfile()
+          presentationProfile: toPersistedPresentationProfile(
+            createDefaultPresentationProfile()
+          )
         })
       },
       signal
@@ -185,7 +212,9 @@ export class PhaseWorkspaceRepository {
         projectId: this.options.projectId,
         jsonData: JSON.stringify({
           schemaVersion: 1,
-          presentationProfile: process.presentationProfile
+          presentationProfile: toPersistedPresentationProfile(
+            process.presentationProfile
+          )
         })
       },
       signal

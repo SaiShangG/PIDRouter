@@ -1,4 +1,5 @@
 import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
   it('creates a Process through the Procedure API', async () => {
@@ -36,6 +37,96 @@ describe('PhaseWorkspaceRepository', () => {
       }),
       undefined
     )
+    const payload = procedures.create.mock.calls[0][0]
+    expect(JSON.parse(payload.jsonData)).toEqual({
+      schemaVersion: 1,
+      presentationProfile: { devices: [], utilities: [] }
+    })
+  })
+
+  it('updates a Process with only the persisted presentation fields', async () => {
+    const procedures = {
+      list: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn()
+    }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '',
+      projectId: 1,
+      files: { list: jest.fn(), upload: jest.fn() },
+      procedures,
+      operations: {
+        list: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn()
+      },
+      phases: {
+        list: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn()
+      }
+    })
+    const presentationProfile = createDefaultPresentationProfile()
+    presentationProfile.devices = [{
+      id: 'valve',
+      name: 'Valve',
+      order: 0,
+      states: [{
+        id: 'valve-open',
+        key: 'open',
+        displayName: 'Open',
+        color: 16711680,
+        lineWidthPx: 3,
+        opacity: 1,
+        enabled: true,
+        order: 0
+      }]
+    }]
+    presentationProfile.utilities = [{
+      id: 'water',
+      name: 'Water',
+      style: { color: 51443, lineWidthPx: 3, opacity: 1, visible: true },
+      enabled: true,
+      order: 0
+    }]
+
+    await repository.updateProcess({
+      id: '12',
+      name: 'CIP',
+      presentationProfile,
+      sequences: [],
+      createdAt: '2026-08-27T00:00:00.000Z',
+      updatedAt: '2026-08-27T00:00:00.000Z'
+    })
+
+    const payload = procedures.update.mock.calls[0][1]
+    expect(JSON.parse(payload.jsonData)).toEqual({
+      schemaVersion: 1,
+      presentationProfile: {
+        devices: [{
+          deviceId: 1,
+          name: 'Valve',
+          states: [{
+            stateId: 1,
+            key: 'open',
+            displayName: 'Open',
+            color: '#FF0000',
+            lineWidthPx: 3,
+            opacity: 1
+          }]
+        }],
+        utilities: [{
+          utilityId: 1,
+          name: 'Water',
+          color: '#00C8F3',
+          lineWidthPx: 3,
+          opacity: 1
+        }]
+      }
+    })
   })
 
   it('loads and maps the backend hierarchy and persisted phase state', async () => {
