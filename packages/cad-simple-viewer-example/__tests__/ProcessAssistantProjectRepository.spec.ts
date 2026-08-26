@@ -4,7 +4,6 @@ import { ProcessAssistantProjectRepository } from '../src/project/ProcessAssista
 const createHarness = () => {
   const api = {
     list: jest.fn(),
-    create: jest.fn(),
     get: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -34,6 +33,27 @@ describe('ProcessAssistantProjectRepository', () => {
       { id: 4, name: 'CIP', description: 'Cleaning', fileIds: [2, 3] },
       { id: 5, name: 'Broken JSON', description: '', fileIds: [] }
     ])
+  })
+
+  it('gets project details by ID', async () => {
+    const { api, repository } = createHarness()
+    api.get.mockResolvedValue({
+      id: 4,
+      name: 'CIP',
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: 'Cleaning',
+        fileIds: [2, 3]
+      })
+    })
+
+    await expect(repository.get(4)).resolves.toEqual({
+      id: 4,
+      name: 'CIP',
+      description: 'Cleaning',
+      fileIds: [2, 3]
+    })
+    expect(api.get).toHaveBeenCalledWith(4)
   })
 
   it('creates through add-v2 and reloads the backend DTO', async () => {
@@ -72,6 +92,15 @@ describe('ProcessAssistantProjectRepository', () => {
   it('updates with versioned jsonData and delegates delete', async () => {
     const { api, repository } = createHarness()
     api.update.mockResolvedValue(undefined)
+    api.get.mockResolvedValue({
+      id: 3,
+      name: 'Updated',
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: 'Details',
+        fileIds: [5]
+      })
+    })
     api.delete.mockResolvedValue(undefined)
 
     await expect(
@@ -95,6 +124,7 @@ describe('ProcessAssistantProjectRepository', () => {
         fileIds: [5]
       })
     })
+    expect(api.get).toHaveBeenCalledWith(3)
 
     await repository.delete(3)
     expect(api.delete).toHaveBeenCalledWith(3)

@@ -44,6 +44,11 @@ const createHarness = (projects: ProjectRecord[] = []) => {
   const onDelete = jest.fn()
   const repository: jest.Mocked<ProjectRepository> = {
     list: jest.fn(async () => projects.map(project => ({ ...project }))),
+    get: jest.fn(async id => {
+      const project = projects.find(item => item.id === id)
+      if (!project) throw new Error('Project not found')
+      return { ...project }
+    }),
     create: jest.fn(async input => ({
       ...existingProject,
       id: 2,
@@ -92,10 +97,11 @@ describe('ProjectManagementModal', () => {
   })
 
   it('shows detailed metadata for the selected project', async () => {
-    const { modal, onSelect } = createHarness([existingProject])
+    const { modal, repository, onSelect } = createHarness([existingProject])
     await modal.open()
 
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
+    await flushPromises()
 
     const details = document.querySelector('.project-details')
     expect(details?.textContent).toContain('描述')
@@ -105,6 +111,7 @@ describe('ProjectManagementModal', () => {
     expect(document.body.textContent).toContain('Project 详情')
     expect(document.querySelector('.project-drawing-option input')).toBeNull()
     expect(document.body.textContent).toContain('编辑')
+    expect(repository.get).toHaveBeenCalledWith(1)
     expect(onSelect).toHaveBeenCalledWith(existingProject)
   })
 
@@ -142,9 +149,9 @@ describe('ProjectManagementModal', () => {
     document
       .querySelectorAll<HTMLInputElement>('.project-drawing-option input')[1]
       .click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '创建 Project')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '创建 Project')
+        ?.click()
     await flushPromises()
 
     expect(repository.create).toHaveBeenCalledWith({
@@ -161,15 +168,16 @@ describe('ProjectManagementModal', () => {
     const { modal, repository } = createHarness([existingProject])
     await modal.open()
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '编辑')
-      ?.click()
+    await flushPromises()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '编辑')
+        ?.click()
     document
       .querySelectorAll<HTMLInputElement>('.project-drawing-option input')[1]
       .click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '保存更改')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '保存更改')
+        ?.click()
     await flushPromises()
 
     expect(repository.update).toHaveBeenCalledWith(1, {
@@ -185,17 +193,18 @@ describe('ProjectManagementModal', () => {
     ])
     await modal.open()
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '删除')
-      ?.click()
     await flushPromises()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(
-        button =>
-          button.textContent === '删除' &&
-          button.classList.contains('confirmation-modal-confirm')
-      )
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '删除')
+        ?.click()
+    await flushPromises()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(
+          button =>
+            button.textContent === '删除' &&
+            button.classList.contains('confirmation-modal-confirm')
+        )
+        ?.click()
     await flushPromises()
 
     expect(repository.delete).toHaveBeenCalledWith(1)

@@ -5,17 +5,10 @@ import type {
 } from './processAssistantTypes'
 
 export class ProcessAssistantProjectApi {
-  constructor(private readonly client: ProcessAssistantClient) {}
+  constructor(private readonly client: ProcessAssistantClient) { }
 
   list(signal?: AbortSignal): Promise<ProjectDto[]> {
     return this.client.request('GET', '/api/v1/Project', { signal })
-  }
-
-  create(project: ProjectDto, signal?: AbortSignal): Promise<number> {
-    return this.client.request('POST', '/api/v1/Project', {
-      body: project,
-      signal
-    })
   }
 
   get(id: number, signal?: AbortSignal): Promise<ProjectDto> {

@@ -165,7 +165,7 @@ export class ProjectManagementModal {
       id.textContent = `ID ${project.id}`
       details.append(count, id)
       button.append(name, details)
-      button.addEventListener('click', () => this.selectProject(project))
+      button.addEventListener('click', () => void this.selectProject(project.id))
       list.append(button)
     })
     panel.append(list)
@@ -391,16 +391,28 @@ export class ProjectManagementModal {
     return label
   }
 
-  private selectProject(project: ProjectRecord) {
-    this.selectedProjectId = project.id
-    this.name = project.name
-    this.description = project.description
-    this.selectedDrawingIds = new Set(project.fileIds.map(String))
-    this.drawingQuery = ''
-    this.isEditing = false
+  private async selectProject(projectId: number) {
+    this.busy = true
     this.message = ''
     this.render()
-    void this.options.onSelect?.(project)
+    try {
+      const project = await this.repository.get(projectId)
+      this.projects = this.projects.map(item =>
+        item.id === project.id ? project : item
+      )
+      this.selectedProjectId = project.id
+      this.name = project.name
+      this.description = project.description
+      this.selectedDrawingIds = new Set(project.fileIds.map(String))
+      this.drawingQuery = ''
+      this.isEditing = false
+      await this.options.onSelect?.(project)
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error)
+    } finally {
+      this.busy = false
+      this.render()
+    }
   }
 
   private startNewProject() {

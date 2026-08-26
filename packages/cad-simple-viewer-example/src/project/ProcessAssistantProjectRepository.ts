@@ -35,8 +35,8 @@ const parseJsonData = (value: string | null | undefined): ProjectJsonData => {
       description: typeof data.description === 'string' ? data.description : '',
       fileIds: Array.isArray(data.fileIds)
         ? normalizeFileIds(
-            data.fileIds.filter((value): value is number => typeof value === 'number')
-          )
+          data.fileIds.filter((value): value is number => typeof value === 'number')
+        )
         : []
     }
   } catch {
@@ -63,7 +63,7 @@ const toProjectRecord = (project: ProjectDto): ProjectRecord | undefined => {
 }
 
 export class ProcessAssistantProjectRepository implements ProjectRepository {
-  constructor(private readonly api: ProcessAssistantProjectApi) {}
+  constructor(private readonly api: ProcessAssistantProjectApi) { }
 
   async list(): Promise<ProjectRecord[]> {
     return (await this.api.list())
@@ -71,12 +71,16 @@ export class ProcessAssistantProjectRepository implements ProjectRepository {
       .filter((project): project is ProjectRecord => project !== undefined)
   }
 
-  async create(input: ProjectInput): Promise<ProjectRecord> {
-    const normalized = normalizeInput(input)
-    const id = await this.api.addV2(normalized)
+  async get(id: number): Promise<ProjectRecord> {
     const project = toProjectRecord(await this.api.get(id))
     if (!project) throw new Error('Project API 返回了无效数据')
     return project
+  }
+
+  async create(input: ProjectInput): Promise<ProjectRecord> {
+    const normalized = normalizeInput(input)
+    const id = await this.api.addV2(normalized)
+    return this.get(id)
   }
 
   async update(id: number, input: ProjectInput): Promise<ProjectRecord> {
@@ -86,7 +90,7 @@ export class ProcessAssistantProjectRepository implements ProjectRepository {
       name: normalized.name,
       jsonData: serializeJsonData(normalized)
     })
-    return { id, ...normalized }
+    return this.get(id)
   }
 
   delete(id: number): Promise<void> {
