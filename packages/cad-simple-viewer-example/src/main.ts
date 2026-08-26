@@ -607,6 +607,10 @@ class CadViewerApp {
     this.syncPhaseContextBar()
     this.syncDockMenuState()
     this.syncViewerToolbarMenuState()
+    this.centerOpenButton.textContent = translateUiText(
+      this.appLocale,
+      'Open File'
+    )
     localizeDom(document, this.appLocale)
     this.valveDebugFeature?.setLocale(this.appLocale as ValveDebugLocale)
   }
