@@ -482,6 +482,7 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       let suffix = 2
       while (seenUtilityIds.has(id)) id = `${baseId}-${suffix++}`
       seenUtilityIds.add(id)
+      const nestedStyle = isRecord(candidate.style) ? candidate.style : {}
       return [
         {
           id,
@@ -490,9 +491,18 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
               ? candidate.name.trim()
               : id,
           style: normalizeStyle({
-            ...(isRecord(candidate.style) ? candidate.style : candidate),
-            color: firstDefined(candidate.color, candidate.FillColorString),
-            opacity: firstDefined(candidate.opacity, candidate.FillOpacity)
+            ...candidate,
+            ...nestedStyle,
+            color: firstDefined(
+              nestedStyle.color,
+              candidate.color,
+              candidate.FillColorString
+            ),
+            opacity: firstDefined(
+              nestedStyle.opacity,
+              candidate.opacity,
+              candidate.FillOpacity
+            )
           }, defaults.defaultFlowStyle),
           enabled: true,
           order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)

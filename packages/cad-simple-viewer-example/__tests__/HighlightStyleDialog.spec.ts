@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import { toPersistedPresentationProfile } from '../src/phase/phaseWorkspaceRepository'
 import { HighlightStyleDialog } from '../src/presentation/HighlightStyleDialog'
 
 const value = () => ({
@@ -80,6 +81,11 @@ describe('HighlightStyleDialog', () => {
       ;[...dialog.element.querySelectorAll('button')]
         .find(button => button.textContent === '新增 Utility')!
         .click()
+    const color = dialog.element.querySelector<HTMLInputElement>(
+      '[aria-label="高亮颜色"]'
+    )!
+    color.value = '#123456'
+    color.dispatchEvent(new Event('input'))
       ;[...dialog.element.querySelectorAll('button')]
         .find(button => button.textContent === '应用')!
         .click()
@@ -88,10 +94,16 @@ describe('HighlightStyleDialog', () => {
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
         presentationProfile: expect.objectContaining({
-          utilities: [expect.objectContaining({ id: 'utility-1' })]
+          utilities: [expect.objectContaining({
+            id: 'utility-1',
+            style: expect.objectContaining({ color: 0x123456 })
+          })]
         })
       })
     )
+    const appliedDraft = onApply.mock.calls[0][0]
+    expect(toPersistedPresentationProfile(appliedDraft.presentationProfile).utilities)
+      .toEqual([expect.objectContaining({ color: '#123456' })])
     expect(
       dialog.element.querySelector<HTMLInputElement>('input[aria-label="Utility 名称"]')
         ?.value

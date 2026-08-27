@@ -500,6 +500,12 @@ describe('PhaseWorkspaceStore', () => {
           utilities: [{
             id: utilityId,
             name: 'Water',
+            style: {
+              color: 0x123456,
+              lineWidthPx: 5,
+              opacity: 0.6,
+              visible: true
+            },
             color: '#00C853',
             lineWidthPx: 3,
             opacity: 1
@@ -518,6 +524,12 @@ describe('PhaseWorkspaceStore', () => {
     expect(profile.devices[0].states[0].id).toBe(deviceStyleId)
     expect(profile.devices[0].states[0].key).toBe('state-1')
     expect(profile.utilities[0].id).toBe(utilityId)
+    expect(profile.utilities[0].style).toEqual({
+      color: 0x123456,
+      lineWidthPx: 5,
+      opacity: 0.6,
+      visible: true
+    })
   })
 
   it('associates and replaces drawings while retaining shared old assets', () => {
