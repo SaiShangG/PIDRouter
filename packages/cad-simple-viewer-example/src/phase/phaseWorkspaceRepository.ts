@@ -9,6 +9,11 @@ import type {
   UploadFileDto
 } from '../api/processAssistantTypes'
 import {
+  parsePhasePidOverlay,
+  PHASE_PID_OVERLAY_SCHEMA_VERSION,
+  type PhasePidOverlay
+} from './phasePidOverlay'
+import {
   createDefaultPresentationProfile,
   PhaseWorkspaceStore
 } from './phaseWorkspaceStore'
@@ -102,14 +107,13 @@ export interface CreateBackendSequenceInput {
   orderIndex?: number
 }
 
-export interface PersistedPhaseData {
-  schemaVersion: 1
-  drawing?: {
-    fileId: number
-    displayName: string
+export type PersistedPhaseData = PhasePidOverlay
+
+export class PhasePidOverlayWriteProtectedError extends Error {
+  constructor(readonly phaseId: string) {
+    super(`Phase ${phaseId} PID overlay is read-only because it cannot be safely rewritten`)
+    this.name = 'PhasePidOverlayWriteProtectedError'
   }
-  sourcePhaseId?: number
-  flowState: PhaseSnapshot['flowState']
 }
 
 export interface CreateBackendPhaseInput {
@@ -127,16 +131,6 @@ const isRecord = (value: unknown): value is JsonRecord =>
 
 const hasId = <T extends { id?: number }>(value: T): value is T & { id: number } =>
   Number.isInteger(value.id) && (value.id ?? 0) > 0
-
-const parseJsonRecord = (value?: string | null): JsonRecord => {
-  if (!value) return {}
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return isRecord(parsed) ? parsed : {}
-  } catch {
-    return {}
-  }
-}
 
 const toNumber = (value: number | undefined, fallback: number): number =>
   Number.isInteger(value) && (value ?? 0) > 0 ? value! : fallback
@@ -201,10 +195,13 @@ export class PhaseWorkspaceRepository {
         drawing
       }
     }
+    if (phase.pidOverlayPersistence) {
+      throw new PhasePidOverlayWriteProtectedError(phase.id)
+    }
+    const persistedPhase = this.toPersistedPhaseData(phase)
     return {
-      ...this.toPersistedPhaseData(phase),
-      sourcePhaseId: this.requireBackendId(phase.id, 'Source phase'),
-      drawing: drawing ?? this.toPersistedPhaseData(phase).drawing
+      ...persistedPhase,
+      drawing: drawing ?? persistedPhase.drawing
     }
   }
 
@@ -309,6 +306,18 @@ export class PhaseWorkspaceRepository {
     orderIndex: number,
     signal?: AbortSignal
   ): Promise<void> {
+    if (phase.pidOverlayPersistence) {
+      throw new PhasePidOverlayWriteProtectedError(phase.id)
+    }
+    return this.writePhase(sequenceId, phase, orderIndex, signal)
+  }
+
+  private writePhase(
+    sequenceId: string,
+    phase: PhaseSnapshot,
+    orderIndex: number,
+    signal?: AbortSignal
+  ): Promise<void> {
     const id = this.requireBackendId(phase.id, 'Phase')
     return this.options.phases.update(
       id,
@@ -383,15 +392,38 @@ export class PhaseWorkspaceRepository {
     position: number,
     drawingAssets: Record<string, DrawingAssetRef>
   ): PhaseSnapshot {
-    const data = parseJsonRecord(phase.jsonData)
+    const parsed = parsePhasePidOverlay(phase.jsonData ?? '')
     const timestamp = this.now()
+    const overlay = parsed.status === 'valid' ? parsed.overlay : undefined
     return {
       id: String(phase.id),
       number: toNumber(phase.index, position + 1),
       name: phase.name?.trim() || `Phase ${phase.id}`,
-      drawing: this.readDrawing(data.drawing, drawingAssets),
-      sourcePhaseId: this.readSourcePhaseId(data.sourcePhaseId),
-      flowState: this.readFlowState(data),
+      drawing: this.readDrawing(overlay?.drawing, drawingAssets),
+      flowState: overlay ? this.readFlowState(overlay) : { flowPaths: [] },
+      textNotes: overlay ? this.readTextNotes(overlay) : [],
+      ...(parsed.status === 'unsupported'
+        ? {
+          pidOverlayPersistence: {
+            status: 'unsupported' as const,
+            schemaVersion: parsed.schemaVersion
+          }
+        }
+        : parsed.status === 'invalid'
+          ? {
+            pidOverlayPersistence: {
+              status: 'invalid' as const,
+              reason: parsed.reason
+            }
+          }
+          : parsed.status === 'valid' && parsed.warnings.length
+            ? {
+              pidOverlayPersistence: {
+                status: 'warnings' as const,
+                warningCodes: parsed.warnings.map(warning => warning.code)
+              }
+            }
+            : {}),
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -459,57 +491,58 @@ export class PhaseWorkspaceRepository {
     }
   }
 
-  private readSourcePhaseId(value: unknown): string | undefined {
-    if (typeof value === 'number' && Number.isInteger(value)) return String(value)
-    if (typeof value === 'string' && value.trim()) return value.trim()
-    return undefined
-  }
-
-  private readFlowPaths(value: unknown): FlowPathStatus[] {
-    if (!isRecord(value) || !Array.isArray(value.flowPaths)) return []
-    return value.flowPaths.filter(isRecord) as unknown as FlowPathStatus[]
-  }
-
-  private readFlowState(data: JsonRecord): FlowStateSnapshot {
-    const flowState = isRecord(data.flowState) ? data.flowState : {}
-    const deviceStates = this.readDeviceStates(
-      flowState.deviceStates ?? data.deviceStates
+  private readFlowState(overlay: PhasePidOverlay): FlowStateSnapshot {
+    const flowPaths: FlowPathStatus[] = overlay.highlightedObjects.flowPaths.map(
+      (flowPath, index) => {
+        const handleKey = this.fromPersistedHandleKey(flowPath.handleKey)
+        return {
+          id: `persisted-flow-${index + 1}`,
+          name: handleKey,
+          handleKeys: [handleKey],
+          utilityId: flowPath.highlightStyleRefId,
+          styleSource: {
+            kind: 'utility',
+            utilityId: flowPath.highlightStyleRefId
+          }
+        }
+      }
     )
+    const deviceStates = overlay.highlightedObjects.deviceStates.length > 0
+      ? Object.fromEntries(
+        overlay.highlightedObjects.deviceStates.map(deviceState => [
+          this.fromPersistedHandleKey(deviceState.handleKey),
+          {
+            key: this.fromPersistedHandleKey(deviceState.handleKey),
+            label: this.fromPersistedHandleKey(deviceState.handleKey),
+            mode: 'unknown',
+            stateKey: deviceState.stateKey,
+            deviceDefinitionId: deviceState.deviceType,
+            highlightStyleRefId: deviceState.highlightStyleRefId
+          } satisfies DeviceState
+        ])
+      )
+      : undefined
     return {
-      flowPaths: this.readFlowPaths(flowState),
+      flowPaths,
       ...(deviceStates ? { deviceStates } : {})
     }
   }
 
-  private readDeviceStates(
-    value: unknown
-  ): Record<string, DeviceState> | undefined {
-    if (!isRecord(value)) return undefined
-    const entries = Object.entries(value).flatMap(([recordKey, candidate]) => {
-      if (!isRecord(candidate) || typeof candidate.mode !== 'string') return []
-      const key =
-        typeof candidate.key === 'string' && candidate.key.trim()
-          ? candidate.key.trim()
-          : recordKey
-      return [[
-        key,
-        {
-          key,
-          label:
-            typeof candidate.label === 'string' && candidate.label.trim()
-              ? candidate.label.trim()
-              : key,
-          mode: candidate.mode
-        } as DeviceState
-      ] as const]
-    })
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  private readTextNotes(overlay: PhasePidOverlay): PhaseSnapshot['textNotes'] {
+    return overlay.textNotes.map(note => ({
+      ...note,
+      linkedObjectHandleKey: note.linkedObjectHandleKey === undefined
+        ? undefined
+        : this.fromPersistedHandleKey(note.linkedObjectHandleKey),
+      location: { ...note.location }
+    }))
   }
 
   private createEmptyPhaseData(): PersistedPhaseData {
     return {
-      schemaVersion: 1,
-      flowState: { flowPaths: [] }
+      schemaVersion: PHASE_PID_OVERLAY_SCHEMA_VERSION,
+      highlightedObjects: { flowPaths: [], deviceStates: [] },
+      textNotes: []
     }
   }
 
@@ -518,11 +551,32 @@ export class PhaseWorkspaceRepository {
       phase.drawing.kind === 'assigned'
         ? this.readFileId(phase.drawing.assetId)
         : undefined
-    const sourcePhaseId = phase.sourcePhaseId
-      ? this.requireBackendId(phase.sourcePhaseId, 'Source phase')
-      : undefined
+    const flowPaths = phase.flowState.flowPaths.flatMap(flowPath => {
+      const highlightStyleRefId = flowPath.utilityId ??
+        (flowPath.styleSource?.kind === 'utility'
+          ? flowPath.styleSource.utilityId
+          : undefined)
+      if (!highlightStyleRefId) return []
+      return flowPath.handleKeys.flatMap(handleKey => {
+        const persistedHandleKey = this.toPersistedHandleKey(handleKey)
+        return persistedHandleKey
+          ? [{ handleKey: persistedHandleKey, highlightStyleRefId }]
+          : []
+      })
+    })
+    const deviceStates = Object.values(phase.flowState.deviceStates ?? {}).flatMap(
+      deviceState => {
+        const handleKey = this.toPersistedHandleKey(deviceState.key)
+        const stateKey = deviceState.stateKey
+        const highlightStyleRefId = deviceState.highlightStyleRefId
+        const deviceType = deviceState.deviceDefinitionId
+        return handleKey && stateKey && highlightStyleRefId && deviceType
+          ? [{ handleKey, stateKey, highlightStyleRefId, deviceType }]
+          : []
+      }
+    )
     return {
-      schemaVersion: 1,
+      schemaVersion: PHASE_PID_OVERLAY_SCHEMA_VERSION,
       drawing:
         fileId !== undefined && phase.drawing.kind === 'assigned'
           ? {
@@ -530,9 +584,32 @@ export class PhaseWorkspaceRepository {
             displayName: phase.drawing.displayName
           }
           : undefined,
-      sourcePhaseId,
-      flowState: phase.flowState
+      highlightedObjects: { flowPaths, deviceStates },
+      textNotes: phase.textNotes?.flatMap(note => {
+        const linkedObjectHandleKey = note.linkedObjectHandleKey === undefined
+          ? undefined
+          : this.toPersistedHandleKey(note.linkedObjectHandleKey)
+        if (note.linkedObjectHandleKey !== undefined && !linkedObjectHandleKey) {
+          return []
+        }
+        return [{
+          ...note,
+          linkedObjectHandleKey,
+          location: { ...note.location }
+        }]
+      }) ?? []
     }
+  }
+
+  private toPersistedHandleKey(value: string): string | undefined {
+    const handleKey = value.trim().toUpperCase()
+    return /^[0-9A-F]+$/.test(handleKey)
+      ? BigInt(`0x${handleKey}`).toString(10)
+      : undefined
+  }
+
+  private fromPersistedHandleKey(value: string): string {
+    return BigInt(value).toString(16).toUpperCase()
   }
 
   private readFileId(assetId: string): number | undefined {

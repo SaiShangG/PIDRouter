@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
-import type { PhaseWorkspaceState } from '../src/phase/types'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import type { PhaseWorkspaceState } from '../src/phase/types'
 import type {
   PhaseReportExportResult,
   PhaseReportOutputMode,
@@ -61,7 +61,8 @@ const createHarness = (
     status: 'completed' as const,
     fileName: 'report.pdf',
     bytes: new Uint8Array([1])
-  }))
+  })),
+  exportMatrix = jest.fn(async () => undefined)
 ) => {
   let id = 0
   const store = new ReportManifestStore(
@@ -73,7 +74,7 @@ const createHarness = (
   const modal = new ReportWorkspaceModal(
     () => JSON.parse(JSON.stringify(state)) as PhaseWorkspaceState,
     store,
-    { preview, export: exportReport },
+    { preview, export: exportReport, exportMatrix },
     () => locale
   )
   modal.open()
@@ -81,7 +82,8 @@ const createHarness = (
     modal,
     store,
     preview,
-    exportReport: exportReport as jest.MockedFunction<ExportReport>
+    exportReport: exportReport as jest.MockedFunction<ExportReport>,
+    exportMatrix
   }
 }
 
@@ -152,6 +154,46 @@ describe('ReportWorkspaceModal', () => {
       expect.any(AbortSignal),
       expect.any(Function)
     )
+  })
+
+  it('switches between separate PDF and Matrix export tabs', () => {
+    createHarness()
+    const pdfTab = document.querySelector<HTMLButtonElement>('#pdfExportTab')!
+    const matrixTab = document.querySelector<HTMLButtonElement>('#matrixExportTab')!
+
+    expect(pdfTab.getAttribute('aria-selected')).toBe('true')
+    expect(document.querySelector('#pdfExportPanel')).not.toBeNull()
+    expect(document.querySelector('.report-matrix-controls')).toBeNull()
+
+    matrixTab.click()
+    expect(document.querySelector('#matrixExportTab')?.getAttribute('aria-selected')).toBe('true')
+    expect(document.querySelector('#matrixExportPanel')).not.toBeNull()
+    expect(buttonByText('合并为一个 PDF')).toBeUndefined()
+
+    document.querySelector<HTMLButtonElement>('#pdfExportTab')?.click()
+    expect(document.querySelector('#pdfExportTab')?.getAttribute('aria-selected')).toBe('true')
+    expect(document.querySelector('#pdfExportPanel')).not.toBeNull()
+    expect(document.querySelector('.report-matrix-controls')).toBeNull()
+  })
+
+  it('exports a matrix for selected operations, phases, and device types', async () => {
+    const { exportMatrix } = createHarness()
+
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+    document.querySelector<HTMLButtonElement>(
+      '#matrixExportPanel .report-primary-button'
+    )?.click()
+    await Promise.resolve()
+
+    expect(exportMatrix).toHaveBeenCalledWith({
+      processId: 'process',
+      sequenceIds: ['sequence'],
+      phaseIds: ['phase-1', 'phase-2'],
+      format: 'XLSX',
+      deviceTypes: ['VALVE', 'PUMP_MOTOR', 'SENSOR'],
+      includeInactiveDevices: true,
+      includeTransitions: true
+    }, expect.any(AbortSignal))
   })
 
   it('lists the exact localized issue and disables export', async () => {

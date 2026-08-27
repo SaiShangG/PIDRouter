@@ -40,6 +40,11 @@ import {
   getProcessAssistantConfig,
   PROCESS_ASSISTANT_API_URL
 } from './api/processAssistantConfig'
+import {
+  type ExportTaskDto,
+  ProcessAssistantMatrixApi,
+  ProcessAssistantReportApi
+} from './api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from './api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
@@ -88,7 +93,17 @@ import {
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
+import {
+  deviceModeFromFlowBehavior,
+  resolveDeviceStateDefinition
+} from './phase/phaseDeviceStateRuntime'
+import {
+  collectHighlightHandleKeys,
+  findStaleHighlightRootIds,
+  retainUnresolvedFlowPaths
+} from './phase/phaseFlowPathRuntime'
 import { createPhaseIcon } from './phase/phaseIcons'
+import { findPhaseOverlayStyleWarnings } from './phase/phaseOverlayStyleResolver'
 import {
   type CopyPhaseRequest,
   type CopySequenceRequest,
@@ -98,6 +113,7 @@ import {
   PhaseWorkspacePanel
 } from './phase/PhaseWorkspacePanel'
 import {
+  PhasePidOverlayWriteProtectedError,
   PhaseWorkspaceRepository,
   toPersistedPresentationProfile
 } from './phase/phaseWorkspaceRepository'
@@ -139,12 +155,12 @@ import { ProjectManagementModal } from './project/ProjectManagementModal'
 import { injectProjectManagementStyles } from './project/projectManagementStyles'
 import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
-import {
-  PhaseReportExporter,
-  type PhaseReportExportResult
-} from './report/PhaseReportExporter'
+import type { PhaseReportProgress } from './report/PhaseReportExporter'
 import { ReportManifestStore } from './report/reportManifest'
-import { ReportWorkspaceModal } from './report/ReportWorkspaceModal'
+import {
+  type MatrixExportSelection,
+  ReportWorkspaceModal
+} from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
 import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
 import { Toast, type ToastTone } from './ui/Toast'
@@ -194,7 +210,6 @@ const CONNECTED_FLOW_STYLE = {
 // positioning. Keep it hidden in the viewer and out of PDF content while
 // retaining it for bounds lookup.
 const PHI_RASTER_LAYER_NAME = '$PHI_RASTER'
-const PDF_EXCLUDED_LAYERS = [PHI_RASTER_LAYER_NAME]
 
 const uniqueHandleKeys = (keys: string[]) => {
   return [
@@ -437,6 +452,12 @@ class CadViewerApp {
   private readonly processAssistantPhaseApi = new ProcessAssistantPhaseApi(
     this.processAssistantClient
   )
+  private readonly processAssistantReportApi = new ProcessAssistantReportApi(
+    this.processAssistantClient
+  )
+  private readonly processAssistantMatrixApi = new ProcessAssistantMatrixApi(
+    this.processAssistantClient
+  )
   private readonly projectRepository = new ProcessAssistantProjectRepository(
     this.processAssistantProjectApi
   )
@@ -627,7 +648,9 @@ class CadViewerApp {
           await this.activateWorkspacePhase(processId, sequenceId, phaseId)
         },
         export: (mode, signal, onProgress) =>
-          this.exportPhaseReport(mode, signal, onProgress)
+          this.exportPhaseReport(mode, signal, onProgress),
+        exportMatrix: (selection, signal) =>
+          this.exportMatrix(selection, signal)
       },
       () => this.appLocale
     )
@@ -698,93 +721,142 @@ class CadViewerApp {
   private async exportPhaseReport(
     mode: 'merged' | 'per-sequence',
     signal: AbortSignal,
-    onProgress: Parameters<PhaseReportExporter['export']>[2]['onProgress']
+    onProgress: (progress: PhaseReportProgress) => void
   ) {
     await this.initialize()
-    const loaded = await AcApDocManager.instance.pluginManager.loadByTrigger(
-      'cpdf'
-    )
-    if (!loaded) throw new Error('PDF export plugin is not available')
-
     this.captureLoadedPhaseState()
     const workspace = this.phaseStore.snapshot()
-    const manifest = this.reportStore.freeze()
-    const view = AcApDocManager.instance.curView
-    const originalViewBox = new AcGeBox2d()
-      .expandByPoint(view.screenToWorld({ x: 0, y: 0 }))
-      .expandByPoint(view.screenToWorld({ x: view.width, y: view.height }))
-    const issues = this.reportStore.preflight(workspace)
-    if (issues.some(issue => issue.severity === 'error')) {
-      throw new Error('Report preflight failed')
-    }
-
-    const { AcApPdfConvertor, AcApPdfReportComposer } = await import(
-      '@mlightcad/cad-pdf-plugin'
-    )
-    const convertor = new AcApPdfConvertor()
-    const composer = new AcApPdfReportComposer()
-    const exporter = new PhaseReportExporter({
-      activate: location =>
-        this.activateWorkspacePhase(
-          location.processId,
-          location.sequenceId,
-          location.phaseId,
-          false
-        ),
-      renderPage: () =>
-        convertor.renderPdfBytes(AcApDocManager.instance.context, {
-          backgroundColor: 0xffffff,
-          bounds: flowConnectionPidBounds ?? undefined,
-          excludedLayers: PDF_EXCLUDED_LAYERS,
-          includeBackground: false,
-          entityStyleOverrides: this.getPdfEntityStyleOverrides()
-        }),
-      compose: pages => composer.compose(pages.map(bytes => ({ bytes }))),
-      restore: async location => {
-        try {
-          if (location) {
-            await this.activateWorkspacePhase(
-              location.processId,
-              location.sequenceId,
-              location.phaseId,
-              false
-            )
-          }
-        } finally {
-          AcApDocManager.instance.curView.zoomTo(originalViewBox, 1)
-        }
-      }
-    })
-    const handleResult = async (
-      result: PhaseReportExportResult
-    ): Promise<PhaseReportExportResult> => {
-      if (signal.aborted) return { status: 'canceled' }
-      if (result.status === 'completed') {
-        this.downloadReportFile(result.fileName, result.bytes)
-      } else if (result.status === 'failed') {
-        const retry = result.retry
-        return {
-          ...result,
-          retry: async options => handleResult(await retry(options))
-        }
-      }
-      return result
-    }
-    const result = await exporter.export(workspace, manifest, {
-      mode,
+    const process = workspace.processes.find(
+      item => item.id === workspace.activeProcessId
+    ) ?? workspace.processes[0]
+    if (!process) throw new Error('Process is required to export a report')
+    const task = await this.processAssistantReportApi.create({
+      processId: this.requireExportBackendId(process.id, 'Process'),
+      mode: mode === 'merged' ? 'COMBINED' : 'PER_SEQUENCE',
+      sequenceIds: process.sequences.map(sequence =>
+        this.requireExportBackendId(sequence.id, 'Sequence')
+      ),
+      includeCover: true,
+      includeValveMatrix: false,
+      pageSize: 'A3',
+      orientation: 'LANDSCAPE'
+    }, signal)
+    const reportId = this.requireExportTaskId(task, 'report')
+    const completed = await this.waitForExportTask(
+      current => this.processAssistantReportApi.get(reportId, current),
       signal,
-      onProgress
-    })
-    return handleResult(result)
+      status => {
+        const total = status.totalPhases ?? process.sequences.reduce(
+          (sum, sequence) => sum + sequence.phases.length,
+          0
+        )
+        const completedCount = status.processedPhases ?? Math.round(
+          Math.max(0, Math.min(100, status.progress ?? 0)) / 100 * total
+        )
+        onProgress({
+          completed: completedCount,
+          total,
+          pageNumber: completedCount,
+          sequenceId: '',
+          phaseId: ''
+        })
+      }
+    )
+    if (!completed) return { status: 'canceled' } as const
+    const file = await this.processAssistantReportApi.download(reportId, signal)
+    const fallback = mode === 'merged'
+      ? 'process-report.pdf'
+      : 'process-reports.zip'
+    const fileName = file.fileName ?? task.fileName ?? fallback
+    this.downloadExportFile(fileName, file.blob)
+    return {
+      status: 'completed',
+      fileName,
+      bytes: new Uint8Array()
+    } as const
   }
 
-  private downloadReportFile(fileName: string, bytes: Uint8Array) {
-    const type = fileName.endsWith('.zip')
-      ? 'application/zip'
-      : 'application/pdf'
-    const buffer = new ArrayBuffer(bytes.byteLength)
-    new Uint8Array(buffer).set(bytes)
-    const blob = new Blob([buffer], { type })
+  private async exportMatrix(
+    selection: MatrixExportSelection,
+    signal: AbortSignal
+  ) {
+    if (this.activeProjectId === undefined) {
+      throw new Error('Matrix export requires an active Project')
+    }
+    const processId = this.requireExportBackendId(selection.processId, 'Process')
+    const selectedSequenceIds = new Set(selection.sequenceIds)
+    const selectedPhaseIds = new Set(selection.phaseIds)
+    const process = this.phaseStore.snapshot().processes.find(
+      item => item.id === selection.processId
+    )
+    if (!process) throw new Error('Selected Process does not exist')
+    const sequences = Object.fromEntries(
+      process.sequences
+        .filter(sequence => selectedSequenceIds.has(sequence.id))
+        .map(sequence => [
+          String(this.requireExportBackendId(sequence.id, 'Sequence')),
+          sequence.phases
+            .filter(phase => selectedPhaseIds.has(phase.id))
+            .map(phase => this.requireExportBackendId(phase.id, 'Phase'))
+        ])
+        .filter(([, phaseIds]) => phaseIds.length > 0)
+    )
+    const file = await this.processAssistantMatrixApi.create({
+      projectId: this.activeProjectId,
+      selection: { [processId]: sequences }
+    }, signal)
+    const extension = selection.format.toLowerCase()
+    this.downloadExportFile(
+      file.fileName ?? `device-matrix.${extension}`,
+      file.blob
+    )
+  }
+
+  private async waitForExportTask(
+    getTask: (signal: AbortSignal) => Promise<ExportTaskDto>,
+    signal: AbortSignal,
+    onProgress?: (task: ExportTaskDto) => void
+  ): Promise<ExportTaskDto | undefined> {
+    while (!signal.aborted) {
+      const task = await getTask(signal)
+      onProgress?.(task)
+      if (task.status === 'COMPLETED' || task.status === 'SUCCEEDED') return task
+      if (task.status === 'CANCELLED' || task.status === 'CANCELED') return undefined
+      if (task.status === 'FAILED') {
+        throw new Error(task.error ?? task.message ?? 'Backend export failed')
+      }
+      await new Promise<void>((resolve, reject) => {
+        const handleAbort = () => {
+          window.clearTimeout(timeout)
+          reject(new DOMException('Export canceled', 'AbortError'))
+        }
+        const timeout = window.setTimeout(() => {
+          signal.removeEventListener('abort', handleAbort)
+          resolve()
+        }, 1000)
+        signal.addEventListener('abort', handleAbort, { once: true })
+      })
+    }
+    return undefined
+  }
+
+  private requireExportTaskId(task: ExportTaskDto, kind: 'report' | 'matrix') {
+    const id = task.id ?? (kind === 'report' ? task.reportId : task.matrixId)
+    if (id === undefined || id === null || id === '') {
+      throw new Error(`Backend ${kind} export did not return a task ID`)
+    }
+    return id
+  }
+
+  private requireExportBackendId(value: string, label: string) {
+    const id = Number(value)
+    if (!Number.isInteger(id) || id < 1) {
+      throw new Error(`${label} ID must be a positive backend integer`)
+    }
+    return id
+  }
+
+  private downloadExportFile(fileName: string, blob: Blob) {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
@@ -1825,16 +1897,53 @@ class CadViewerApp {
     operation: BrushOperation,
     objectIds: readonly AcDbObjectId[]
   ) {
+    const profile = this.getActivePresentationProfile()
+    const selection =
+      this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
+    const utility = profile.utilities.find(
+      candidate => candidate.id === selection.utilityId && candidate.enabled
+    )
+    const device = profile.devices.find(
+      candidate => candidate.id === selection.deviceId
+    )
+    const deviceState = device?.states.find(
+      candidate => candidate.id === selection.stateId && candidate.enabled
+    )
     objectIds.forEach(objectId => {
       if (operation === 'paint') {
         this.manualHighlightedIds.add(objectId)
         this.manualHiddenIds.delete(objectId)
+        const handleKey = this.getHighlightHandleKeys([objectId])[0]
+        if (!handleKey) return
+        const valveHandle = this.getPrimaryFlowHandleForObject(objectId)
+        if (valveHandle && device && deviceState) {
+          this.valveDeviceStates.set(objectId, {
+            key: handleKey,
+            label: deviceState.displayName,
+            mode: deviceModeFromFlowBehavior(deviceState.flowBehavior),
+            stateKey: deviceState.key,
+            deviceDefinitionId: device.id,
+            highlightStyleRefId: deviceState.id
+          })
+          return
+        }
+        if (utility) {
+          this.openHighlightPaths.set(objectId, {
+            id: `brush-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
+            name: this.appLocale === 'zh' ? '手工高亮' : 'Manual highlight',
+            handleKeys: [handleKey],
+            styleSource: { kind: 'utility', utilityId: utility.id }
+          })
+        }
       } else {
         this.manualHighlightedIds.delete(objectId)
         this.manualHiddenIds.add(objectId)
+        this.openHighlightPaths.delete(objectId)
+        this.valveDeviceStates.delete(objectId)
       }
     })
     this.syncOpenHighlightRoots()
+    this.captureLoadedPhaseState()
   }
 
   private getPrimaryFlowHandleForObject(objectId: AcDbObjectId) {
@@ -2038,9 +2147,28 @@ class CadViewerApp {
       throw new Error('Phase context controls were not found')
     }
     saveButton.prepend(createPhaseIcon(Save))
-    saveButton.addEventListener('click', () => {
-      this.captureLoadedPhaseState()
-      this.showMessage(translate(this.appLocale, 'phaseSaved'), 'success')
+    saveButton.addEventListener('click', async () => {
+      const loadedPhase = this.loadedPhase
+      if (!loadedPhase) return
+      saveButton.disabled = true
+      try {
+        this.captureLoadedPhaseState()
+        this.cancelBackendPhaseSave(loadedPhase.phaseId)
+        await this.saveBackendPhase(
+          loadedPhase.processId,
+          loadedPhase.sequenceId,
+          loadedPhase.phaseId
+        )
+        this.showMessage(translate(this.appLocale, 'phaseSaved'), 'success')
+      } catch (error) {
+        log.error('Failed to save backend Phase state:', error)
+        this.showMessage(
+          translate(this.appLocale, 'phaseSaveFailed'),
+          'error'
+        )
+      } finally {
+        saveButton.disabled = false
+      }
     })
     processSelect.addEventListener('change', () => {
       if (processSelect.value) {
@@ -3209,12 +3337,14 @@ class CadViewerApp {
     const state = [...this.valveDeviceStates.values()].find(candidate =>
       normalizeFlowHandle(candidate.key) === normalizedHandle
     )
-    if (!state?.stateKey) {
-      return state?.mode === 'open' ? 'conducting' : 'blocking'
-    }
-    return this.getConfiguredValveStates().find(
-      candidate => candidate.key === state.stateKey
-    )?.flowBehavior ?? (state.mode === 'open' ? 'conducting' : 'blocking')
+    const configuredState = state
+      ? resolveDeviceStateDefinition(
+        this.getActivePresentationProfile(),
+        state
+      )?.state
+      : undefined
+    if (configuredState) return configuredState.flowBehavior
+    return state?.mode === 'open' ? 'conducting' : 'blocking'
   }
 
   private isFlowBoundaryObject(objectId: AcDbObjectId) {
@@ -3251,6 +3381,20 @@ class CadViewerApp {
     })
   }
 
+  private getConfiguredValveState(mode: 'open' | 'closed') {
+    const expectedBehavior = mode === 'closed' ? 'blocking' : 'conducting'
+    return this.getConfiguredValveStates()
+      .filter(state => state.enabled)
+      .sort((left, right) => left.order - right.order)
+      .find(state => state.flowBehavior === expectedBehavior)
+  }
+
+  private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
+    return collectHighlightHandleKeys(objectIds, objectId =>
+      handleKeysFromObjectId(objectId)
+    )
+  }
+
   private applyConfiguredValveState(
     handleKey: string,
     state: DeviceStateStyleDefinition,
@@ -3267,7 +3411,8 @@ class CadViewerApp {
       label: state.displayName,
       mode: state.flowBehavior === 'blocking' ? 'closed' : 'open',
       stateKey: state.key,
-      deviceDefinitionId: this.getConfiguredValveDefinition()?.id ?? 'valve'
+      deviceDefinitionId: this.getConfiguredValveDefinition()?.id ?? 'valve',
+      highlightStyleRefId: state.id
     })
     this.openHighlightGroups.delete(ownerId)
     this.openHighlightConnections.delete(ownerId)
@@ -3275,15 +3420,16 @@ class CadViewerApp {
 
     if (state.autoHighlightFlow && utility) {
       const traversal = this.getFlowConnectionTraversal(ownerId)
-      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-      this.openHighlightGroups.set(
+      const highlightedIds = this.getOpenHighlightObjectIds(
         ownerId,
-        this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+        traversal.connectedHandles
       )
+      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
+      this.openHighlightGroups.set(ownerId, highlightedIds)
       this.openHighlightPaths.set(ownerId, {
         id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
         name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
-        handleKeys: [handleKey],
+        handleKeys: this.getHighlightHandleKeys(highlightedIds),
         styleSource: { kind: 'utility', utilityId: utility.id }
       })
     } else if (state.autoHighlightFlow && !utility) {
@@ -3305,11 +3451,30 @@ class CadViewerApp {
   ) {
     const ownerId = this.resolveObjectIdByHandleKey(handleKey)
     if (!ownerId) return
+    const device = this.getConfiguredValveDefinition()
+    const configuredState = this.getConfiguredValveState(state)
+    if (!device || !configuredState) {
+      log.warn('[PhasePidOverlay] Valve state cannot be persisted:', {
+        handleKey,
+        mode: state,
+        reason: 'No matching enabled configured state'
+      })
+    }
     this.removeOpenHighlightRootsForIds(new Set([ownerId]))
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
-      label: this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ?? handleKey,
-      mode: state
+      label:
+        configuredState?.displayName ??
+        this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
+        handleKey,
+      mode: state,
+      ...(device && configuredState
+        ? {
+          stateKey: configuredState.key,
+          deviceDefinitionId: device.id,
+          highlightStyleRefId: configuredState.id
+        }
+        : {})
     })
     if (state === 'closed') {
       this.openHighlightGroups.delete(ownerId)
@@ -3329,18 +3494,19 @@ class CadViewerApp {
       return
     }
     const traversal = this.getFlowConnectionTraversal(ownerId)
+    const highlightedIds = this.getOpenHighlightObjectIds(
+      ownerId,
+      traversal.connectedHandles
+    )
     this.openHighlightGroups.delete(ownerId)
     this.openHighlightConnections.delete(ownerId)
     this.openHighlightPaths.delete(ownerId)
     this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-    this.openHighlightGroups.set(
-      ownerId,
-      this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
-    )
+    this.openHighlightGroups.set(ownerId, highlightedIds)
     this.openHighlightPaths.set(ownerId, {
       id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
       name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
-      handleKeys: [handleKey],
+      handleKeys: this.getHighlightHandleKeys(highlightedIds),
       styleSource: { kind: 'utility', utilityId: utility.id }
     })
     this.recomputeOpenHighlightGroups()
@@ -3371,10 +3537,18 @@ class CadViewerApp {
         ? this.getFlowConnectionTraversal(ownerId)
         : { connectedHandles: new Set<number>() }
       this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-      this.openHighlightGroups.set(
+      const highlightedIds = this.getOpenHighlightObjectIds(
         ownerId,
-        this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+        traversal.connectedHandles
       )
+      this.openHighlightGroups.set(ownerId, highlightedIds)
+      const flowPath = this.openHighlightPaths.get(ownerId)
+      if (flowPath) {
+        this.openHighlightPaths.set(ownerId, {
+          ...flowPath,
+          handleKeys: this.getHighlightHandleKeys(highlightedIds)
+        })
+      }
     })
     this.syncOpenHighlightRoots()
   }
@@ -3385,8 +3559,9 @@ class CadViewerApp {
     if (!layout) return
 
     const desiredIds = this.getReferencedOpenHighlightIds()
-    const idsToRemove = [...this.openHighlightRoots.keys()].filter(
-      id => !desiredIds.has(id)
+    const idsToRemove = findStaleHighlightRootIds(
+      this.openHighlightRoots.keys(),
+      desiredIds
     )
     let changedHighlight = false
 
@@ -3455,70 +3630,6 @@ class CadViewerApp {
     return ids
   }
 
-  private getPdfEntityStyleOverrides() {
-    const draft = this.getLoadedHighlightStyleDraft()
-    const flowState = this.getLoadedFlowState()
-    if (!draft || !flowState) return []
-    const entityStyles = new Map<string, ResolvedEntityPresentation>()
-    const flowPathsByEntity = new Map<string, FlowPathStatus[]>()
-    for (const flowPath of flowState.flowPaths) {
-      flowPath.handleKeys.forEach(handleKey => {
-        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-        if (!ownerId) return
-        const key = String(ownerId)
-        const paths = flowPathsByEntity.get(key) ?? []
-        paths.push(flowPath)
-        flowPathsByEntity.set(key, paths)
-      })
-    }
-    flowPathsByEntity.forEach((flowPaths, entityId) => {
-      const layers = resolveFlowHighlightLayers(
-        draft.presentationProfile,
-        flowPaths,
-        undefined,
-        undefined,
-        flowState.activeFlowPathId
-      )
-      const style = layers[0]?.style
-      if (!style?.visible) return
-      const ownerId = [...this.openHighlightGroups.keys()].find(
-        candidateId => String(candidateId) === entityId
-      )
-      const highlightedIds = ownerId
-        ? this.openHighlightGroups.get(ownerId) ??
-        this.getOpenHighlightObjectIds(ownerId)
-        : new Set([entityId])
-      highlightedIds.forEach(id => entityStyles.set(String(id), style))
-    })
-    Object.values(flowState.deviceStates ?? {}).forEach(deviceState => {
-      const objectId = this.resolveObjectIdByHandleKey(deviceState.key)
-      if (!objectId) return
-      const style = resolveEntityPresentation(draft.presentationProfile, {
-        deviceState
-      })
-      if (style.visible) {
-        entityStyles.set(String(objectId), style)
-      } else {
-        entityStyles.delete(String(objectId))
-      }
-    })
-    const groups = new Map<
-      string,
-      { entityIds: Set<string>; style: ResolvedEntityPresentation }
-    >()
-    entityStyles.forEach((style, entityId) => {
-      const group = groups.get(style.key) ?? { entityIds: new Set(), style }
-      group.entityIds.add(entityId)
-      groups.set(style.key, group)
-    })
-    return [...groups.values()].map(({ entityIds, style }) => ({
-      entityIds,
-      strokeColor: style.color,
-      strokeWidthPx: style.lineWidthPx,
-      opacity: style.opacity
-    }))
-  }
-
   private getHighlightStyleDraft(processId: string): HighlightStyleDraft | undefined {
     const process = this.phaseStore
       .snapshot()
@@ -3532,16 +3643,6 @@ class CadViewerApp {
     return this.loadedPhase
       ? this.getHighlightStyleDraft(this.loadedPhase.processId)
       : undefined
-  }
-
-  private getLoadedFlowState(): FlowStateSnapshot | undefined {
-    if (!this.loadedPhase) return undefined
-    const loaded = this.loadedPhase
-    return this.phaseStore
-      .snapshot()
-      .processes.find(process => process.id === loaded.processId)
-      ?.sequences.find(sequence => sequence.id === loaded.sequenceId)
-      ?.phases.find(phase => phase.id === loaded.phaseId)?.flowState
   }
 
   private openHighlightStyleDialog(processId: string) {
@@ -3699,14 +3800,30 @@ class CadViewerApp {
       )
       ?.phases.find(phase => phase.id === this.loadedPhase?.phaseId)
     if (!currentPhase) return
+    const capturedFlowPaths = this.captureFlowPaths()
+    const retainedFlowPaths = retainUnresolvedFlowPaths(
+      currentPhase.flowState.flowPaths,
+      handleKey => this.resolveObjectIdByHandleKey(handleKey) != null
+    )
+    const capturedDeviceStates = this.captureDeviceStates() ?? {}
+    const retainedDeviceStates = Object.fromEntries(
+      Object.entries(currentPhase.flowState.deviceStates ?? {}).filter(
+        ([, deviceState]) =>
+          this.resolveObjectIdByHandleKey(deviceState.key) == null
+      )
+    )
+    const deviceStates = {
+      ...retainedDeviceStates,
+      ...capturedDeviceStates
+    }
     const nextState = {
       flowState: {
-        flowPaths: this.captureFlowPaths(),
+        flowPaths: [...retainedFlowPaths, ...capturedFlowPaths],
         ...(this.captureActiveFlowPathId()
           ? { activeFlowPathId: this.captureActiveFlowPathId() }
           : {}),
-        ...(this.captureDeviceStates()
-          ? { deviceStates: this.captureDeviceStates() }
+        ...(Object.keys(deviceStates).length > 0
+          ? { deviceStates }
           : {})
       }
     }
@@ -3741,23 +3858,46 @@ class CadViewerApp {
     const timer = window.setTimeout(async () => {
       this.backendPhaseSaveTimers.delete(phaseId)
       try {
-        const sequence = this.phaseStore
-          .snapshot()
-          .processes.find(process => process.id === processId)
-          ?.sequences.find(item => item.id === sequenceId)
-        const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
-        const phase =
-          phaseIndex !== undefined && phaseIndex >= 0
-            ? sequence?.phases[phaseIndex]
-            : undefined
-        if (!phase) return
-        await repository.updatePhase(sequenceId, phase, phaseIndex! + 1)
+        await this.saveBackendPhase(processId, sequenceId, phaseId)
       } catch (error) {
+        if (error instanceof PhasePidOverlayWriteProtectedError) {
+          log.warn(error.message)
+          this.showMessage(
+            '该 Phase 的 PID Overlay 版本不受支持。原始数据已保留，显式重建前不会覆盖。',
+            'warning'
+          )
+          return
+        }
         log.error('Failed to save backend Phase state:', error)
-        this.showMessage('Phase 状态保存失败', 'error')
+        this.showMessage(
+          translate(this.appLocale, 'phaseSaveFailed'),
+          'error'
+        )
       }
     }, 300)
     this.backendPhaseSaveTimers.set(phaseId, timer)
+  }
+
+  private async saveBackendPhase(
+    processId: string,
+    sequenceId: string,
+    phaseId: string
+  ): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) throw new Error('Phase repository is not initialized')
+    const sequence = this.phaseStore
+      .snapshot()
+      .processes.find(process => process.id === processId)
+      ?.sequences.find(item => item.id === sequenceId)
+    const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
+    const phase =
+      phaseIndex !== undefined && phaseIndex >= 0
+        ? sequence?.phases[phaseIndex]
+        : undefined
+    if (!phase || phaseIndex === undefined) {
+      throw new Error(`Phase ${phaseId} was not found`)
+    }
+    await repository.updatePhase(sequenceId, phase, phaseIndex + 1)
   }
 
   private cancelBackendPhaseSave(phaseId: string): void {
@@ -3791,6 +3931,26 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
+    if (phase.pidOverlayPersistence) {
+      this.showMessage(
+        '该 Phase 的 PID Overlay 版本不受支持。原始数据已保留，显式重建前不会覆盖。',
+        'warning'
+      )
+    }
+    const styleWarnings = findPhaseOverlayStyleWarnings(
+      process?.presentationProfile ?? createDefaultPresentationProfile(),
+      phase.flowState.flowPaths,
+      phase.flowState.deviceStates
+    )
+    if (styleWarnings.length > 0) {
+      styleWarnings.forEach(warning => {
+        log.warn('[PhasePidOverlay] Missing style reference:', warning)
+      })
+      this.showMessage(
+        '部分高亮样式引用不存在，已使用默认样式。',
+        'warning'
+      )
+    }
 
     const restoredValveKeys = new Set<string>()
     Object.values(phase.flowState.deviceStates ?? {}).forEach(deviceState => {
@@ -3799,8 +3959,26 @@ class CadViewerApp {
         log.warn(`Unable to restore device state handle: ${deviceState.key}`)
         return
       }
-      this.valveDeviceStates.set(ownerId, { ...deviceState })
-      if (deviceState.mode === 'open') restoredValveKeys.add(deviceState.key)
+      const configuredState = resolveDeviceStateDefinition(
+        process?.presentationProfile ?? createDefaultPresentationProfile(),
+        deviceState
+      )?.state
+      if (!configuredState && deviceState.deviceDefinitionId && deviceState.stateKey) {
+        log.warn('[PhasePidOverlay] Unable to resolve device state:', {
+          handleKey: deviceState.key,
+          deviceType: deviceState.deviceDefinitionId,
+          stateKey: deviceState.stateKey
+        })
+      }
+      const restoredState = configuredState
+        ? {
+          ...deviceState,
+          label: configuredState.displayName,
+          mode: deviceModeFromFlowBehavior(configuredState.flowBehavior)
+        }
+        : { ...deviceState }
+      this.valveDeviceStates.set(ownerId, restoredState)
+      if (restoredState.mode === 'open') restoredValveKeys.add(deviceState.key)
     })
     this.activeFlowPathId = phase.flowState.activeFlowPathId
     phase.flowState.flowPaths.forEach(flowPath => {

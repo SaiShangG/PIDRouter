@@ -10,11 +10,14 @@ export function injectReportWorkspaceStyles() {
     .report-workspace-modal { position: fixed; z-index: 900; inset: 0; padding: 18px; color: var(--app-text, #17262b); background: var(--app-overlay-scrim-strong, rgba(12, 28, 34, .72)); }
     .report-workspace-modal[hidden] { display: none; }
     .report-workspace-shell { position: relative; display: grid; grid-template-rows: 64px minmax(0, 1fr); width: 100%; height: 100%; overflow: hidden; border: 1px solid var(--app-border-strong, #aebdc1); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface, #edf2f2); box-shadow: var(--app-shadow-modal, 0 24px 70px rgba(3, 18, 23, .42)); }
-    .report-workspace-shell > header { display: grid; grid-template-columns: minmax(0, 1fr) auto 34px; align-items: center; gap: 18px; padding: 8px 18px; border-bottom: 1px solid var(--app-border-strong, #bdc9cc); background: var(--app-surface-panel, #f8fafa); }
+    .report-workspace-shell > header { display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(150px, 1fr) 34px; align-items: center; gap: 18px; padding: 8px 18px; border-bottom: 1px solid var(--app-border-strong, #bdc9cc); background: var(--app-surface-panel, #f8fafa); }
     .report-workspace-shell > header div { display: grid; gap: 1px; }
     .report-workspace-shell > header span { color: #64777d; font-size: 10px; font-weight: 700; text-transform: uppercase; }
     .report-workspace-shell > header h2 { margin: 0; font-size: 18px; letter-spacing: 0; }
-    .report-workspace-shell > header .report-workspace-summary { color: #176b52; font-size: 12px; }
+    .report-workspace-shell > header .report-workspace-summary { justify-self: end; color: #176b52; font-size: 12px; text-align: right; }
+    .report-export-tabs { display: flex !important; align-self: stretch; gap: 2px !important; padding: 3px; border: 1px solid #c7d2d4; border-radius: 5px; background: #e8eeee; }
+    .report-workspace-modal .report-export-tab { min-height: 32px; padding: 5px 16px; border-color: transparent; background: transparent; font-size: 11px; font-weight: 700; }
+    .report-workspace-modal .report-export-tab[aria-selected='true'] { border-color: #aabbbc; color: #075d43; background: #fff; box-shadow: 0 1px 3px rgba(12, 28, 34, .12); }
     .report-workspace-modal button, .report-workspace-modal input, .report-workspace-modal select { min-height: 34px; border: 1px solid var(--app-border-strong, #bcc9cc); border-radius: var(--app-radius-control, 4px); background: var(--app-surface-elevated, #fff); color: inherit; padding: 6px 9px; font: inherit; }
     .report-workspace-modal button { cursor: pointer; }
     .report-workspace-modal button:hover:not(:disabled) { border-color: var(--app-accent, #188461); color: var(--app-success-text, #075d43); background: var(--app-success-surface, #edf8f4); }
@@ -67,6 +70,18 @@ export function injectReportWorkspaceStyles() {
     .report-export-controls { display: grid; gap: 8px; margin-top: auto; padding-top: 14px; border-top: 1px solid #d2dcde; }
     .report-export-controls h3 { margin: 0; }
     .report-export-controls p { min-height: 32px; margin: 0; color: #65777d; font-size: 11px; line-height: 1.45; }
+    .report-matrix-workspace { min-height: 0; overflow: auto; padding: 24px; background: #e7eeee; }
+    .report-matrix-controls { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(320px, 1.3fr); gap: 14px 18px; width: min(920px, 100%); margin: 0 auto; padding: 20px; border: 1px solid #c4d0d2; background: #f8fafa; }
+    .report-matrix-controls > h3, .report-matrix-controls > p, .report-matrix-controls > button { grid-column: 1 / -1; }
+    .report-matrix-controls > label { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 7px; }
+    .report-matrix-controls fieldset { display: grid; gap: 5px; min-width: 0; margin: 0; padding: 8px; border: 1px solid #d2dcde; background: #fff; }
+    .report-matrix-controls legend { padding: 0 4px; color: #52676d; font-size: 10px; font-weight: 750; }
+    .report-matrix-controls fieldset label { display: flex; align-items: center; gap: 7px; min-width: 0; color: #33484e; font-weight: 500; line-height: 1.35; }
+    .report-matrix-controls input[type='checkbox'] { flex: 0 0 auto; width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
+    .report-matrix-sequence { display: grid; gap: 5px; }
+    .report-matrix-sequence + .report-matrix-sequence { padding-top: 7px; border-top: 1px solid #e1e7e8; }
+    .report-matrix-sequence .is-phase { padding-left: 20px; color: #60747a; font-size: 10px; }
+    .report-matrix-controls > p { min-height: 0; }
     .report-export-estimates { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; margin: 0; padding: 9px 10px; border: 1px solid #d2dcde; background: #fff; font-size: 10px; }
     .report-export-estimates dt { color: #6b7d82; }
     .report-export-estimates dd { margin: 0; font-weight: 750; text-align: right; }
@@ -83,13 +98,22 @@ export function injectReportWorkspaceStyles() {
     @media (prefers-reduced-motion: reduce) { .report-export-spinner { animation: none; } }
     @media (max-width: 980px) {
       .report-workspace-modal { padding: 8px; }
+      .report-workspace-shell > header { grid-template-columns: minmax(160px, 1fr) auto 34px; gap: 10px; }
+      .report-workspace-shell > header .report-workspace-summary { display: none; }
       .report-workspace-body { grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); }
       .report-page-inspector { position: absolute; right: 8px; bottom: 8px; width: min(300px, calc(100vw - 32px)); max-height: 48vh; border: 1px solid #b9c7ca; box-shadow: 0 12px 32px rgba(12, 28, 34, .2); }
     }
     @media (max-width: 680px) {
+      .report-workspace-shell { grid-template-rows: auto minmax(0, 1fr); }
+      .report-workspace-shell > header { grid-template-columns: minmax(0, 1fr) 34px; }
+      .report-export-tabs { grid-column: 1 / -1; grid-row: 2; }
+      .report-workspace-modal .report-export-tab { flex: 1; }
       .report-workspace-body { grid-template-columns: 1fr; }
       .report-page-preview { display: none; }
       .report-page-browser { border-right: 0; }
+      .report-matrix-workspace { padding: 10px; }
+      .report-matrix-controls { grid-template-columns: 1fr; padding: 12px; }
+      .report-matrix-controls > label { grid-template-columns: 1fr; }
     }
   `
   document.head.append(style)

@@ -952,9 +952,15 @@ POST /api/v1/valve-matrices
 {
   "processId": "process_1",
   "sequenceIds": ["seq_14"],
-  "format": "XLSX"
+  "phaseIds": ["phase_141", "phase_142"],
+  "format": "XLSX",
+  "deviceTypes": ["VALVE", "PUMP_MOTOR", "SENSOR"],
+  "includeInactiveDevices": true,
+  "includeTransitions": true
 }
 ```
+
+`sequenceIds` 和 `phaseIds` 支持多选；`phaseIds` 必须属于所选 Sequence。`format` 可取 `XLSX` 或 `CSV`。`deviceTypes` 可包含 `VALVE`、`PUMP_MOTOR` 和 `SENSOR`。`includeInactiveDevices` 控制是否保留各 Phase 中未激活的设备，`includeTransitions` 控制是否导出 Phase 转换条件。
 
 ### 13.2 查询阀门矩阵任务
 

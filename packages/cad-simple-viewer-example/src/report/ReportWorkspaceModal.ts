@@ -1,5 +1,9 @@
 import { Eye, RotateCcw, X } from 'lucide'
 
+import type {
+  MatrixDeviceType,
+  MatrixFormat
+} from '../api/processAssistantExportApi'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import type {
@@ -22,6 +26,16 @@ import {
   type ReportPreflightIssue
 } from './reportManifest'
 
+export interface MatrixExportSelection {
+  processId: string
+  sequenceIds: string[]
+  phaseIds: string[]
+  format: MatrixFormat
+  deviceTypes: MatrixDeviceType[]
+  includeInactiveDevices: boolean
+  includeTransitions: boolean
+}
+
 interface ReportWorkspaceActions {
   preview(processId: string, sequenceId: string, phaseId: string): Promise<void>
   export(
@@ -29,6 +43,10 @@ interface ReportWorkspaceActions {
     signal: AbortSignal,
     onProgress: (progress: PhaseReportProgress) => void
   ): Promise<PhaseReportExportResult>
+  exportMatrix?(
+    selection: MatrixExportSelection,
+    signal: AbortSignal
+  ): Promise<void>
 }
 
 interface PageContext {
@@ -58,6 +76,20 @@ export class ReportWorkspaceModal {
   private exportMessage = ''
   private failedExport?: Extract<PhaseReportExportResult, { status: 'failed' }>
   private pendingWarningMode?: PhaseReportOutputMode
+  private matrixProcessId = ''
+  private matrixSequenceIds = new Set<string>()
+  private matrixPhaseIds = new Set<string>()
+  private matrixFormat: MatrixFormat = 'XLSX'
+  private matrixDeviceTypes = new Set<MatrixDeviceType>([
+    'VALVE',
+    'PUMP_MOTOR',
+    'SENSOR'
+  ])
+  private matrixIncludeInactiveDevices = true
+  private matrixIncludeTransitions = true
+  private matrixMessage = ''
+  private activeTab: 'pdf' | 'matrix' = 'pdf'
+  private activeExportKind: 'pdf' | 'matrix' = 'pdf'
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(
@@ -85,8 +117,10 @@ export class ReportWorkspaceModal {
   }
 
   open() {
-    this.manifest = this.store.reconcile(this.getWorkspace())
+    const workspace = this.getWorkspace()
+    this.manifest = this.store.reconcile(workspace)
     this.store.persist()
+    this.initializeMatrixSelection(workspace)
     this.selectedSlotId =
       this.manifest.pages.find(page => page.id === this.selectedSlotId)?.id ??
       this.manifest.pages[0]?.id
@@ -127,11 +161,14 @@ export class ReportWorkspaceModal {
     eyebrow.textContent = '独立报告工作区'
     const title = document.createElement('h2')
     title.id = 'reportWorkspaceTitle'
-    title.textContent = 'PDF 报告页面'
+    title.textContent = this.activeTab === 'pdf' ? 'PDF 报告页面' : 'Matrix 导出页面'
     const summary = document.createElement('span')
     summary.className = 'report-workspace-summary'
-    summary.textContent = `${includedCount} / ${this.manifest.pages.length} 页`
+    summary.textContent = this.activeTab === 'pdf'
+      ? `${includedCount} / ${this.manifest.pages.length} 页`
+      : `已选择 ${this.matrixSequenceIds.size} 个 Operation，${this.matrixPhaseIds.size} 个 Phase`
     heading.append(eyebrow, title)
+    const tabs = this.createExportTabs()
     const close = document.createElement('button')
     close.type = 'button'
     close.className = 'report-icon-button'
@@ -140,21 +177,58 @@ export class ReportWorkspaceModal {
     close.disabled = Boolean(this.exportController)
     close.append(createPhaseIcon(X))
     close.addEventListener('click', () => this.close())
-    header.append(heading, summary, close)
+    header.append(heading, tabs, summary, close)
 
     const body = document.createElement('div')
-    body.className = 'report-workspace-body'
-    body.append(
-      this.createPageBrowser(contexts, issues.length, excludedCount, replacedCount),
-      this.createPreview(contexts),
-      this.createInspector(contexts, issues)
-    )
+    body.id = `${this.activeTab}ExportPanel`
+    body.setAttribute('role', 'tabpanel')
+    body.setAttribute('aria-labelledby', `${this.activeTab}ExportTab`)
+    if (this.activeTab === 'pdf') {
+      body.className = 'report-workspace-body'
+      body.append(
+        this.createPageBrowser(contexts, issues.length, excludedCount, replacedCount),
+        this.createPreview(contexts),
+        this.createInspector(contexts, issues)
+      )
+    } else {
+      body.className = 'report-matrix-workspace'
+      body.append(this.createMatrixExportControls())
+    }
     shell.append(header, body)
     if (this.exportController && !this.exportController.signal.aborted) {
       shell.append(this.createExportOverlay())
     }
     this.element.append(shell)
     localizeDom(this.element, this.getLocale())
+  }
+
+  private createExportTabs() {
+    const tabs = document.createElement('div')
+    tabs.className = 'report-export-tabs'
+    tabs.setAttribute('role', 'tablist')
+    tabs.setAttribute('aria-label', '报告导出类型')
+    ;([
+      ['pdf', '导出 PDF'],
+      ['matrix', '导出 Matrix']
+    ] as const).forEach(([value, label]) => {
+      if (value === 'matrix' && !this.actions.exportMatrix) return
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.id = `${value}ExportTab`
+      button.className = 'report-export-tab'
+      button.setAttribute('role', 'tab')
+      button.setAttribute('aria-controls', `${value}ExportPanel`)
+      button.setAttribute('aria-selected', String(this.activeTab === value))
+      button.tabIndex = this.activeTab === value ? 0 : -1
+      button.disabled = Boolean(this.exportController)
+      button.textContent = label
+      button.addEventListener('click', () => {
+        this.activeTab = value
+        this.render()
+      })
+      tabs.append(button)
+    })
+    return tabs
   }
 
   private createExportOverlay() {
@@ -166,7 +240,9 @@ export class ReportWorkspaceModal {
     spinner.className = 'report-export-spinner'
     spinner.setAttribute('aria-hidden', 'true')
     const message = document.createElement('strong')
-    message.textContent = 'PDF 正在生成中，请不要操作 Viewer'
+    message.textContent = this.activeExportKind === 'matrix'
+      ? 'Matrix 正在后台生成，请稍候'
+      : 'PDF 正在生成中，请不要操作 Viewer'
     overlay.append(spinner, message)
     if (this.exportProgress) {
       const progress = document.createElement('span')
@@ -185,7 +261,11 @@ export class ReportWorkspaceModal {
     if (!this.exportController || this.exportController.signal.aborted) return
     this.exportController.abort()
     this.exportProgress = undefined
-    this.exportMessage = '报告生成已取消'
+    if (this.activeExportKind === 'matrix') {
+      this.matrixMessage = 'Matrix 导出已取消'
+    } else {
+      this.exportMessage = '报告生成已取消'
+    }
     this.render()
   }
 
@@ -608,6 +688,189 @@ export class ReportWorkspaceModal {
     return section
   }
 
+  private createMatrixExportControls() {
+    const workspace = this.getWorkspace()
+    const process = workspace.processes.find(item => item.id === this.matrixProcessId)
+    const section = document.createElement('section')
+    section.className = 'report-matrix-controls'
+    const title = document.createElement('h3')
+    title.textContent = '配置并导出设备 Matrix'
+
+    const processLabel = document.createElement('label')
+    processLabel.textContent = 'Process'
+    const processSelect = document.createElement('select')
+    processSelect.setAttribute('aria-label', 'Matrix Process')
+    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
+    processSelect.value = this.matrixProcessId
+    processSelect.disabled = Boolean(this.exportController)
+    processSelect.addEventListener('change', () => {
+      this.matrixProcessId = processSelect.value
+      this.selectAllMatrixScope()
+      this.matrixMessage = ''
+      this.render()
+    })
+    processLabel.append(processSelect)
+
+    const formatLabel = document.createElement('label')
+    formatLabel.textContent = '文件格式'
+    const format = document.createElement('select')
+    format.setAttribute('aria-label', 'Matrix 文件格式')
+    ;(['XLSX', 'CSV'] as MatrixFormat[]).forEach(value =>
+      format.add(new Option(value, value))
+    )
+    format.value = this.matrixFormat
+    format.disabled = Boolean(this.exportController)
+    format.addEventListener('change', () => {
+      this.matrixFormat = format.value as MatrixFormat
+    })
+    formatLabel.append(format)
+
+    const scope = document.createElement('fieldset')
+    const scopeLegend = document.createElement('legend')
+    scopeLegend.textContent = 'Operation / Phase 范围'
+    scope.append(scopeLegend)
+    process?.sequences.forEach(sequence => {
+      const group = document.createElement('div')
+      group.className = 'report-matrix-sequence'
+      group.append(this.createMatrixCheckbox(
+        `序列 ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
+        this.matrixSequenceIds.has(sequence.id),
+        checked => {
+          if (checked) {
+            this.matrixSequenceIds.add(sequence.id)
+            sequence.phases.forEach(phase => this.matrixPhaseIds.add(phase.id))
+          } else {
+            this.matrixSequenceIds.delete(sequence.id)
+            sequence.phases.forEach(phase => this.matrixPhaseIds.delete(phase.id))
+          }
+          this.render()
+        }
+      ))
+      sequence.phases.forEach(phase => {
+        const option = this.createMatrixCheckbox(
+          `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`,
+          this.matrixPhaseIds.has(phase.id),
+          checked => {
+            if (checked) {
+              this.matrixPhaseIds.add(phase.id)
+              this.matrixSequenceIds.add(sequence.id)
+            } else {
+              this.matrixPhaseIds.delete(phase.id)
+              if (!sequence.phases.some(item => this.matrixPhaseIds.has(item.id))) {
+                this.matrixSequenceIds.delete(sequence.id)
+              }
+            }
+            this.render()
+          }
+        )
+        option.classList.add('is-phase')
+        group.append(option)
+      })
+      scope.append(group)
+    })
+
+    const devices = document.createElement('fieldset')
+    const devicesLegend = document.createElement('legend')
+    devicesLegend.textContent = '设备与内容'
+    devices.append(
+      devicesLegend,
+      this.createDeviceCheckbox('Valve', 'VALVE'),
+      this.createDeviceCheckbox('Pump / Motor', 'PUMP_MOTOR'),
+      this.createDeviceCheckbox('Sensor', 'SENSOR'),
+      this.createMatrixCheckbox('包含未激活设备', this.matrixIncludeInactiveDevices, checked => {
+        this.matrixIncludeInactiveDevices = checked
+      }),
+      this.createMatrixCheckbox('包含转换条件', this.matrixIncludeTransitions, checked => {
+        this.matrixIncludeTransitions = checked
+      })
+    )
+
+    const summary = document.createElement('p')
+    summary.textContent = this.matrixMessage ||
+      `已选择 ${this.matrixSequenceIds.size} 个 Operation，${this.matrixPhaseIds.size} 个 Phase`
+    const exportButton = document.createElement('button')
+    exportButton.type = 'button'
+    exportButton.className = 'report-primary-button'
+    exportButton.textContent = '导出 Matrix'
+    exportButton.disabled = Boolean(this.exportController) ||
+      !this.matrixProcessId || this.matrixPhaseIds.size === 0 ||
+      this.matrixDeviceTypes.size === 0
+    exportButton.addEventListener('click', () => void this.startMatrixExport())
+
+    section.append(title, processLabel, formatLabel, scope, devices, summary, exportButton)
+    return section
+  }
+
+  private createDeviceCheckbox(label: string, type: MatrixDeviceType) {
+    return this.createMatrixCheckbox(label, this.matrixDeviceTypes.has(type), checked => {
+      if (checked) this.matrixDeviceTypes.add(type)
+      else this.matrixDeviceTypes.delete(type)
+      this.render()
+    })
+  }
+
+  private createMatrixCheckbox(
+    text: string,
+    checked: boolean,
+    onChange: (checked: boolean) => void
+  ) {
+    const label = document.createElement('label')
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.checked = checked
+    input.disabled = Boolean(this.exportController)
+    input.addEventListener('change', () => onChange(input.checked))
+    label.append(input, document.createTextNode(text))
+    return label
+  }
+
+  private initializeMatrixSelection(workspace: PhaseWorkspaceState) {
+    if (!workspace.processes.some(item => item.id === this.matrixProcessId)) {
+      this.matrixProcessId = workspace.activeProcessId ?? workspace.processes[0]?.id ?? ''
+      this.selectAllMatrixScope()
+    }
+  }
+
+  private selectAllMatrixScope() {
+    const process = this.getWorkspace().processes.find(
+      item => item.id === this.matrixProcessId
+    )
+    this.matrixSequenceIds = new Set(process?.sequences.map(item => item.id))
+    this.matrixPhaseIds = new Set(
+      process?.sequences.flatMap(sequence => sequence.phases.map(phase => phase.id))
+    )
+  }
+
+  private async startMatrixExport() {
+    if (this.exportController || !this.actions.exportMatrix) return
+    const controller = new AbortController()
+    this.exportController = controller
+    this.activeExportKind = 'matrix'
+    this.matrixMessage = ''
+    this.render()
+    try {
+      await this.actions.exportMatrix({
+        processId: this.matrixProcessId,
+        sequenceIds: [...this.matrixSequenceIds],
+        phaseIds: [...this.matrixPhaseIds],
+        format: this.matrixFormat,
+        deviceTypes: [...this.matrixDeviceTypes],
+        includeInactiveDevices: this.matrixIncludeInactiveDevices,
+        includeTransitions: this.matrixIncludeTransitions
+      }, controller.signal)
+      this.matrixMessage = controller.signal.aborted
+        ? 'Matrix 导出已取消'
+        : 'Matrix 导出完成'
+    } catch {
+      this.matrixMessage = controller.signal.aborted
+        ? 'Matrix 导出已取消'
+        : 'Matrix 导出失败'
+    } finally {
+      this.exportController = undefined
+      this.render()
+    }
+  }
+
   private requestExport(mode: PhaseReportOutputMode, warningCount: number) {
     if (warningCount > 0) {
       this.pendingWarningMode = mode
@@ -621,6 +884,7 @@ export class ReportWorkspaceModal {
     if (this.exportController) return
     const controller = new AbortController()
     this.exportController = controller
+    this.activeExportKind = 'pdf'
     this.exportProgress = undefined
     this.exportMessage = ''
     this.failedExport = undefined

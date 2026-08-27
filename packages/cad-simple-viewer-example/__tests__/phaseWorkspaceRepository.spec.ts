@@ -158,16 +158,21 @@ describe('PhaseWorkspaceRepository', () => {
                 index: 1,
                 operationId: 10,
                 jsonData: JSON.stringify({
-                  schemaVersion: 1,
+                  schemaVersion: 2,
                   drawing: { fileId: 5, displayName: 'Supply PID' },
-                  flowState: {
+                  highlightedObjects: {
                     flowPaths: [
-                      { id: 'flow-1', name: 'Main', handleKeys: ['1A'] }
-                    ]
+                      { handleKey: '26', highlightStyleRefId: 'utility-water' },
+                      { handleKey: 'invalid', highlightStyleRefId: 'utility-water' }
+                    ],
+                    deviceStates: [{
+                      handleKey: '26',
+                      stateKey: 'Open',
+                      highlightStyleRefId: 'state-open',
+                      deviceType: 'device-valve'
+                    }]
                   },
-                  deviceStates: {
-                    '1A': { label: 'XV-101', mode: 'open' }
-                  }
+                  textNotes: []
                 })
               }
             ]
@@ -212,8 +217,19 @@ describe('PhaseWorkspaceRepository', () => {
       displayName: 'Supply PID'
     })
     expect(phase.flowState.flowPaths[0].handleKeys).toEqual(['1A'])
+    expect(phase.pidOverlayPersistence).toEqual({
+      status: 'warnings',
+      warningCodes: ['invalid-flow-path']
+    })
     expect(phase.flowState.deviceStates).toEqual({
-      '1A': { key: '1A', label: 'XV-101', mode: 'open' }
+      '1A': {
+        key: '1A',
+        label: '1A',
+        mode: 'unknown',
+        stateKey: 'Open',
+        deviceDefinitionId: 'device-valve',
+        highlightStyleRefId: 'state-open'
+      }
     })
     expect(workspace.drawingAssets['file:5'].url).toBe(
       'http://localhost/api/v1/File/download/stored%20drawing.dwg'
@@ -221,8 +237,94 @@ describe('PhaseWorkspaceRepository', () => {
     expect(workspace.processes[0].sequences[1].phases[0].flowState).toEqual({
       flowPaths: []
     })
+    expect(workspace.processes[0].sequences[1].phases[0].pidOverlayPersistence)
+      .toEqual({ status: 'invalid', reason: 'invalid-json' })
     expect(workspace.processes[0].presentationProfile.devices).toEqual([])
     expect(workspace.processes[0].presentationProfile.utilities).toEqual([])
+  })
+
+  it('writes v2 Phase data and protects unsafe persisted overlays', async () => {
+    const phases = {
+      list: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn()
+    }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '',
+      projectId: 1,
+      files: { list: jest.fn(), upload: jest.fn() },
+      procedures: {
+        list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      operations: {
+        list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      phases
+    })
+    const phase = {
+      id: '20',
+      number: 1,
+      name: 'Transfer',
+      drawing: { kind: 'assigned' as const, assetId: 'file:5', displayName: 'PID' },
+      flowState: {
+        flowPaths: [{
+          id: 'flow-1',
+          name: 'Main',
+          handleKeys: ['1a', '2b'],
+          utilityId: 'utility-water'
+        }],
+        deviceStates: {
+          '1A': {
+            key: '1a',
+            label: 'XV-101',
+            mode: 'open' as const,
+            stateKey: 'Open',
+            deviceDefinitionId: 'device-valve',
+            highlightStyleRefId: 'state-open'
+          }
+        }
+      },
+      textNotes: [],
+      createdAt: '2026-08-27T00:00:00.000Z',
+      updatedAt: '2026-08-27T00:00:00.000Z'
+    }
+
+    await repository.updatePhase('10', phase, 1)
+    const payload = phases.update.mock.calls[0][1]
+    const persistedOverlay = JSON.parse(payload.jsonData)
+    expect(payload.jsonData).not.toContain('"mode"')
+    expect(persistedOverlay).toEqual({
+      schemaVersion: 2,
+      drawing: { fileId: 5, displayName: 'PID' },
+      highlightedObjects: {
+        flowPaths: [{
+          handleKey: '26',
+          highlightStyleRefId: 'utility-water'
+        }, {
+          handleKey: '43',
+          highlightStyleRefId: 'utility-water'
+        }],
+        deviceStates: [{
+          handleKey: '26',
+          stateKey: 'Open',
+          highlightStyleRefId: 'state-open',
+          deviceType: 'device-valve'
+        }]
+      },
+      textNotes: []
+    })
+
+    const protectedPhase = {
+      ...phase,
+      pidOverlayPersistence: {
+        status: 'warnings' as const,
+        warningCodes: ['invalid-flow-path']
+      }
+    }
+    expect(() => repository.updatePhase('10', protectedPhase, 1))
+      .toThrow('is read-only because it cannot be safely rewritten')
+    expect(phases.update).toHaveBeenCalledTimes(1)
   })
 
   it('uses Project Configure as the presentation profile', async () => {

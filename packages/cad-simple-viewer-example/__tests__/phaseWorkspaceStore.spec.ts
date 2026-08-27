@@ -532,6 +532,45 @@ describe('PhaseWorkspaceStore', () => {
     })
   })
 
+  it('preserves unresolved Utility references after profile updates', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Rinse',
+      source: { kind: 'unassigned' }
+    })
+    store.updatePhaseState(process.id, sequence.id, phase.id, {
+      flowState: {
+        flowPaths: [{
+          id: 'flow-1',
+          name: 'Water route',
+          handleKeys: ['1A'],
+          utilityId: 'removed-utility',
+          styleSource: {
+            kind: 'utility',
+            utilityId: 'removed-utility'
+          }
+        }]
+      }
+    })
+
+    store.updatePresentationProfile(process.id, {
+      ...process.presentationProfile,
+      utilities: []
+    })
+
+    const flowPath = store.snapshot().processes[0]
+      .sequences[0].phases[0].flowState.flowPaths[0]
+    expect(flowPath.utilityId).toBe('removed-utility')
+    expect(flowPath.styleSource).toEqual({
+      kind: 'utility',
+      utilityId: 'removed-utility'
+    })
+  })
+
   it('associates and replaces drawings while retaining shared old assets', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)

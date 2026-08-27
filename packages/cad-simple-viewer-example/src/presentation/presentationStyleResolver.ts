@@ -43,6 +43,14 @@ const resolveDeviceStyle = (
   const configuredDevices = state?.deviceDefinitionId
     ? profile.devices.filter(device => device.id === state.deviceDefinitionId)
     : profile.devices
+  if (state?.highlightStyleRefId) {
+    const referencedState = configuredDevices
+      .flatMap(device => device.states)
+      .find(candidate => candidate.id === state.highlightStyleRefId)
+    return referencedState
+      ? deviceStateStyle(referencedState)
+      : profile.unknownDeviceStyle ?? undefined
+  }
   const configuredState = configuredDevices
     .flatMap(device => device.states)
     .find(candidate => candidate.key === (state?.stateKey ?? state?.mode))

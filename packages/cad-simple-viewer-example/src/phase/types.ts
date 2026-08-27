@@ -1,3 +1,16 @@
+export {
+  PHASE_PID_OVERLAY_SCHEMA_VERSION,
+  TextAttachmentPoint
+} from './phasePidOverlay'
+export type {
+  PhasePidOverlay,
+  PhasePidOverlayDeviceState,
+  PhasePidOverlayDrawing,
+  PhasePidOverlayFlowPath,
+  PhasePidOverlayTextLocation,
+  PhasePidOverlayTextNote
+} from './phasePidOverlay'
+
 export const PHASE_WORKSPACE_SCHEMA_VERSION = 4
 
 export interface HighlightStyle {
@@ -103,6 +116,7 @@ export interface DeviceState {
   mode: DeviceMode
   stateKey?: string
   deviceDefinitionId?: string
+  highlightStyleRefId?: string
 }
 
 export interface FlowStateSnapshot {
@@ -122,6 +136,11 @@ export interface PhaseSnapshot {
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
   flowState: FlowStateSnapshot
+  textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]
+  pidOverlayPersistence?:
+    | { status: 'unsupported'; schemaVersion: unknown }
+    | { status: 'invalid'; reason: 'invalid-json' | 'invalid-root' }
+    | { status: 'warnings'; warningCodes: string[] }
   createdAt: string
   updatedAt: string
 }

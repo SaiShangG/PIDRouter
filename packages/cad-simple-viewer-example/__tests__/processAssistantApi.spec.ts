@@ -1,9 +1,13 @@
 import { ProcessAssistantClient } from '../src/api/processAssistantClient'
+import {
+  ProcessAssistantMatrixApi,
+  ProcessAssistantReportApi
+} from '../src/api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from '../src/api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from '../src/api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from '../src/api/processAssistantPhaseApi'
-import { ProcessAssistantProjectApi } from '../src/api/processAssistantProjectApi'
 import { ProcessAssistantProcedureApi } from '../src/api/processAssistantProcedureApi'
+import { ProcessAssistantProjectApi } from '../src/api/processAssistantProjectApi'
 
 const createClient = (fetchMock: jest.MockedFunction<typeof fetch>) =>
   new ProcessAssistantClient({
@@ -91,9 +95,74 @@ describe('ProcessAssistantClient', () => {
     )
     await expect(blob.text()).resolves.toBe('drawing-content')
   })
+
+  it('preserves a UTF-8 filename from file responses', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response('matrix-content', {
+        headers: {
+          'Content-Disposition':
+            'attachment; filename*=UTF-8\'\'CIP%20Valve%20Matrix.xlsx'
+        }
+      })
+    ) as jest.MockedFunction<typeof fetch>
+
+    const file = await createClient(fetchMock).requestFile(
+      'GET',
+      '/api/v1/valve-matrices/7/download'
+    )
+
+    expect(file.fileName).toBe('CIP Valve Matrix.xlsx')
+    await expect(file.blob.text()).resolves.toBe('matrix-content')
+  })
 })
 
 describe('ProcessAssistant endpoint services', () => {
+  it('uses the report task endpoint and direct valve matrix export endpoint', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 7, status: 'QUEUED' }), {
+        headers: { 'Content-Type': 'application/json' }
+      }))
+      .mockResolvedValueOnce(new Response('matrix-content')) as jest.MockedFunction<typeof fetch>
+    const client = createClient(fetchMock)
+    const reports = new ProcessAssistantReportApi(client)
+    const matrices = new ProcessAssistantMatrixApi(client)
+
+    await reports.create({
+      processId: 1,
+      mode: 'COMBINED',
+      sequenceIds: [2],
+      includeCover: true,
+      includeValveMatrix: false,
+      pageSize: 'A3',
+      orientation: 'LANDSCAPE'
+    })
+    await matrices.create({
+      projectId: 10,
+      selection: {
+        1: {
+          2: [1, 2, 3],
+          3: [4, 5]
+        }
+      }
+    })
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'http://api.example.test/api/v1/reports',
+      'http://api.example.test/api/v1/Skill/valve-matrix'
+    ])
+    expect(fetchMock.mock.calls[1][1]?.body).toBe(
+      JSON.stringify({
+        projectId: 10,
+        selection: {
+          1: {
+            2: [1, 2, 3],
+            3: [4, 5]
+          }
+        }
+      })
+    )
+  })
+
   it('builds parent filters and encoded File paths from the live contract', async () => {
     const fetchMock = jest.fn().mockImplementation(() =>
       Promise.resolve(

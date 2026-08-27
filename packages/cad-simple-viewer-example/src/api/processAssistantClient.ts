@@ -10,6 +10,11 @@ export interface ApiRequestOptions
   body?: unknown
 }
 
+export interface ApiFileResponse {
+  blob: Blob
+  fileName?: string
+}
+
 export class ProcessAssistantClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
@@ -40,8 +45,19 @@ export class ProcessAssistantClient {
     path: string,
     options: ApiRequestOptions = {}
   ): Promise<Blob> {
+    return (await this.requestFile(method, path, options)).blob
+  }
+
+  async requestFile(
+    method: string,
+    path: string,
+    options: ApiRequestOptions = {}
+  ): Promise<ApiFileResponse> {
     const response = await this.send(method, path, options)
-    return response.blob()
+    return {
+      blob: await response.blob(),
+      fileName: this.getDownloadFileName(response.headers.get('content-disposition'))
+    }
   }
 
   private async send(
@@ -102,6 +118,21 @@ export class ProcessAssistantClient {
       headers.set('Content-Type', 'application/json')
     }
     return JSON.stringify(body)
+  }
+
+  private getDownloadFileName(contentDisposition: string | null) {
+    if (!contentDisposition) return undefined
+    const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    if (encoded) {
+      try {
+        return decodeURIComponent(encoded.replace(/^"|"$/g, ''))
+      } catch {
+        return encoded.replace(/^"|"$/g, '')
+      }
+    }
+    return contentDisposition
+      .match(/filename="?([^";]+)"?/i)?.[1]
+      ?.trim()
   }
 
   private async readErrorBody(response: Response): Promise<unknown> {

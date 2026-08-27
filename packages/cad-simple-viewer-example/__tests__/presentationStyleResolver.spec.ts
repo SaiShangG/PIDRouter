@@ -170,4 +170,68 @@ describe('presentationStyleResolver', () => {
       source: 'device'
     })
   })
+
+  it('resolves a persisted device style by reference id before state key', () => {
+    const profile = createDefaultPresentationProfile()
+    profile.devices.push({
+      id: 'valve',
+      name: 'Valve',
+      order: 0,
+      states: [{
+        id: 'valve-open-style',
+        key: 'Open',
+        displayName: 'Open',
+        color: 0x00cc66,
+        lineWidthPx: 4,
+        opacity: 0.9,
+        enabled: true,
+        autoHighlightFlow: true,
+        flowBehavior: 'conducting',
+        order: 0
+      }]
+    })
+
+    expect(resolveEntityPresentation(profile, {
+      deviceState: {
+        key: '1A',
+        label: 'XV-1',
+        mode: 'unknown',
+        stateKey: 'stale-key',
+        deviceDefinitionId: 'valve',
+        highlightStyleRefId: 'valve-open-style'
+      }
+    })).toMatchObject({ color: 0x00cc66, source: 'device' })
+  })
+
+  it('uses the default unknown-device style when a state style is missing', () => {
+    const profile = createDefaultPresentationProfile()
+    profile.unknownDeviceStyle = {
+      color: 0xff00ff,
+      lineWidthPx: 5,
+      opacity: 0.7,
+      visible: true
+    }
+    profile.devices.push({
+      id: 'valve',
+      name: 'Valve',
+      order: 0,
+      states: []
+    })
+
+    expect(resolveEntityPresentation(profile, {
+      deviceState: {
+        key: '1A',
+        label: 'XV-1',
+        mode: 'unknown',
+        stateKey: 'Open',
+        deviceDefinitionId: 'valve',
+        highlightStyleRefId: 'missing-style'
+      }
+    })).toMatchObject({
+      color: 0xff00ff,
+      lineWidthPx: 5,
+      opacity: 0.7,
+      source: 'device'
+    })
+  })
 })

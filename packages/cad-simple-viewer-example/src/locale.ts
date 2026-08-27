@@ -39,6 +39,7 @@ const messages = {
     phaseCount: '个阶段',
     savePhase: '保存',
     phaseSaved: '阶段已保存',
+    phaseSaveFailed: '阶段保存失败',
     noPhase: '尚未创建 Phase',
     switchTo: '切换为英文',
     languageButton: '切换为英文'
@@ -67,6 +68,7 @@ const messages = {
     phaseCount: 'Phases',
     savePhase: 'Save',
     phaseSaved: 'Phase saved',
+    phaseSaveFailed: 'Failed to save Phase',
     noPhase: 'No Phase created',
     switchTo: '切换为中文',
     languageButton: 'Switch to Chinese'

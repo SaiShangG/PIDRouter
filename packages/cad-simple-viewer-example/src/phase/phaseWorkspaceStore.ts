@@ -195,6 +195,13 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
   flowState: cloneFlowState(phase.flowState),
+  textNotes: phase.textNotes?.map(note => ({
+    ...note,
+    location: { ...note.location }
+  })),
+  pidOverlayPersistence: phase.pidOverlayPersistence
+    ? { ...phase.pidOverlayPersistence }
+    : undefined,
   createdAt: phase.createdAt,
   updatedAt: phase.updatedAt
 })
@@ -513,6 +520,7 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
   const dimmedBaseStyle = isRecord(value.dimmedBaseStyle)
     ? value.dimmedBaseStyle
     : {}
+  const devices = normalizeDevices(persistedDevices ?? value.devices)
   return {
     defaultFlowStyle: normalizeStyle(
       value.defaultFlowStyle,
@@ -545,8 +553,8 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       }
     },
     deviceStylesInitialized: true,
-    devices: normalizeDevices(persistedDevices ?? value.devices).length
-      ? normalizeDevices(persistedDevices ?? value.devices)
+    devices: devices.length
+      ? devices
       : preserveDeviceStyles
         ? migrateLegacyDevices(value)
         : [],
@@ -643,7 +651,18 @@ const normalizeDeviceStates = (
           typeof candidate.label === 'string' && candidate.label.trim()
             ? candidate.label.trim()
             : key,
-        mode: candidate.mode as DeviceMode
+        mode: candidate.mode as DeviceMode,
+        ...(typeof candidate.stateKey === 'string' && candidate.stateKey.trim()
+          ? { stateKey: candidate.stateKey.trim() }
+          : {}),
+        ...(typeof candidate.deviceDefinitionId === 'string' &&
+          candidate.deviceDefinitionId.trim()
+          ? { deviceDefinitionId: candidate.deviceDefinitionId.trim() }
+          : {}),
+        ...(typeof candidate.highlightStyleRefId === 'string' &&
+          candidate.highlightStyleRefId.trim()
+          ? { highlightStyleRefId: candidate.highlightStyleRefId.trim() }
+          : {})
       }
     ] as const]
   })
@@ -808,6 +827,13 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
           },
           drawing: { ...phase.drawing },
           sourcePhaseId: phase.sourcePhaseId,
+          textNotes: phase.textNotes?.map(note => ({
+            ...note,
+            location: { ...note.location }
+          })),
+          pidOverlayPersistence: phase.pidOverlayPersistence
+            ? { ...phase.pidOverlayPersistence }
+            : undefined,
           createdAt: phase.createdAt,
           updatedAt: phase.updatedAt
         }))
@@ -1130,25 +1156,6 @@ export class PhaseWorkspaceStore {
   ) {
     const process = this.requireProcess(processId)
     process.presentationProfile = normalizeProfile(presentationProfile)
-    const utilityIds = new Set(
-      process.presentationProfile.utilities.map(utility => utility.id)
-    )
-    for (const sequence of process.sequences) {
-      for (const phase of sequence.phases) {
-        for (const flowPath of phase.flowState.flowPaths) {
-          if (flowPath.utilityId && !utilityIds.has(flowPath.utilityId)) {
-            delete flowPath.utilityId
-          }
-          if (
-            flowPath.styleSource?.kind === 'utility' &&
-            flowPath.styleSource.utilityId &&
-            !utilityIds.has(flowPath.styleSource.utilityId)
-          ) {
-            delete flowPath.styleSource.utilityId
-          }
-        }
-      }
-    }
     process.updatedAt = this.now()
   }
 
