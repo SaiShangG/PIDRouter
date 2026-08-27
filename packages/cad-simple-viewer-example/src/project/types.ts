@@ -3,6 +3,7 @@ export interface ProjectRecord {
   name: string
   description: string
   fileIds: number[]
+  configure?: Record<string, unknown>
 }
 
 export interface ProjectInput {

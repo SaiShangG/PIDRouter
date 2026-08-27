@@ -39,12 +39,11 @@ describe('PhaseWorkspaceRepository', () => {
     )
     const payload = procedures.create.mock.calls[0][0]
     expect(JSON.parse(payload.jsonData)).toEqual({
-      schemaVersion: 1,
-      presentationProfile: { deviceStyles: [], utilities: [] }
+      schemaVersion: 1
     })
   })
 
-  it('updates a Process with only the persisted presentation fields', async () => {
+  it('updates a Process without persisting its runtime presentation profile', async () => {
     const procedures = {
       list: jest.fn(),
       create: jest.fn(),
@@ -106,27 +105,7 @@ describe('PhaseWorkspaceRepository', () => {
 
     const payload = procedures.update.mock.calls[0][1]
     expect(JSON.parse(payload.jsonData)).toEqual({
-      schemaVersion: 1,
-      presentationProfile: {
-        deviceStyles: [{
-          id: 'a4f4cb2a-edf8-4880-b45c-0ca42a45063d',
-          deviceType: 'Valve',
-          deviceState: 'open',
-          displayName: 'Open',
-          color: '#FF0000',
-          lineWidthPx: 3,
-          opacity: 1,
-          autoHighlightFlow: true,
-          flowBehavior: 'conducting'
-        }],
-        utilities: [{
-          id: '0a4e2606-bb00-479d-bb6d-22c2a8607189',
-          name: 'Water',
-          color: '#00C8F3',
-          lineWidthPx: 3,
-          opacity: 1
-        }]
-      }
+      schemaVersion: 1
     })
   })
 
@@ -142,7 +121,19 @@ describe('PhaseWorkspaceRepository', () => {
       upload: jest.fn()
     }
     const procedures = {
-      list: jest.fn().mockResolvedValue([{ id: 2, name: 'CIP' }]),
+      list: jest.fn().mockResolvedValue([{
+        id: 2,
+        name: 'CIP',
+        jsonData: JSON.stringify({
+          presentationProfile: {
+            deviceStyles: [{
+              id: 'legacy-state',
+              deviceType: 'Legacy device',
+              deviceState: 'legacy'
+            }]
+          }
+        })
+      }]),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn()
@@ -230,5 +221,64 @@ describe('PhaseWorkspaceRepository', () => {
     expect(workspace.processes[0].sequences[1].phases[0].flowState).toEqual({
       flowPaths: []
     })
+    expect(workspace.processes[0].presentationProfile.devices).toEqual([])
+    expect(workspace.processes[0].presentationProfile.utilities).toEqual([])
+  })
+
+  it('uses Project Configure as the presentation profile', async () => {
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '',
+      projectId: 1,
+      projectConfigure: {
+        utilities: [{
+          id: 'utility-1',
+          name: 'Utility 1',
+          lineWidthPx: 3,
+          color: '#00C853',
+          opacity: 1
+        }],
+        deviceStyles: [{
+          id: 'state-1',
+          lineWidthPx: 4,
+          color: '#00C853',
+          opacity: 0.7,
+          deviceType: '设备 1',
+          deviceState: 'state-1',
+          FillColorString: '#FF0000',
+          FillOpacity: 0.2
+        }]
+      },
+      files: { list: jest.fn().mockResolvedValue([]), upload: jest.fn() },
+      procedures: {
+        list: jest.fn().mockResolvedValue([{ id: 2, name: 'CIP' }]),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn()
+      },
+      operations: {
+        list: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn()
+      },
+      phases: {
+        list: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn()
+      }
+    })
+
+    const profile = (await repository.load()).processes[0].presentationProfile
+
+    expect(profile.utilities).toHaveLength(1)
+    expect(profile.utilities[0].name).toBe('Utility 1')
+    expect(profile.devices[0].name).toBe('设备 1')
+    expect(profile.devices[0].states[0]).toEqual(expect.objectContaining({
+      key: 'state-1',
+      color: 0x00c853,
+      opacity: 0.7,
+      lineWidthPx: 4
+    }))
   })
 })

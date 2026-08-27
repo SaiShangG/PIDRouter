@@ -69,7 +69,6 @@ import {
   buildFlowGraphIndex,
   normalizeFlowHandle
 } from './flow/flowGraph'
-import { getOpenValveHandleKeys } from './flow/openValveStates'
 import type {
   FlowConnectionDocumentInput,
   ValveDebugOverlay,
@@ -109,9 +108,9 @@ import {
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
 import type {
   DeviceState,
+  DeviceStateStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
-  FlowPathStyleSource,
   FlowStateSnapshot,
   PresentationProfile
 } from './phase/types'
@@ -417,7 +416,6 @@ class CadViewerApp {
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
   private readonly manualHighlightedIds = new Set<AcDbObjectId>()
   private readonly manualHiddenIds = new Set<AcDbObjectId>()
-  private pendingValveStyleSources = new Map<string, FlowPathStyleSource>()
   private readonly phasePresentationController = new PhasePresentationController()
   private phaseStore = new PhaseWorkspaceStore()
   private phaseRepository?: PhaseWorkspaceRepository
@@ -1424,6 +1422,7 @@ class CadViewerApp {
     const repository = new PhaseWorkspaceRepository({
       baseUrl: config.baseUrl,
       projectId: project.id,
+      projectConfigure: project.configure,
       files: this.processAssistantFileApi,
       procedures: this.processAssistantProcedureApi,
       operations: this.processAssistantOperationApi,
@@ -1658,24 +1657,17 @@ class CadViewerApp {
       zoomToObject: objectId => this.zoomToValveDebugObject(objectId),
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => this.appLocale as ValveDebugLocale,
-      requestStateChange: (handleKey, state) =>
-        state === 'open' ? this.requestValveFlowStyle(handleKey) : true,
+      requestStateChange: () => true,
       onStateChanged: (handleKey, state) =>
         this.handleValveStateChanged(handleKey, state),
-      getConfiguredStates: () =>
-        this.getActivePresentationProfile().devices.flatMap(device => device.states),
-      requestConfiguredStateChange: (handleKey, state) => {
+      getConfiguredStates: () => this.getConfiguredValveStates(),
+      getConfiguredStateKey: handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-        if (!ownerId) return false
-        this.valveDeviceStates.set(ownerId, {
-          key: handleKey,
-          label: state.displayName,
-          mode: state.key === 'closed' ? 'closed' : 'open',
-          stateKey: state.key
-        })
-        this.captureLoadedPhaseState()
-        return true
+        return ownerId ? this.valveDeviceStates.get(ownerId)?.stateKey : undefined
       },
+      getUtilities: () => this.getActivePresentationProfile().utilities,
+      requestConfiguredStateChange: (handleKey, state, utilityId) =>
+        this.applyConfiguredValveState(handleKey, state, utilityId),
       renderPathOverlay: false
     })
     this.valveDebugFeature.attach()
@@ -3174,7 +3166,6 @@ class CadViewerApp {
     const pendingHandleKeys = handleKeysFromObjectId(objectId)
       .map(normalizeFlowHandle)
       .filter((key): key is string => key != null)
-    const traversableBoundaryKeys = this.getOpenFlowBoundaryKeys()
     const rootKeys = new Set(pendingHandleKeys)
 
     while (pendingHandleKeys.length > 0) {
@@ -3184,11 +3175,10 @@ class CadViewerApp {
       visitedHandleKeys.add(handleKey)
       if (
         !rootKeys.has(handleKey) &&
-        this.isClosedFlowBoundary(handleKey, traversableBoundaryKeys)
+        this.getFlowBoundaryBehavior(handleKey) === 'blocking'
       ) {
         continue
       }
-
       const handleId = Number.parseInt(handleKey, 16)
       if (!rootKeys.has(handleKey) && Number.isFinite(handleId)) {
         connectedHandles.add(handleId)
@@ -3201,23 +3191,18 @@ class CadViewerApp {
     return { connectedHandles }
   }
 
-  private getOpenFlowBoundaryKeys() {
-    const keys = getOpenValveHandleKeys(this.valveDeviceStates.values())
-      ;[...keys].forEach(handleKey => {
-        const handle = Number.parseInt(handleKey, 16)
-        if (Number.isFinite(handle)) {
-          handleKeysFromNumber(handle).forEach(alias => keys.add(alias))
-        }
-      })
-    return keys
-  }
-
-  private isClosedFlowBoundary(
-    handleKey: string,
-    traversableBoundaryKeys: Set<string>
-  ) {
-    if (!flowGraphIndex.valveKeys.has(handleKey)) return false
-    return !traversableBoundaryKeys.has(handleKey)
+  private getFlowBoundaryBehavior(handleKey: string) {
+    if (!flowGraphIndex.valveKeys.has(handleKey)) return 'neutral' as const
+    const normalizedHandle = normalizeFlowHandle(handleKey)
+    const state = [...this.valveDeviceStates.values()].find(candidate =>
+      normalizeFlowHandle(candidate.key) === normalizedHandle
+    )
+    if (!state?.stateKey) {
+      return state?.mode === 'open' ? 'conducting' : 'blocking'
+    }
+    return this.getConfiguredValveStates().find(
+      candidate => candidate.key === state.stateKey
+    )?.flowBehavior ?? (state.mode === 'open' ? 'conducting' : 'blocking')
   }
 
   private isFlowBoundaryObject(objectId: AcDbObjectId) {
@@ -3242,43 +3227,64 @@ class CadViewerApp {
     )
   }
 
-  private requestValveFlowStyle(handleKey: string): Promise<boolean> {
-    if (!this.loadedPhase) {
-      this.showMessage('请先激活一个 Phase', 'error')
-      return Promise.resolve(false)
-    }
-    const profile = this.getActivePresentationProfile()
-    return new Promise(resolve => {
-      let settled = false
-      const finish = (confirmed: boolean) => {
-        if (settled) return
-        settled = true
-        resolve(confirmed)
-      }
-      document.querySelector('.style-source-modal')?.remove()
-      const dialog = new StyleSourceDialog({
-        mode: 'flow',
-        profile,
-        getLocale: () => this.appLocale,
-        onApply: selection => {
-          this.pendingValveStyleSources.set(
-            handleKey,
-            selection.kind === 'custom'
-              ? { kind: 'custom', style: { ...selection.style } }
-              : {
-                kind: 'utility',
-                utilityId:
-                  selection.kind === 'utility'
-                    ? selection.utilityId
-                    : undefined
-              }
-          )
-          finish(true)
-        },
-        onClose: () => finish(false)
-      })
-      dialog.open()
+  private getConfiguredValveStates() {
+    return this.getConfiguredValveDefinition()?.states ?? []
+  }
+
+  private getConfiguredValveDefinition() {
+    return this.getActivePresentationProfile().devices.find(device => {
+      const id = device.id.trim().toLocaleLowerCase()
+      const name = device.name.trim().toLocaleLowerCase()
+      return id === 'valve' || name === 'valve' || name === '阀门'
     })
+  }
+
+  private applyConfiguredValveState(
+    handleKey: string,
+    state: DeviceStateStyleDefinition,
+    utilityId: string | undefined
+  ) {
+    const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+    if (!ownerId) return false
+    const utility = this.getActivePresentationProfile().utilities.find(
+      candidate => candidate.id === utilityId && candidate.enabled
+    )
+    this.removeOpenHighlightRootsForIds(new Set([ownerId]))
+    this.valveDeviceStates.set(ownerId, {
+      key: handleKey,
+      label: state.displayName,
+      mode: state.flowBehavior === 'blocking' ? 'closed' : 'open',
+      stateKey: state.key,
+      deviceDefinitionId: this.getConfiguredValveDefinition()?.id ?? 'valve'
+    })
+    this.openHighlightGroups.delete(ownerId)
+    this.openHighlightConnections.delete(ownerId)
+    this.openHighlightPaths.delete(ownerId)
+
+    if (state.autoHighlightFlow && utility) {
+      const traversal = this.getFlowConnectionTraversal(ownerId)
+      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
+      this.openHighlightGroups.set(
+        ownerId,
+        this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
+      )
+      this.openHighlightPaths.set(ownerId, {
+        id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
+        name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
+        handleKeys: [handleKey],
+        styleSource: { kind: 'utility', utilityId: utility.id }
+      })
+    } else if (state.autoHighlightFlow && !utility) {
+      this.showMessage(
+        this.appLocale === 'zh'
+          ? '没有已启用的 Utility，已应用阀门状态但未创建流路高亮'
+          : 'No enabled Utility. The valve state was applied without a flow highlight.',
+        'error'
+      )
+    }
+    this.recomputeOpenHighlightGroups()
+    this.captureLoadedPhaseState()
+    return true
   }
 
   private handleValveStateChanged(
@@ -3286,10 +3292,7 @@ class CadViewerApp {
     state: 'open' | 'closed'
   ) {
     const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-    if (!ownerId) {
-      this.pendingValveStyleSources.delete(handleKey)
-      return
-    }
+    if (!ownerId) return
     this.removeOpenHighlightRootsForIds(new Set([ownerId]))
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
@@ -3305,10 +3308,14 @@ class CadViewerApp {
       return
     }
 
-    const styleSource = this.pendingValveStyleSources.get(handleKey) ?? {
-      kind: 'utility' as const
+    const utility = this.getActivePresentationProfile().utilities
+      .filter(candidate => candidate.enabled)
+      .sort((left, right) => left.order - right.order)[0]
+    if (!utility) {
+      this.recomputeOpenHighlightGroups()
+      this.captureLoadedPhaseState()
+      return
     }
-    this.pendingValveStyleSources.delete(handleKey)
     const traversal = this.getFlowConnectionTraversal(ownerId)
     this.openHighlightGroups.delete(ownerId)
     this.openHighlightConnections.delete(ownerId)
@@ -3322,7 +3329,7 @@ class CadViewerApp {
       id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
       name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
       handleKeys: [handleKey],
-      styleSource
+      styleSource: { kind: 'utility', utilityId: utility.id }
     })
     this.recomputeOpenHighlightGroups()
     this.captureLoadedPhaseState()
@@ -3662,7 +3669,6 @@ class CadViewerApp {
       this.openHighlightPaths.clear()
       this.activeFlowPathId = undefined
       this.valveDeviceStates.clear()
-      this.pendingValveStyleSources.clear()
     }
 
     idsToRemove.forEach(id => {
@@ -4123,7 +4129,6 @@ class CadViewerApp {
       this.openHighlightConnections.clear()
       this.openHighlightPaths.clear()
       this.valveDeviceStates.clear()
-      this.pendingValveStyleSources.clear()
     } else {
       this.removeOpenHighlight()
     }

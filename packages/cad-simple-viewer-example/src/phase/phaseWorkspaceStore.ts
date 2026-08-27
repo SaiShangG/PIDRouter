@@ -348,17 +348,12 @@ const normalizeDeviceState = (
         ? value.displayName.trim()
         : key,
     color: normalizeColor(
-      firstDefined(value.FillColorString, value.color),
+      firstDefined(value.color, value.FillColorString),
       0x00c853
     ),
     lineWidthPx: clamp(value.lineWidthPx, 3, 1, 12),
-    opacity: clamp(firstDefined(value.FillOpacity, value.opacity), 1, 0, 1),
-    enabled:
-      typeof value.enabled === 'boolean'
-        ? value.enabled
-        : typeof value.visible === 'boolean'
-          ? value.visible
-          : true,
+    opacity: clamp(firstDefined(value.opacity, value.FillOpacity), 1, 0, 1),
+    enabled: true,
     autoHighlightFlow:
       typeof value.autoHighlightFlow === 'boolean'
         ? value.autoHighlightFlow
@@ -496,11 +491,10 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
               : id,
           style: normalizeStyle({
             ...(isRecord(candidate.style) ? candidate.style : candidate),
-            color: firstDefined(candidate.FillColorString, candidate.color),
-            opacity: firstDefined(candidate.FillOpacity, candidate.opacity)
+            color: firstDefined(candidate.color, candidate.FillColorString),
+            opacity: firstDefined(candidate.opacity, candidate.FillOpacity)
           }, defaults.defaultFlowStyle),
-          enabled:
-            typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
+          enabled: true,
           order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
         }
       ]

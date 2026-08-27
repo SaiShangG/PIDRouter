@@ -5,6 +5,7 @@ import type { ProjectInput, ProjectRecord, ProjectRepository } from './types'
 interface ProjectJsonData {
   schemaVersion: 1
   description: string
+  configure?: Record<string, unknown>
 }
 
 interface ProjectJsonDataUpdate extends ProjectJsonData {
@@ -35,7 +36,12 @@ const parseJsonData = (value: string | null | undefined): ProjectJsonData => {
     const data = parsed as Record<string, unknown>
     return {
       schemaVersion: 1,
-      description: typeof data.description === 'string' ? data.description : ''
+      description: typeof data.description === 'string' ? data.description : '',
+      configure:
+        data.Configure && typeof data.Configure === 'object' &&
+          !Array.isArray(data.Configure)
+          ? data.Configure as Record<string, unknown>
+          : undefined
     }
   } catch {
     return { schemaVersion: 1, description: '' }
@@ -57,11 +63,15 @@ const parseFileIds = (value: number[] | string | null | undefined): number[] => 
   }
 }
 
-const serializeJsonData = (input: ProjectInput): string =>
+const serializeJsonData = (
+  input: ProjectInput,
+  configure?: Record<string, unknown>
+): string =>
   JSON.stringify({
     schemaVersion: 1,
     description: input.description,
-    fileIds: input.fileIds
+    fileIds: input.fileIds,
+    ...(configure ? { Configure: configure } : {})
   } satisfies ProjectJsonDataUpdate)
 
 const toProjectRecord = (project: ProjectDto): ProjectRecord | undefined => {
@@ -71,7 +81,8 @@ const toProjectRecord = (project: ProjectDto): ProjectRecord | undefined => {
     id: project.id!,
     name: project.name?.trim() || `Project ${project.id}`,
     description: data.description,
-    fileIds: parseFileIds(project.fileIds)
+    fileIds: parseFileIds(project.fileIds),
+    ...(data.configure ? { configure: data.configure } : {})
   }
 }
 
@@ -98,10 +109,11 @@ export class ProcessAssistantProjectRepository implements ProjectRepository {
 
   async update(id: number, input: ProjectInput): Promise<ProjectRecord> {
     const normalized = normalizeInput(input)
+    const existingData = parseJsonData((await this.api.get(id)).jsonData)
     await this.api.update(id, {
       id,
       name: normalized.name,
-      jsonData: serializeJsonData(normalized)
+      jsonData: serializeJsonData(normalized, existingData.configure)
     })
     return this.get(id)
   }

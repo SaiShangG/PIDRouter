@@ -78,6 +78,7 @@ import {
 export interface PhaseWorkspaceRepositoryOptions {
   baseUrl: string
   projectId: number
+  projectConfigure?: Record<string, unknown>
   files: Pick<ProcessAssistantFileApi, 'list' | 'upload'>
   procedures: Pick<
     ProcessAssistantProcedureApi,
@@ -212,12 +213,7 @@ export class PhaseWorkspaceRepository {
       {
         name: this.requireName(name, 'Process'),
         projectId: this.options.projectId,
-        jsonData: JSON.stringify({
-          schemaVersion: 1,
-          presentationProfile: toPersistedPresentationProfile(
-            createDefaultPresentationProfile()
-          )
-        })
+        jsonData: JSON.stringify({ schemaVersion: 1 })
       },
       signal
     )
@@ -234,12 +230,7 @@ export class PhaseWorkspaceRepository {
         id,
         name: this.requireName(process.name, 'Process'),
         projectId: this.options.projectId,
-        jsonData: JSON.stringify({
-          schemaVersion: 1,
-          presentationProfile: toPersistedPresentationProfile(
-            process.presentationProfile
-          )
-        })
+        jsonData: JSON.stringify({ schemaVersion: 1 })
       },
       signal
     )
@@ -352,12 +343,11 @@ export class PhaseWorkspaceRepository {
         this.mapSequence(operation, index, drawingAssets, signal)
       )
     )
-    const data = parseJsonRecord(procedure.jsonData)
     const timestamp = this.now()
     return {
       id: String(procedure.id),
       name: procedure.name?.trim() || `Process ${procedure.id}`,
-      presentationProfile: this.readPresentationProfile(data),
+      presentationProfile: this.readPresentationProfile(),
       sequences,
       activeSequenceId: sequences[0]?.id,
       createdAt: timestamp,
@@ -440,9 +430,12 @@ export class PhaseWorkspaceRepository {
     return new URL(path, `${baseUrl.replace(/\/$/, '')}/`).href
   }
 
-  private readPresentationProfile(data: JsonRecord): PresentationProfile {
-    return isRecord(data.presentationProfile)
-      ? (data.presentationProfile as unknown as PresentationProfile)
+  private readPresentationProfile(): PresentationProfile {
+    const profile = isRecord(this.options.projectConfigure)
+      ? this.options.projectConfigure
+      : undefined
+    return profile
+      ? (profile as unknown as PresentationProfile)
       : createDefaultPresentationProfile()
   }
 

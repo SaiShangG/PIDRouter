@@ -45,7 +45,8 @@ describe('ProcessAssistantProjectRepository', () => {
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Cleaning',
-        fileIds: [99]
+        fileIds: [99],
+        Configure: { utilities: [{ id: 'utility-1' }] }
       })
     })
 
@@ -53,7 +54,8 @@ describe('ProcessAssistantProjectRepository', () => {
       id: 4,
       name: 'CIP',
       description: 'Cleaning',
-      fileIds: [2, 3]
+      fileIds: [2, 3],
+      configure: { utilities: [{ id: 'utility-1' }] }
     })
     expect(api.get).toHaveBeenCalledWith(4)
   })
@@ -96,14 +98,25 @@ describe('ProcessAssistantProjectRepository', () => {
   it('updates with versioned jsonData and delegates delete', async () => {
     const { api, repository } = createHarness()
     api.update.mockResolvedValue(undefined)
-    api.get.mockResolvedValue({
+    api.get.mockResolvedValueOnce({
+      id: 3,
+      name: 'Updated',
+      fileIds: [5],
+      jsonData: JSON.stringify({
+        schemaVersion: 1,
+        description: 'Old details',
+        fileIds: [99],
+        Configure: { devices: [{ id: 'device-1' }] }
+      })
+    }).mockResolvedValueOnce({
       id: 3,
       name: 'Updated',
       fileIds: [5],
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Details',
-        fileIds: [99]
+        fileIds: [5],
+        Configure: { devices: [{ id: 'device-1' }] }
       })
     })
     api.delete.mockResolvedValue(undefined)
@@ -118,7 +131,8 @@ describe('ProcessAssistantProjectRepository', () => {
       id: 3,
       name: 'Updated',
       description: 'Details',
-      fileIds: [5]
+      fileIds: [5],
+      configure: { devices: [{ id: 'device-1' }] }
     })
     expect(api.update).toHaveBeenCalledWith(3, {
       id: 3,
@@ -126,9 +140,11 @@ describe('ProcessAssistantProjectRepository', () => {
       jsonData: JSON.stringify({
         schemaVersion: 1,
         description: 'Details',
-        fileIds: [5]
+        fileIds: [5],
+        Configure: { devices: [{ id: 'device-1' }] }
       })
     })
+    expect(api.get).toHaveBeenCalledTimes(2)
     expect(api.get).toHaveBeenCalledWith(3)
 
     await repository.delete(3)
