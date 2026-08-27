@@ -1392,7 +1392,8 @@ class CadViewerApp {
           this.activeProject.description !== project.description ||
           !areEqualNumberSets(this.activeProject.fileIds, project.fileIds))
       if (shouldReloadActiveWorkspace) {
-        await this.loadProjectWorkspace(project, true)
+        await this.loadProjectWorkspace(project)
+        await this.prepareProjectForPhaseSelection()
         this.syncAppToolbarContext()
         return
       }
@@ -1403,7 +1404,8 @@ class CadViewerApp {
       return
     }
     try {
-      await this.loadProjectWorkspace(project, true)
+      await this.loadProjectWorkspace(project)
+      await this.prepareProjectForPhaseSelection()
       this.showMessage(`已切换到 Project：${project.name}`, 'success')
     } catch (error) {
       log.error('Failed to switch Project:', error)
@@ -1442,11 +1444,31 @@ class CadViewerApp {
     }
   }
 
+  private async prepareProjectForPhaseSelection(): Promise<void> {
+    const state = this.phaseStore.snapshot()
+    const process = state.processes.find(
+      item => item.id === state.activeProcessId
+    )
+    const sequence = process?.sequences.find(
+      item => item.id === process.activeSequenceId
+    )
+    if (process && sequence) {
+      this.phaseStore.activate(process.id, sequence.id, undefined)
+      this.phaseStore.persist()
+    }
+    this.phasePanel?.render()
+    this.syncPhaseContextBar()
+    const command = new AcApQNewCmd()
+    await command.execute(AcApDocManager.instance.context)
+    document.title = 'CAD Viewer'
+  }
+
   private async handleDeletedProject(projectId: number): Promise<void> {
     if (projectId !== this.activeProjectId) return
     const replacement = (await this.projectRepository.list())[0]
     if (replacement) {
-      await this.loadProjectWorkspace(replacement, true)
+      await this.loadProjectWorkspace(replacement)
+      await this.prepareProjectForPhaseSelection()
       return
     }
     this.clearProjectWorkspace()
