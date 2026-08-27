@@ -137,6 +137,7 @@ describe('ProcessAssistant endpoint services', () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(
         new Response('12', {
           headers: { 'Content-Type': 'application/json' }
@@ -150,6 +151,9 @@ describe('ProcessAssistant endpoint services', () => {
     ).resolves.toBe(11)
     await expect(api.get(11)).resolves.toEqual({ id: 11, name: 'Project 11' })
     await expect(api.update(11, { id: 11, name: 'Updated' })).resolves.toBeUndefined()
+    await expect(
+      api.saveStyle(11, JSON.stringify({ presentationProfile: { devices: [] } }))
+    ).resolves.toBeUndefined()
     await expect(api.delete(11)).resolves.toBeUndefined()
     await expect(
       api.addV2({ name: 'Project 12', description: 'CIP', fileIds: [3, 4] })
@@ -160,13 +164,19 @@ describe('ProcessAssistant endpoint services', () => {
       ['http://api.example.test/api/v1/Project', 'POST'],
       ['http://api.example.test/api/v1/Project/11', 'GET'],
       ['http://api.example.test/api/v1/Project/11', 'PUT'],
+      ['http://api.example.test/api/v1/Project/savestyle/11', 'POST'],
       ['http://api.example.test/api/v1/Project/11', 'DELETE'],
       ['http://api.example.test/api/v1/Project/add-v2', 'POST']
     ])
     expect(fetchMock.mock.calls[1][1]?.body).toBe(
       JSON.stringify({ name: 'Project 11', jsonData: '{"schemaVersion":1}' })
     )
-    expect(fetchMock.mock.calls[5][1]?.body).toBe(
+    expect(fetchMock.mock.calls[4][1]?.body).toBe(
+      JSON.stringify({
+        jsonData: JSON.stringify({ presentationProfile: { devices: [] } })
+      })
+    )
+    expect(fetchMock.mock.calls[6][1]?.body).toBe(
       JSON.stringify({
         name: 'Project 12',
         description: 'CIP',

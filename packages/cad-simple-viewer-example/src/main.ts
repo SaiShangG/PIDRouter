@@ -3528,12 +3528,19 @@ class CadViewerApp {
       const process = this.phaseStore
         .snapshot()
         .processes.find(item => item.id === processId)
-      if (process && this.phaseRepository) {
+      if (process && this.activeProjectId) {
+        const presentationProfile = toPersistedPresentationProfile(
+          process.presentationProfile
+        )
+        const jsonData = JSON.stringify({ presentationProfile })
         console.log(
           '[PresentationProfile] Payload prepared for backend:',
-          toPersistedPresentationProfile(process.presentationProfile)
+          presentationProfile
         )
-        await this.phaseRepository.updateProcess(process)
+        await this.processAssistantProjectApi.saveStyle(
+          this.activeProjectId,
+          jsonData
+        )
       }
       this.syncOpenHighlightRoots()
       this.phasePanel?.render()

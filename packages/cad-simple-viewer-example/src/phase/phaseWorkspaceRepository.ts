@@ -16,21 +16,41 @@ import {
 const toHexColor = (color: number) =>
   `#${Math.round(color).toString(16).padStart(6, '0').slice(-6).toUpperCase()}`
 
-export const toPersistedPresentationProfile = (profile: PresentationProfile) => ({
-  devices: profile.devices.map((device, deviceIndex) => ({
-    deviceId: deviceIndex + 1,
-    name: device.name,
-    states: device.states.map((state, stateIndex) => ({
-      stateId: stateIndex + 1,
-      key: state.key,
+export interface PersistedPresentationProfile {
+  deviceStyles: Array<{
+    id: string
+    deviceType: string
+    deviceState: string
+    displayName: string
+    color: string
+    lineWidthPx: number
+    opacity: number
+  }>
+  utilities: Array<{
+    id: string
+    name: string
+    color: string
+    lineWidthPx: number
+    opacity: number
+  }>
+}
+
+export const toPersistedPresentationProfile = (
+  profile: PresentationProfile
+): PersistedPresentationProfile => ({
+  deviceStyles: profile.devices.flatMap(device =>
+    device.states.map(state => ({
+      id: state.id,
+      deviceType: device.name,
+      deviceState: state.key,
       displayName: state.displayName,
       color: toHexColor(state.color),
       lineWidthPx: state.lineWidthPx,
       opacity: state.opacity
     }))
-  })),
-  utilities: profile.utilities.map((utility, utilityIndex) => ({
-    utilityId: utilityIndex + 1,
+  ),
+  utilities: profile.utilities.map(utility => ({
+    id: utility.id,
     name: utility.name,
     color: toHexColor(utility.style.color),
     lineWidthPx: utility.style.lineWidthPx,

@@ -2,7 +2,11 @@ import {
   PHASE_WORKSPACE_STORAGE_KEY,
   PhaseWorkspaceStore
 } from '../src/phase/phaseWorkspaceStore'
-import type { DrawingAssetRef, FlowPathStatus } from '../src/phase/types'
+import type {
+  DrawingAssetRef,
+  FlowPathStatus,
+  PhaseWorkspaceState
+} from '../src/phase/types'
 
 const flowState = (handleKeys: string[] = []) => ({
   flowPaths: handleKeys.length
@@ -473,6 +477,47 @@ describe('PhaseWorkspaceStore', () => {
       name: '默认流路',
       handleKeys: ['1a', '2b']
     })
+  })
+
+  it('preserves persisted UUIDs when normalizing presentation styles', () => {
+    const deviceStyleId = 'a4f4cb2a-edf8-4880-b45c-0ca42a45063d'
+    const utilityId = '0a4e2606-bb00-479d-bb6d-22c2a8607189'
+    const state = {
+      version: 4,
+      processes: [{
+        id: 'process-1',
+        name: 'CIP',
+        presentationProfile: {
+          deviceStyles: [{
+            id: deviceStyleId,
+            deviceType: 'Valve',
+            deviceState: 'state-1',
+            displayName: '状态 1',
+            color: '#00C853',
+            lineWidthPx: 3,
+            opacity: 1
+          }],
+          utilities: [{
+            id: utilityId,
+            name: 'Water',
+            color: '#00C853',
+            lineWidthPx: 3,
+            opacity: 1
+          }]
+        },
+        sequences: [],
+        createdAt: '2026-08-27T00:00:00.000Z',
+        updatedAt: '2026-08-27T00:00:00.000Z'
+      }],
+      drawingAssets: {}
+    } as unknown as PhaseWorkspaceState
+
+    const profile = new PhaseWorkspaceStore(state)
+      .snapshot().processes[0].presentationProfile
+
+    expect(profile.devices[0].states[0].id).toBe(deviceStyleId)
+    expect(profile.devices[0].states[0].key).toBe('state-1')
+    expect(profile.utilities[0].id).toBe(utilityId)
   })
 
   it('associates and replaces drawings while retaining shared old assets', () => {

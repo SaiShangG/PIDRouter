@@ -280,6 +280,9 @@ const normalizeColor = (value: unknown, fallback: number) => {
   return Math.round(clamp(value, fallback, 0, 0xffffff))
 }
 
+const firstDefined = (...values: unknown[]) =>
+  values.find(value => value !== undefined && value !== null)
+
 const normalizeStyle = (
   value: unknown,
   fallback: HighlightStyle
@@ -320,7 +323,7 @@ const normalizeDeviceState = (
   return {
     id: uniqueId(
       value.id,
-      typeof value.stateId === 'number' ? `state-${value.stateId}` : key,
+      typeof value.id === 'number' ? `state-${value.id}` : key,
       seenIds
     ),
     key,
@@ -328,9 +331,12 @@ const normalizeDeviceState = (
       typeof value.displayName === 'string' && value.displayName.trim()
         ? value.displayName.trim()
         : key,
-    color: normalizeColor(value.color, 0x00c853),
+    color: normalizeColor(
+      firstDefined(value.FillColorString, value.color),
+      0x00c853
+    ),
     lineWidthPx: clamp(value.lineWidthPx, 3, 1, 12),
-    opacity: clamp(value.opacity, 1, 0, 1),
+    opacity: clamp(firstDefined(value.FillOpacity, value.opacity), 1, 0, 1),
     enabled:
       typeof value.enabled === 'boolean'
         ? value.enabled
@@ -344,12 +350,34 @@ const normalizeDeviceState = (
 const normalizeDevices = (value: unknown): DeviceStyleDefinition[] => {
   if (!Array.isArray(value)) return []
   const seenDeviceIds = new Set<string>()
-  return value.flatMap((candidate, index) => {
+  const devices = new Map<string, DeviceStyleDefinition>()
+  value.forEach((candidate, index) => {
     if (!isRecord(candidate)) return []
+    const deviceType =
+      typeof candidate.deviceType === 'string' && candidate.deviceType.trim()
+        ? candidate.deviceType.trim()
+        : undefined
+    if (deviceType) {
+      const existing = devices.get(deviceType)
+      const device = existing ?? {
+        id: uniqueId(deviceType, `device-${index + 1}`, seenDeviceIds),
+        name: deviceType,
+        states: [],
+        order: devices.size
+      }
+      const state = normalizeDeviceState({
+        ...candidate,
+        id: candidate.id,
+        key: candidate.deviceState ?? candidate.key
+      }, device.states.length, new Set(device.states.map(item => item.id)))
+      if (state) device.states.push(state)
+      devices.set(deviceType, device)
+      return
+    }
     const id = uniqueId(
-      candidate.id,
-      typeof candidate.deviceId === 'number'
-        ? `device-${candidate.deviceId}`
+      typeof candidate.id === 'string' ? candidate.id : undefined,
+      typeof candidate.id === 'number'
+        ? `device-${candidate.id}`
         : `device-${index + 1}`,
       seenDeviceIds
     )
@@ -360,7 +388,7 @@ const normalizeDevices = (value: unknown): DeviceStyleDefinition[] => {
         return normalized ? [normalized] : []
       })
       : []
-    return [{
+    const device = {
       id,
       name:
         typeof candidate.name === 'string' && candidate.name.trim()
@@ -368,8 +396,10 @@ const normalizeDevices = (value: unknown): DeviceStyleDefinition[] => {
           : id,
       states,
       order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
-    }]
+    }
+    devices.set(id, device)
   })
+  return [...devices.values()]
 }
 
 const migrateLegacyDevices = (value: Record<string, unknown>) => {
@@ -395,6 +425,9 @@ const migrateLegacyDevices = (value: Record<string, unknown>) => {
 const normalizeProfile = (value: unknown): PresentationProfile => {
   const defaults = createDefaultPresentationProfile()
   if (!isRecord(value)) return defaults
+  const persistedDevices = Array.isArray(value.deviceStyles)
+    ? value.deviceStyles
+    : undefined
   const deviceStyles = isRecord(value.deviceStyles) ? value.deviceStyles : {}
   const valve = isRecord(deviceStyles.valve) ? deviceStyles.valve : {}
   const motor = isRecord(deviceStyles.motor) ? deviceStyles.motor : {}
@@ -413,8 +446,8 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       const baseId =
         typeof candidate.id === 'string' && candidate.id.trim()
           ? candidate.id.trim()
-          : typeof candidate.utilityId === 'number'
-            ? `utility-${candidate.utilityId}`
+          : typeof candidate.id === 'number'
+            ? `utility-${candidate.id}`
             : `utility-${index + 1}`
       let id = baseId
       let suffix = 2
@@ -427,10 +460,11 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
             typeof candidate.name === 'string' && candidate.name.trim()
               ? candidate.name.trim()
               : id,
-          style: normalizeStyle(
-            candidate.style ?? candidate,
-            defaults.defaultFlowStyle
-          ),
+          style: normalizeStyle({
+            ...(isRecord(candidate.style) ? candidate.style : candidate),
+            color: firstDefined(candidate.FillColorString, candidate.color),
+            opacity: firstDefined(candidate.FillOpacity, candidate.opacity)
+          }, defaults.defaultFlowStyle),
           enabled:
             typeof candidate.enabled === 'boolean' ? candidate.enabled : true,
           order: clamp(candidate.order, index, 0, Number.MAX_SAFE_INTEGER)
@@ -473,8 +507,8 @@ const normalizeProfile = (value: unknown): PresentationProfile => {
       }
     },
     deviceStylesInitialized: true,
-    devices: normalizeDevices(value.devices).length
-      ? normalizeDevices(value.devices)
+    devices: normalizeDevices(persistedDevices ?? value.devices).length
+      ? normalizeDevices(persistedDevices ?? value.devices)
       : preserveDeviceStyles
         ? migrateLegacyDevices(value)
         : [],

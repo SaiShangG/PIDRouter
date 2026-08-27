@@ -15,6 +15,13 @@ export class ProcessAssistantProjectApi {
     return this.client.request('GET', `/api/v1/Project/${id}`, { signal })
   }
 
+  create(project: ProjectDto, signal?: AbortSignal): Promise<number> {
+    return this.client.request('POST', '/api/v1/Project', {
+      body: project,
+      signal
+    })
+  }
+
   update(
     id: number,
     project: ProjectDto,
@@ -22,6 +29,17 @@ export class ProcessAssistantProjectApi {
   ): Promise<void> {
     return this.client.request('PUT', `/api/v1/Project/${id}`, {
       body: project,
+      signal
+    })
+  }
+
+  saveStyle(
+    id: number,
+    jsonData: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return this.client.request('POST', `/api/v1/Project/savestyle/${id}`, {
+      body: { jsonData },
       signal
     })
   }

@@ -40,7 +40,7 @@ describe('PhaseWorkspaceRepository', () => {
     const payload = procedures.create.mock.calls[0][0]
     expect(JSON.parse(payload.jsonData)).toEqual({
       schemaVersion: 1,
-      presentationProfile: { devices: [], utilities: [] }
+      presentationProfile: { deviceStyles: [], utilities: [] }
     })
   })
 
@@ -71,11 +71,11 @@ describe('PhaseWorkspaceRepository', () => {
     })
     const presentationProfile = createDefaultPresentationProfile()
     presentationProfile.devices = [{
-      id: 'valve',
+      id: 'a22a29fb-8de4-447e-884f-fcd79f74cf5d',
       name: 'Valve',
       order: 0,
       states: [{
-        id: 'valve-open',
+        id: 'a4f4cb2a-edf8-4880-b45c-0ca42a45063d',
         key: 'open',
         displayName: 'Open',
         color: 16711680,
@@ -86,7 +86,7 @@ describe('PhaseWorkspaceRepository', () => {
       }]
     }]
     presentationProfile.utilities = [{
-      id: 'water',
+      id: '0a4e2606-bb00-479d-bb6d-22c2a8607189',
       name: 'Water',
       style: { color: 51443, lineWidthPx: 3, opacity: 1, visible: true },
       enabled: true,
@@ -106,20 +106,17 @@ describe('PhaseWorkspaceRepository', () => {
     expect(JSON.parse(payload.jsonData)).toEqual({
       schemaVersion: 1,
       presentationProfile: {
-        devices: [{
-          deviceId: 1,
-          name: 'Valve',
-          states: [{
-            stateId: 1,
-            key: 'open',
-            displayName: 'Open',
-            color: '#FF0000',
-            lineWidthPx: 3,
-            opacity: 1
-          }]
+        deviceStyles: [{
+          id: 'a4f4cb2a-edf8-4880-b45c-0ca42a45063d',
+          deviceType: 'Valve',
+          deviceState: 'open',
+          displayName: 'Open',
+          color: '#FF0000',
+          lineWidthPx: 3,
+          opacity: 1
         }],
         utilities: [{
-          utilityId: 1,
+          id: '0a4e2606-bb00-479d-bb6d-22c2a8607189',
           name: 'Water',
           color: '#00C8F3',
           lineWidthPx: 3,
