@@ -6,6 +6,9 @@ import type {
   ValveRuntimeState,
   ValveRuntimeStateInput
 } from './types'
+import type { FlowBehavior } from '../phase/types'
+
+type FlowBoundaryBehaviorInput = ReadonlyMap<string, FlowBehavior>
 
 const nodeStatus = (
   node: FlowGraphNode,
@@ -34,7 +37,8 @@ const valveState = (
 export const traverseFlowFromValve = (
   graph: FlowGraphIndex,
   startKey: string,
-  valveStates: ValveRuntimeStateInput
+  valveStates: ValveRuntimeStateInput,
+  boundaryBehaviors?: FlowBoundaryBehaviorInput
 ): FlowTraversalResult => {
   const start = graph.nodes.get(startKey) ?? {
     key: startKey,
@@ -46,7 +50,10 @@ export const traverseFlowFromValve = (
   const diagnostics: string[] = []
   if (!graph.nodes.has(startKey)) diagnostics.push(`Missing graph node ${startKey}`)
 
-  const startState = valveState(valveStates, startKey)
+  const startBehavior = boundaryBehaviors?.get(startKey)
+  const startState = startBehavior
+    ? startBehavior === 'blocking' ? 'closed' : 'open'
+    : valveState(valveStates, startKey)
   const startNeighbors = graph.adjacency.get(startKey) ?? []
   const diagnosedMissing = new Set<string>()
   if (start.missingEntity) {
@@ -94,8 +101,13 @@ export const traverseFlowFromValve = (
         diagnostics.push(`Missing entity ${neighborKey}`)
         diagnosedMissing.add(neighborKey)
       }
+      const behavior = neighbor.kind === 'valve'
+        ? boundaryBehaviors?.get(neighborKey)
+        : undefined
       const state = neighbor.kind === 'valve'
-        ? valveState(valveStates, neighborKey)
+        ? behavior
+          ? behavior === 'blocking' ? 'closed' : 'open'
+          : valveState(valveStates, neighborKey)
         : undefined
 
       // Keep cycle/convergence detection internally, but do not add duplicate

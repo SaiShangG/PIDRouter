@@ -42,7 +42,7 @@ export class StyleSourceDialog {
   private customStyle: HighlightStyle
 
   constructor(private readonly options: StyleSourceDialogOptions) {
-    const enabledUtilities = options.profile.utilities
+    const enabledUtilities = this.availableUtilities()
     const initial = options.initialValue
     this.selection = initial
       ? cloneSelection(initial)
@@ -81,15 +81,27 @@ export class StyleSourceDialog {
   private normalizeSelection() {
     if (this.selection.kind === 'utility') {
       const utilityId = this.selection.utilityId
-      const utilityExists = this.options.profile.utilities.some(
+      const utilityExists = this.availableUtilities().some(
         utility => utility.id === utilityId
       )
-      if (!utilityExists) this.selection = { kind: 'utility' }
+      if (!utilityExists) {
+        this.selection = {
+          kind: 'utility',
+          utilityId: this.availableUtilities()[0]?.id
+        }
+      }
+      return
+    }
+    if (this.options.mode === 'flow') {
+      this.selection = {
+        kind: 'utility',
+        utilityId: this.availableUtilities()[0]?.id
+      }
       return
     }
     if (
       this.selection.kind === 'valve-state' &&
-      (!this.hasValveStyle(this.selection.state) || this.options.mode === 'flow')
+      !this.hasValveStyle(this.selection.state)
     ) {
       this.selection = { kind: 'utility' }
     }
@@ -134,8 +146,8 @@ export class StyleSourceDialog {
     sourceGroup.append(this.sourceButton('utility', 'Utility 预设'))
     if (this.options.mode === 'brush') {
       sourceGroup.append(this.sourceButton('valve-state', '阀门状态预设'))
+      sourceGroup.append(this.sourceButton('custom', '自定义'))
     }
-    sourceGroup.append(this.sourceButton('custom', '自定义'))
     body.append(sourceGroup, this.renderSourceControls(), this.renderPreview())
 
     const footer = document.createElement('footer')
@@ -181,9 +193,7 @@ export class StyleSourceDialog {
       label.textContent = 'Utility 样式'
       const select = document.createElement('select')
       select.setAttribute('aria-label', 'Utility 样式')
-      select.add(new Option('默认流路样式', ''))
-      this.options.profile.utilities
-        .sort((left, right) => left.order - right.order)
+      this.availableUtilities()
         .forEach(utility => select.add(new Option(utility.name, utility.id)))
       select.value = this.selection.utilityId ?? ''
       select.addEventListener('change', () => {
@@ -310,6 +320,12 @@ export class StyleSourceDialog {
           utility.id === utilityId
       )?.style ?? this.options.profile.defaultFlowStyle
     )
+  }
+
+  private availableUtilities() {
+    return [...this.options.profile.utilities]
+      .filter(utility => utility.enabled)
+      .sort((left, right) => left.order - right.order)
   }
 
   private availableValveStates(): ValveStyleState[] {

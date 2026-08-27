@@ -102,6 +102,7 @@ export interface DeviceState {
   label: string
   mode: DeviceMode
   stateKey?: string
+  deviceDefinitionId?: string
 }
 
 export interface FlowStateSnapshot {

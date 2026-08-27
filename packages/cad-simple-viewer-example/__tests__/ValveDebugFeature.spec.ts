@@ -132,7 +132,7 @@ describe('ValveDebugFeature', () => {
     feature.dispose()
   })
 
-  it('applies a configured flow state without replacing it with the legacy open state', () => {
+  it('applies a configured state with the first enabled Utility', () => {
     const host = document.createElement('div')
     document.body.append(host)
     const canvas = document.createElement('canvas')
@@ -175,6 +175,22 @@ describe('ValveDebugFeature', () => {
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => 'en',
       getConfiguredStates: () => [configuredState],
+      getUtilities: () => [
+        {
+          id: 'disabled-first',
+          name: 'Disabled',
+          style: { color: 0x999999, lineWidthPx: 2, opacity: 1, visible: true },
+          enabled: false,
+          order: 0
+        },
+        {
+          id: 'process-water',
+          name: 'Process Water',
+          style: { color: 0x0088ff, lineWidthPx: 2, opacity: 1, visible: true },
+          enabled: true,
+          order: 1
+        }
+      ],
       requestConfiguredStateChange,
       onStateChanged
     })
@@ -183,12 +199,90 @@ describe('ValveDebugFeature', () => {
     canvas.dispatchEvent(
       new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
     )
+    const stateSelect = document.querySelector<HTMLSelectElement>(
+      '[data-valve-state-select="true"]'
+    )!
+    const utilitySelect = document.querySelector<HTMLSelectElement>(
+      '[data-valve-utility-select="true"]'
+    )!
+    expect(stateSelect.selectedOptions[0]?.textContent).toBe('Running')
+    expect(utilitySelect.options).toHaveLength(1)
+    expect(utilitySelect.value).toBe('process-water')
     document
-      .querySelector<HTMLButtonElement>('[data-configured-state-id="state-running"]')!
+      .querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!
       .click()
 
-    expect(requestConfiguredStateChange).toHaveBeenCalledWith('1', configuredState)
+    expect(requestConfiguredStateChange).toHaveBeenCalledWith(
+      '1',
+      configuredState,
+      'process-water'
+    )
     expect(onStateChanged).not.toHaveBeenCalled()
+    feature.dispose()
+  })
+
+  it('allows applying a configured state when no Utility is available', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const configuredState = {
+      id: 'state-closed',
+      key: 'closed',
+      displayName: 'Closed',
+      color: 0xff0000,
+      lineWidthPx: 3,
+      opacity: 1,
+      enabled: true,
+      autoHighlightFlow: false,
+      flowBehavior: 'blocking' as const,
+      order: 0
+    }
+    const requestConfiguredStateChange = jest.fn(() => true)
+    const feature = new ValveDebugFeature({
+      panelHost: host,
+      graphDocument: {
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Id: 'V-1', Name: 'Valve' }]
+        }],
+        Map: { Graph: { Vertices: [1], Edges: [] } }
+      },
+      getView: () => ({
+        canvas,
+        width: 100,
+        height: 100,
+        viewportToCanvas: point => point,
+        pick: () => [{ id: 'V1' }],
+        screenToWorld: point => point,
+        zoomTo: () => undefined,
+        isDirty: false
+      }),
+      resolveObjectId: key => key,
+      resolveHandleKeys: () => ['1'],
+      createOverlay: () => null,
+      getLabels: locale => defaultValveDebugLabels(locale),
+      getLocale: () => 'en',
+      getConfiguredStates: () => [configuredState],
+      getUtilities: () => [],
+      requestConfiguredStateChange
+    })
+
+    feature.attach()
+    canvas.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
+    )
+    expect(document.body.textContent).toContain(
+      'No enabled Utility. The state can be applied without a flow highlight.'
+    )
+    document
+      .querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!
+      .click()
+
+    expect(requestConfiguredStateChange).toHaveBeenCalledWith(
+      '1',
+      configuredState,
+      undefined
+    )
     feature.dispose()
   })
 })

@@ -73,6 +73,25 @@ describe('flowTraversal', () => {
     expect(countFlowTreeStops(result.root)).toBe(1)
   })
 
+  it('excludes blocking valves and traverses through neutral valves', () => {
+    const result = traverseFlowFromValve(
+      graph,
+      '1',
+      new Map(),
+      new Map([
+        ['1', 'conducting' as const],
+        ['4', 'neutral' as const],
+        ['7', 'blocking' as const]
+      ])
+    )
+
+    expect(result.highlightedKeys).toEqual(
+      new Set(['1', '2', '6', '3', '5', '4'])
+    )
+    expect(result.stoppedValveKeys).toEqual(new Set(['7']))
+    expect(result.visitedKeys).toContain('7')
+  })
+
   it('merges highlighted lines from multiple open roots', () => {
     const states = new Map([
       ['1', 'open' as const],

@@ -104,4 +104,70 @@ describe('presentationStyleResolver', () => {
     resolveEntityPresentation(profile, { flowPath })
     expect(JSON.stringify({ profile, flowPath })).toBe(before)
   })
+
+  it('uses the owning valve state style over the Utility flow style', () => {
+    const profile = createDefaultPresentationProfile()
+    profile.utilities.push({
+      id: 'water',
+      name: 'Water',
+      style: { color: 0x112233, lineWidthPx: 2, opacity: 0.8, visible: true },
+      enabled: true,
+      order: 0
+    })
+    profile.devices.push({
+      id: 'motor',
+      name: 'Motor',
+      order: 1,
+      states: [{
+        id: 'motor-running',
+        key: 'running',
+        displayName: 'Running',
+        color: 0xffaa00,
+        lineWidthPx: 2,
+        opacity: 1,
+        enabled: true,
+        autoHighlightFlow: false,
+        flowBehavior: 'neutral',
+        order: 0
+      }]
+    })
+    profile.devices.push({
+      id: 'valve',
+      name: 'Valve',
+      order: 2,
+      states: [{
+        id: 'valve-running',
+        key: 'running',
+        displayName: 'Running',
+        color: 0x00cc66,
+        lineWidthPx: 4,
+        opacity: 0.9,
+        enabled: true,
+        autoHighlightFlow: true,
+        flowBehavior: 'conducting',
+        order: 0
+      }]
+    })
+
+    expect(resolveEntityPresentation(profile, {
+      flowPath: {
+        id: 'flow-1',
+        name: 'Route',
+        handleKeys: ['1a'],
+        styleSource: { kind: 'utility', utilityId: 'water' }
+      },
+      deviceState: {
+        key: '1a',
+        label: 'XV-1',
+        mode: 'open',
+        stateKey: 'running',
+        deviceDefinitionId: 'valve'
+      }
+    })).toMatchObject({
+      color: 0x00cc66,
+      lineWidthPx: 4,
+      opacity: 0.9,
+      source: 'device'
+    })
+  })
 })

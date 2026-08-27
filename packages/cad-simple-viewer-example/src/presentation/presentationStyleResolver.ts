@@ -40,7 +40,10 @@ const resolveDeviceStyle = (
   profile: PresentationProfile,
   state?: DeviceState
 ): HighlightStyle | undefined => {
-  const configuredState = profile.devices
+  const configuredDevices = state?.deviceDefinitionId
+    ? profile.devices.filter(device => device.id === state.deviceDefinitionId)
+    : profile.devices
+  const configuredState = configuredDevices
     .flatMap(device => device.states)
     .find(candidate => candidate.key === (state?.stateKey ?? state?.mode))
   if (configuredState) {

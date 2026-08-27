@@ -62,31 +62,35 @@ describe('StyleSourceDialog', () => {
     })
   })
 
-  it('offers custom flow styles but excludes valve presets', () => {
+  it('offers only enabled Utility presets in flow mode', () => {
     const onApply = jest.fn()
+    const profile = createProfile()
+    profile.utilities.push({
+      id: 'disabled',
+      name: 'Disabled Utility',
+      style: { color: 0x445566, lineWidthPx: 2, opacity: 1, visible: true },
+      enabled: false,
+      order: -1
+    })
     const dialog = new StyleSourceDialog({
       mode: 'flow',
-      profile: createProfile(),
+      profile,
       onApply,
       onClose: jest.fn()
     })
     dialog.open()
 
     expect(dialog.element.textContent).not.toContain('阀门状态预设')
-    findButton(dialog.element, '自定义').click()
-    const color = dialog.element.querySelector<HTMLInputElement>(
-      '[aria-label="自定义颜色"]'
+    expect(dialog.element.textContent).not.toContain('自定义')
+    expect(dialog.element.textContent).not.toContain('默认流路样式')
+    const utility = dialog.element.querySelector<HTMLSelectElement>(
+      '[aria-label="Utility 样式"]'
     )!
-    color.value = '#445566'
-    color.dispatchEvent(new Event('input'))
+    expect(utility.options).toHaveLength(1)
+    expect(utility.value).toBe('water')
     findButton(dialog.element, '应用').click()
 
-    expect(onApply).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'custom',
-        style: expect.objectContaining({ color: 0x445566 })
-      })
-    )
+    expect(onApply).toHaveBeenCalledWith({ kind: 'utility', utilityId: 'water' })
   })
 
   it('closes on Escape without applying', () => {
