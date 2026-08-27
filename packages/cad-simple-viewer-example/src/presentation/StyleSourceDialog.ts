@@ -2,16 +2,35 @@ import { X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
-import type { HighlightStyle, PresentationProfile } from '../phase/types'
+import type {
+  DeviceStateStyleDefinition,
+  DeviceStyleDefinition,
+  HighlightStyle,
+  PresentationProfile
+} from '../phase/types'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
 
-export type ValveStyleState = 'open' | 'closed' | 'pulse'
+export const resolveDevicePresetStyle = (
+  profile: PresentationProfile,
+  deviceId: string,
+  stateId: string
+): HighlightStyle | undefined => {
+  const state = profile.devices
+    .find(device => device.id === deviceId)
+    ?.states.find(candidate => candidate.id === stateId && candidate.enabled)
+  if (!state) return undefined
+  return {
+    color: state.color,
+    lineWidthPx: state.lineWidthPx,
+    opacity: state.opacity,
+    visible: true
+  }
+}
 
 export type StyleSourceSelection =
   | { kind: 'utility'; utilityId?: string }
-  | { kind: 'valve-state'; state: ValveStyleState }
-  | { kind: 'custom'; style: HighlightStyle }
+  | { kind: 'device-state'; deviceId: string; stateId: string }
 
 export interface StyleSourceDialogOptions {
   mode: 'brush' | 'flow'
@@ -25,21 +44,14 @@ export interface StyleSourceDialogOptions {
 const toHex = (color: number) =>
   `#${color.toString(16).padStart(6, '0').slice(-6)}`
 
-const parseHex = (value: string) =>
-  /^#[0-9a-f]{6}$/i.test(value) ? Number.parseInt(value.slice(1), 16) : undefined
-
 const cloneSelection = (
   value: StyleSourceSelection
-): StyleSourceSelection =>
-  value.kind === 'custom'
-    ? { kind: 'custom', style: { ...value.style } }
-    : { ...value }
+): StyleSourceSelection => ({ ...value })
 
 export class StyleSourceDialog {
   readonly element = document.createElement('div')
   private readonly focusController = createModalFocusController(this.element)
   private selection: StyleSourceSelection
-  private customStyle: HighlightStyle
 
   constructor(private readonly options: StyleSourceDialogOptions) {
     const enabledUtilities = this.availableUtilities()
@@ -47,10 +59,6 @@ export class StyleSourceDialog {
     this.selection = initial
       ? cloneSelection(initial)
       : { kind: 'utility', utilityId: enabledUtilities[0]?.id }
-    this.customStyle =
-      initial?.kind === 'custom'
-        ? { ...initial.style }
-        : { ...options.profile.defaultFlowStyle }
     this.normalizeSelection()
 
     this.element.className = 'phase-workspace-modal style-source-modal'
@@ -99,11 +107,26 @@ export class StyleSourceDialog {
       }
       return
     }
-    if (
-      this.selection.kind === 'valve-state' &&
-      !this.hasValveStyle(this.selection.state)
-    ) {
-      this.selection = { kind: 'utility' }
+    if (this.selection.kind !== 'device-state') return
+    const selection = this.selection
+    const device = this.availableDevices().find(
+      candidate => candidate.id === selection.deviceId
+    )
+    const stateExists = device?.states.some(
+      state => state.id === selection.stateId && state.enabled
+    )
+    if (!stateExists) {
+      const firstDevice = this.availableDevices()[0]
+      this.selection = firstDevice
+        ? {
+            kind: 'device-state',
+            deviceId: firstDevice.id,
+            stateId: this.availableDeviceStates(firstDevice)[0].id
+          }
+        : {
+            kind: 'utility',
+            utilityId: this.availableUtilities()[0]?.id
+          }
     }
   }
 
@@ -116,11 +139,7 @@ export class StyleSourceDialog {
   }
 
   private apply() {
-    this.options.onApply(
-      this.selection.kind === 'custom'
-        ? { kind: 'custom', style: { ...this.customStyle } }
-        : cloneSelection(this.selection)
-    )
+    this.options.onApply(cloneSelection(this.selection))
     this.close()
   }
 
@@ -145,8 +164,7 @@ export class StyleSourceDialog {
     sourceGroup.setAttribute('aria-label', '样式来源')
     sourceGroup.append(this.sourceButton('utility', 'Utility 预设'))
     if (this.options.mode === 'brush') {
-      sourceGroup.append(this.sourceButton('valve-state', '阀门状态预设'))
-      sourceGroup.append(this.sourceButton('custom', '自定义'))
+      sourceGroup.append(this.sourceButton('device-state', '设备样式预设'))
     }
     body.append(sourceGroup, this.renderSourceControls(), this.renderPreview())
 
@@ -168,20 +186,25 @@ export class StyleSourceDialog {
   ) {
     const button = this.button(label, () => {
       if (kind === 'utility') {
-        this.selection = { kind: 'utility' }
-      } else if (kind === 'valve-state') {
-        const state = this.availableValveStates()[0]
-        if (!state) return
-        this.selection = { kind: 'valve-state', state }
+        this.selection = {
+          kind: 'utility',
+          utilityId: this.availableUtilities()[0]?.id
+        }
       } else {
-        this.selection = { kind: 'custom', style: this.customStyle }
+        const device = this.availableDevices()[0]
+        const state = device && this.availableDeviceStates(device)[0]
+        if (!device || !state) return
+        this.selection = {
+          kind: 'device-state',
+          deviceId: device.id,
+          stateId: state.id
+        }
       }
       this.render()
     })
     const selected = this.selection.kind === kind
     button.setAttribute('role', 'radio')
     button.setAttribute('aria-checked', String(selected))
-    button.disabled = kind === 'valve-state' && this.availableValveStates().length === 0
     return button
   }
 
@@ -207,86 +230,53 @@ export class StyleSourceDialog {
       section.append(label)
       return section
     }
-    if (this.selection.kind === 'valve-state') {
-      const label = document.createElement('label')
-      label.textContent = '阀门状态'
-      const select = document.createElement('select')
-      select.setAttribute('aria-label', '阀门状态')
-      this.availableValveStates().forEach(state =>
-        select.add(new Option(state.toUpperCase(), state))
+    if (this.selection.kind === 'device-state') {
+      const selection = this.selection
+      const deviceLabel = document.createElement('label')
+      deviceLabel.textContent = '设备样式'
+      const deviceSelect = document.createElement('select')
+      deviceSelect.setAttribute('aria-label', '设备样式')
+      this.availableDevices().forEach(device =>
+        deviceSelect.add(new Option(device.name, device.id))
       )
-      select.value = this.selection.state
-      select.addEventListener('change', () => {
+      deviceSelect.value = selection.deviceId
+      deviceSelect.addEventListener('change', () => {
+        const device = this.availableDevices().find(
+          candidate => candidate.id === deviceSelect.value
+        )!
         this.selection = {
-          kind: 'valve-state',
-          state: select.value as ValveStyleState
+          kind: 'device-state',
+          deviceId: device.id,
+          stateId: this.availableDeviceStates(device)[0].id
         }
         this.render()
       })
-      label.append(select)
-      section.append(label)
+      deviceLabel.append(deviceSelect)
+
+      const stateLabel = document.createElement('label')
+      stateLabel.textContent = '设备状态'
+      const stateSelect = document.createElement('select')
+      stateSelect.setAttribute('aria-label', '设备状态')
+      const device = this.availableDevices().find(
+        candidate => candidate.id === selection.deviceId
+      )!
+      this.availableDeviceStates(device).forEach(state =>
+        stateSelect.add(new Option(state.displayName, state.id))
+      )
+      stateSelect.value = selection.stateId
+      stateSelect.addEventListener('change', () => {
+        this.selection = {
+          kind: 'device-state',
+          deviceId: device.id,
+          stateId: stateSelect.value
+        }
+        this.render()
+      })
+      stateLabel.append(stateSelect)
+      section.append(deviceLabel, stateLabel)
       return section
     }
 
-    const colorLabel = document.createElement('label')
-    colorLabel.textContent = '颜色'
-    const color = document.createElement('input')
-    color.type = 'color'
-    color.value = toHex(this.customStyle.color)
-    color.setAttribute('aria-label', '自定义颜色')
-    const hex = document.createElement('input')
-    hex.value = toHex(this.customStyle.color).toUpperCase()
-    hex.setAttribute('aria-label', '自定义十六进制颜色')
-    const updateColor = (value: string) => {
-      const parsed = parseHex(value)
-      if (parsed == null) return
-      this.customStyle.color = parsed
-      this.render()
-    }
-    color.addEventListener('input', () => updateColor(color.value))
-    hex.addEventListener('change', () => updateColor(hex.value))
-    const colorInputs = document.createElement('span')
-    colorInputs.className = 'style-source-color-inputs'
-    colorInputs.append(color, hex)
-    colorLabel.append(colorInputs)
-
-    const opacityLabel = document.createElement('label')
-    opacityLabel.textContent = '透明度'
-    const opacity = document.createElement('input')
-    opacity.type = 'range'
-    opacity.min = '0'
-    opacity.max = '1'
-    opacity.step = '0.05'
-    opacity.value = String(this.customStyle.opacity)
-    opacity.setAttribute('aria-label', '自定义透明度')
-    const opacityValue = document.createElement('output')
-    opacityValue.textContent = `${Math.round(this.customStyle.opacity * 100)}%`
-    opacity.addEventListener('input', () => {
-      this.customStyle.opacity = Number(opacity.value)
-      opacityValue.textContent = `${Math.round(this.customStyle.opacity * 100)}%`
-    })
-    const opacityInputs = document.createElement('span')
-    opacityInputs.className = 'style-source-range-inputs'
-    opacityInputs.append(opacity, opacityValue)
-    opacityLabel.append(opacityInputs)
-
-    const widthLabel = document.createElement('label')
-    widthLabel.textContent = '线宽'
-    const width = document.createElement('input')
-    width.type = 'number'
-    width.min = '1'
-    width.max = '12'
-    width.step = '0.5'
-    width.value = String(this.customStyle.lineWidthPx)
-    width.setAttribute('aria-label', '自定义线宽')
-    width.addEventListener('input', () => {
-      this.customStyle.lineWidthPx = Math.min(
-        12,
-        Math.max(1, Number(width.value) || 1)
-      )
-    })
-    widthLabel.append(width)
-    section.append(colorLabel, opacityLabel, widthLabel)
     return section
   }
 
@@ -306,12 +296,12 @@ export class StyleSourceDialog {
   }
 
   private resolvePreviewStyle(): HighlightStyle {
-    if (this.selection.kind === 'custom') return this.customStyle
-    if (this.selection.kind === 'valve-state') {
-      return (
-        this.options.profile.deviceStyles.valve[this.selection.state] ??
-        this.options.profile.defaultFlowStyle
-      )
+    if (this.selection.kind === 'device-state') {
+      return resolveDevicePresetStyle(
+        this.options.profile,
+        this.selection.deviceId,
+        this.selection.stateId
+      ) ?? this.options.profile.defaultFlowStyle
     }
     const utilityId = this.selection.utilityId
     return (
@@ -328,14 +318,18 @@ export class StyleSourceDialog {
       .sort((left, right) => left.order - right.order)
   }
 
-  private availableValveStates(): ValveStyleState[] {
-    return (['open', 'closed', 'pulse'] as const).filter(state =>
-      this.hasValveStyle(state)
-    )
+  private availableDevices(): DeviceStyleDefinition[] {
+    return [...this.options.profile.devices]
+      .filter(device => device.states.some(state => state.enabled))
+      .sort((left, right) => left.order - right.order)
   }
 
-  private hasValveStyle(state: ValveStyleState) {
-    return this.options.profile.deviceStyles.valve[state] != null
+  private availableDeviceStates(
+    device: DeviceStyleDefinition
+  ): DeviceStateStyleDefinition[] {
+    return [...device.states]
+      .filter(state => state.enabled)
+      .sort((left, right) => left.order - right.order)
   }
 
   private button(label: string, action: () => void) {

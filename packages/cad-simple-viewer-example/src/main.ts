@@ -129,7 +129,7 @@ import {
   resolveFlowHighlightLayers
 } from './presentation/resolveFlowHighlightLayers'
 import {
-  resolveValvePresetStyle,
+  resolveDevicePresetStyle,
   StyleSourceDialog,
   type StyleSourceSelection
 } from './presentation/StyleSourceDialog'
@@ -1741,13 +1741,24 @@ class CadViewerApp {
         localStorage.getItem(BRUSH_STYLE_STORAGE_KEY) ?? 'null'
       ) as Partial<StyleSourceSelection> | null
       if (
-        stored?.kind === 'valve-state' &&
-        'state' in stored &&
-        (stored.state === 'open' ||
-          stored.state === 'closed' ||
-          stored.state === 'pulse')
+        stored?.kind === 'device-state' &&
+        'deviceId' in stored &&
+        'stateId' in stored &&
+        typeof stored.deviceId === 'string' &&
+        typeof stored.stateId === 'string'
       ) {
-        return { kind: 'valve-state', state: stored.state }
+        const style = resolveDevicePresetStyle(
+          profile,
+          stored.deviceId,
+          stored.stateId
+        )
+        if (style) {
+          return {
+            kind: 'device-state',
+            deviceId: stored.deviceId,
+            stateId: stored.stateId
+          }
+        }
       }
       if (stored?.kind === 'utility' && 'utilityId' in stored) {
         return {
@@ -1782,9 +1793,15 @@ class CadViewerApp {
     const profile = this.getActivePresentationProfile()
     const selection =
       this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
-    if (selection.kind === 'valve-state') {
+    if (selection.kind === 'device-state') {
+      const style = resolveDevicePresetStyle(
+        profile,
+        selection.deviceId,
+        selection.stateId
+      )
+      if (!style) return resolveEntityPresentation(profile, {})
       return resolveEntityPresentation(profile, {
-        diagnosticStyle: resolveValvePresetStyle(profile, selection.state)
+        diagnosticStyle: style
       })
     }
     const flowPath: FlowPathStatus = {
