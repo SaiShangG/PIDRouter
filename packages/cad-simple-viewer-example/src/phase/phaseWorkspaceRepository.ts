@@ -109,13 +109,6 @@ export interface CreateBackendSequenceInput {
 
 export type PersistedPhaseData = PhasePidOverlay
 
-export class PhasePidOverlayWriteProtectedError extends Error {
-  constructor(readonly phaseId: string) {
-    super(`Phase ${phaseId} PID overlay is read-only because it cannot be safely rewritten`)
-    this.name = 'PhasePidOverlayWriteProtectedError'
-  }
-}
-
 export interface CreateBackendPhaseInput {
   sequenceId: string
   number: number
@@ -194,9 +187,6 @@ export class PhaseWorkspaceRepository {
         ...this.createEmptyPhaseData(),
         drawing
       }
-    }
-    if (phase.pidOverlayPersistence) {
-      throw new PhasePidOverlayWriteProtectedError(phase.id)
     }
     const persistedPhase = this.toPersistedPhaseData(phase)
     return {
@@ -306,9 +296,6 @@ export class PhaseWorkspaceRepository {
     orderIndex: number,
     signal?: AbortSignal
   ): Promise<void> {
-    if (phase.pidOverlayPersistence) {
-      throw new PhasePidOverlayWriteProtectedError(phase.id)
-    }
     return this.writePhase(sequenceId, phase, orderIndex, signal)
   }
 
@@ -402,28 +389,6 @@ export class PhaseWorkspaceRepository {
       drawing: this.readDrawing(overlay?.drawing, drawingAssets),
       flowState: overlay ? this.readFlowState(overlay) : { flowPaths: [] },
       textNotes: overlay ? this.readTextNotes(overlay) : [],
-      ...(parsed.status === 'unsupported'
-        ? {
-          pidOverlayPersistence: {
-            status: 'unsupported' as const,
-            schemaVersion: parsed.schemaVersion
-          }
-        }
-        : parsed.status === 'invalid'
-          ? {
-            pidOverlayPersistence: {
-              status: 'invalid' as const,
-              reason: parsed.reason
-            }
-          }
-          : parsed.status === 'valid' && parsed.warnings.length
-            ? {
-              pidOverlayPersistence: {
-                status: 'warnings' as const,
-                warningCodes: parsed.warnings.map(warning => warning.code)
-              }
-            }
-            : {}),
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -551,6 +516,12 @@ export class PhaseWorkspaceRepository {
       phase.drawing.kind === 'assigned'
         ? this.readFileId(phase.drawing.assetId)
         : undefined
+    const deviceStateHandles = new Set(
+      Object.values(phase.flowState.deviceStates ?? {}).map(deviceState =>
+        this.toPersistedHandleKey(deviceState.key)
+      )
+    )
+    const persistedFlowPathKeys = new Set<string>()
     const flowPaths = phase.flowState.flowPaths.flatMap(flowPath => {
       const highlightStyleRefId = flowPath.utilityId ??
         (flowPath.styleSource?.kind === 'utility'
@@ -559,9 +530,13 @@ export class PhaseWorkspaceRepository {
       if (!highlightStyleRefId) return []
       return flowPath.handleKeys.flatMap(handleKey => {
         const persistedHandleKey = this.toPersistedHandleKey(handleKey)
-        return persistedHandleKey
-          ? [{ handleKey: persistedHandleKey, highlightStyleRefId }]
-          : []
+        if (!persistedHandleKey || deviceStateHandles.has(persistedHandleKey)) {
+          return []
+        }
+        const key = `${persistedHandleKey}:${highlightStyleRefId}`
+        if (persistedFlowPathKeys.has(key)) return []
+        persistedFlowPathKeys.add(key)
+        return [{ handleKey: persistedHandleKey, highlightStyleRefId }]
       })
     })
     const deviceStates = Object.values(phase.flowState.deviceStates ?? {}).flatMap(

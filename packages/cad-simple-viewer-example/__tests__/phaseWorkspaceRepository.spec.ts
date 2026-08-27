@@ -217,10 +217,7 @@ describe('PhaseWorkspaceRepository', () => {
       displayName: 'Supply PID'
     })
     expect(phase.flowState.flowPaths[0].handleKeys).toEqual(['1A'])
-    expect(phase.pidOverlayPersistence).toEqual({
-      status: 'warnings',
-      warningCodes: ['invalid-flow-path']
-    })
+    expect(phase.pidOverlayPersistence).toBeUndefined()
     expect(phase.flowState.deviceStates).toEqual({
       '1A': {
         key: '1A',
@@ -238,7 +235,7 @@ describe('PhaseWorkspaceRepository', () => {
       flowPaths: []
     })
     expect(workspace.processes[0].sequences[1].phases[0].pidOverlayPersistence)
-      .toEqual({ status: 'invalid', reason: 'invalid-json' })
+      .toBeUndefined()
     expect(workspace.processes[0].presentationProfile.devices).toEqual([])
     expect(workspace.processes[0].presentationProfile.utilities).toEqual([])
   })
@@ -271,7 +268,7 @@ describe('PhaseWorkspaceRepository', () => {
         flowPaths: [{
           id: 'flow-1',
           name: 'Main',
-          handleKeys: ['1a', '2b'],
+          handleKeys: ['1a', '2b', '2B'],
           utilityId: 'utility-water'
         }],
         deviceStates: {
@@ -299,9 +296,6 @@ describe('PhaseWorkspaceRepository', () => {
       drawing: { fileId: 5, displayName: 'PID' },
       highlightedObjects: {
         flowPaths: [{
-          handleKey: '26',
-          highlightStyleRefId: 'utility-water'
-        }, {
           handleKey: '43',
           highlightStyleRefId: 'utility-water'
         }],
@@ -315,16 +309,16 @@ describe('PhaseWorkspaceRepository', () => {
       textNotes: []
     })
 
-    const protectedPhase = {
+    const rewrittenPhase = {
       ...phase,
       pidOverlayPersistence: {
         status: 'warnings' as const,
         warningCodes: ['invalid-flow-path']
       }
     }
-    expect(() => repository.updatePhase('10', protectedPhase, 1))
-      .toThrow('is read-only because it cannot be safely rewritten')
-    expect(phases.update).toHaveBeenCalledTimes(1)
+    await expect(repository.updatePhase('10', rewrittenPhase, 1))
+      .resolves.toBeUndefined()
+    expect(phases.update).toHaveBeenCalledTimes(2)
   })
 
   it('uses Project Configure as the presentation profile', async () => {

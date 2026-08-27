@@ -113,7 +113,6 @@ import {
   PhaseWorkspacePanel
 } from './phase/PhaseWorkspacePanel'
 import {
-  PhasePidOverlayWriteProtectedError,
   PhaseWorkspaceRepository,
   toPersistedPresentationProfile
 } from './phase/phaseWorkspaceRepository'
@@ -3816,9 +3815,13 @@ class CadViewerApp {
       ...retainedDeviceStates,
       ...capturedDeviceStates
     }
+    const flowPaths = retainedFlowPaths.concat(capturedFlowPaths).map(flowPath => ({
+      ...flowPath,
+      handleKeys: [...new Set(flowPath.handleKeys)]
+    })).filter(flowPath => flowPath.handleKeys.length > 0)
     const nextState = {
       flowState: {
-        flowPaths: [...retainedFlowPaths, ...capturedFlowPaths],
+        flowPaths,
         ...(this.captureActiveFlowPathId()
           ? { activeFlowPathId: this.captureActiveFlowPathId() }
           : {}),
@@ -3860,14 +3863,6 @@ class CadViewerApp {
       try {
         await this.saveBackendPhase(processId, sequenceId, phaseId)
       } catch (error) {
-        if (error instanceof PhasePidOverlayWriteProtectedError) {
-          log.warn(error.message)
-          this.showMessage(
-            '该 Phase 的 PID Overlay 版本不受支持。原始数据已保留，显式重建前不会覆盖。',
-            'warning'
-          )
-          return
-        }
         log.error('Failed to save backend Phase state:', error)
         this.showMessage(
           translate(this.appLocale, 'phaseSaveFailed'),
@@ -3931,12 +3926,6 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
-    if (phase.pidOverlayPersistence) {
-      this.showMessage(
-        '该 Phase 的 PID Overlay 版本不受支持。原始数据已保留，显式重建前不会覆盖。',
-        'warning'
-      )
-    }
     const styleWarnings = findPhaseOverlayStyleWarnings(
       process?.presentationProfile ?? createDefaultPresentationProfile(),
       phase.flowState.flowPaths,
