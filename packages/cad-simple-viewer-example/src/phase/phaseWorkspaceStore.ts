@@ -5,6 +5,7 @@ import {
   type DeviceStateStyleDefinition,
   type DeviceStyleDefinition,
   type DrawingAssetRef,
+  type FlowBehavior,
   type FlowPathStatus,
   type HighlightStyle,
   PHASE_WORKSPACE_SCHEMA_VERSION,
@@ -309,6 +310,19 @@ const uniqueId = (candidate: unknown, fallback: string, seen: Set<string>) => {
   return id
 }
 
+const legacyFlowRules = (key: string): {
+  autoHighlightFlow: boolean
+  flowBehavior: FlowBehavior
+} => {
+  if (key === 'closed') {
+    return { autoHighlightFlow: false, flowBehavior: 'blocking' }
+  }
+  if (key === 'open' || key === 'pulse' || key === 'start' || key === 'active') {
+    return { autoHighlightFlow: true, flowBehavior: 'conducting' }
+  }
+  return { autoHighlightFlow: false, flowBehavior: 'neutral' }
+}
+
 const normalizeDeviceState = (
   value: unknown,
   index: number,
@@ -320,6 +334,8 @@ const normalizeDeviceState = (
     typeof value.key === 'string' && value.key.trim()
       ? value.key.trim()
       : fallbackKey
+  const legacyRules = legacyFlowRules(key)
+  const flowBehavior = value.flowBehavior
   return {
     id: uniqueId(
       value.id,
@@ -343,6 +359,16 @@ const normalizeDeviceState = (
         : typeof value.visible === 'boolean'
           ? value.visible
           : true,
+    autoHighlightFlow:
+      typeof value.autoHighlightFlow === 'boolean'
+        ? value.autoHighlightFlow
+        : legacyRules.autoHighlightFlow,
+    flowBehavior:
+      flowBehavior === 'conducting' ||
+        flowBehavior === 'blocking' ||
+        flowBehavior === 'neutral'
+        ? flowBehavior
+        : legacyRules.flowBehavior,
     order: clamp(value.order, index, 0, Number.MAX_SAFE_INTEGER)
   }
 }
@@ -416,7 +442,15 @@ const migrateLegacyDevices = (value: Record<string, unknown>) => {
   deviceStates.forEach(([id, name, key, style], index) => {
     if (!style || !isRecord(value.deviceStyles)) return
     const device = devices.get(id) ?? { id, name, states: [], order: devices.size }
-    device.states.push({ id: `${id}-${key}`, key, displayName: key.toUpperCase(), ...style, enabled: true, order: index })
+    device.states.push({
+      id: `${id}-${key}`,
+      key,
+      displayName: key.toUpperCase(),
+      ...style,
+      enabled: true,
+      ...legacyFlowRules(key),
+      order: index
+    })
     devices.set(id, device)
   })
   return [...devices.values()]

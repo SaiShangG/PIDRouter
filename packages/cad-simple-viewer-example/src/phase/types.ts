@@ -30,8 +30,12 @@ export interface DeviceStateStyleDefinition {
   lineWidthPx: number
   opacity: number
   enabled: boolean
+  autoHighlightFlow: boolean
+  flowBehavior: FlowBehavior
   order: number
 }
+
+export type FlowBehavior = 'conducting' | 'blocking' | 'neutral'
 
 export interface DeviceStyleDefinition {
   id: string

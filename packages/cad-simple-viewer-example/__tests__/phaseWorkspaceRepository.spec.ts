@@ -82,6 +82,8 @@ describe('PhaseWorkspaceRepository', () => {
         lineWidthPx: 3,
         opacity: 1,
         enabled: true,
+        autoHighlightFlow: true,
+        flowBehavior: 'conducting',
         order: 0
       }]
     }]
@@ -113,7 +115,9 @@ describe('PhaseWorkspaceRepository', () => {
           displayName: 'Open',
           color: '#FF0000',
           lineWidthPx: 3,
-          opacity: 1
+          opacity: 1,
+          autoHighlightFlow: true,
+          flowBehavior: 'conducting'
         }],
         utilities: [{
           id: '0a4e2606-bb00-479d-bb6d-22c2a8607189',

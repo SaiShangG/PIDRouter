@@ -209,6 +209,8 @@ export class HighlightStyleDialog {
           lineWidthPx: 3,
           opacity: 1,
           enabled: true,
+          autoHighlightFlow: false,
+          flowBehavior: 'neutral',
           order: device.states.length
         })
         this.emitPreview()
@@ -256,6 +258,27 @@ export class HighlightStyleDialog {
       state.displayName = displayName.value
       this.emitPreview()
     })
+    const autoHighlightFlow = document.createElement('input')
+    autoHighlightFlow.type = 'checkbox'
+    autoHighlightFlow.checked = state.autoHighlightFlow
+    autoHighlightFlow.setAttribute('aria-label', '自动高亮流路')
+    autoHighlightFlow.addEventListener('change', () => {
+      state.autoHighlightFlow = autoHighlightFlow.checked
+      this.emitPreview()
+    })
+    const autoHighlightFlowLabel = document.createElement('label')
+    autoHighlightFlowLabel.className = 'highlight-checkbox'
+    autoHighlightFlowLabel.append(autoHighlightFlow, '选择此状态时自动高亮流路')
+    const flowBehavior = document.createElement('select')
+    flowBehavior.setAttribute('aria-label', '流路行为')
+    flowBehavior.add(new Option('允许继续', 'conducting'))
+    flowBehavior.add(new Option('停止', 'blocking'))
+    flowBehavior.add(new Option('不参与', 'neutral'))
+    flowBehavior.value = state.flowBehavior
+    flowBehavior.addEventListener('change', () => {
+      state.flowBehavior = flowBehavior.value as DeviceStateStyleDefinition['flowBehavior']
+      this.emitPreview()
+    })
     const style = this.asHighlightStyle(state)
     const remove = this.iconButton('删除设备状态', Trash2, () => {
       const locale = this.options.getLocale?.() ?? 'zh'
@@ -274,10 +297,17 @@ export class HighlightStyleDialog {
         this.render()
       })
     })
-    row.append(this.field('状态 key', key), this.field('右键名称', displayName), this.styleControls(style, changed => {
-      Object.assign(state, changed)
-      this.emitPreview()
-    }), remove)
+    row.append(
+      this.field('状态 key', key),
+      this.field('右键名称', displayName),
+      this.styleControls(style, changed => {
+        Object.assign(state, changed)
+        this.emitPreview()
+      }),
+      remove,
+      autoHighlightFlowLabel,
+      this.field('流路行为', flowBehavior)
+    )
     return row
   }
 
@@ -410,7 +440,7 @@ export class HighlightStyleDialog {
     return group
   }
 
-  private field(labelText: string, input: HTMLInputElement) {
+  private field(labelText: string, input: HTMLInputElement | HTMLSelectElement) {
     const label = document.createElement('label')
     label.className = 'highlight-style-field'
     const text = document.createElement('span')

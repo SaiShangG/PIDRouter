@@ -131,6 +131,8 @@ const pairs: TranslationPair[] = [
   ['颜色', 'Color'], ['透明度', 'Opacity'], ['线宽', 'Line width'],
   ['十六进制', 'Hex'], ['线宽 (px)', 'Line width (px)'], ['透明度 (%)', 'Opacity (%)'],
   ['状态 key', 'State key'], ['右键名称', 'Context menu name'], ['Utility 名称', 'Utility name'],
+  ['自动高亮流路', 'Automatically highlight flow path'], ['选择此状态时自动高亮流路', 'Automatically highlight flow path for this state'],
+  ['流路行为', 'Flow behavior'], ['允许继续', 'Conducting'], ['停止', 'Blocking'], ['不参与', 'Not involved'],
   ['状态 key 不能为空，且同一设备内不能重复', 'State key is required and must be unique per device'],
   ['自定义颜色', 'Custom color'], ['自定义十六进制颜色', 'Custom hexadecimal color'],
   ['自定义透明度', 'Custom opacity'], ['自定义线宽', 'Custom line width'], ['预览', 'Preview'],

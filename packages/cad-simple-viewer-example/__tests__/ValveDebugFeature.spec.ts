@@ -131,4 +131,64 @@ describe('ValveDebugFeature', () => {
     expect(host.querySelector('.valve-debug-tree-label')).toBeNull()
     feature.dispose()
   })
+
+  it('applies a configured flow state without replacing it with the legacy open state', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const requestConfiguredStateChange = jest.fn(() => true)
+    const onStateChanged = jest.fn()
+    const configuredState = {
+      id: 'state-running',
+      key: 'running',
+      displayName: 'Running',
+      color: 0x00ff00,
+      lineWidthPx: 3,
+      opacity: 0.8,
+      enabled: true,
+      autoHighlightFlow: true,
+      flowBehavior: 'conducting' as const,
+      order: 0
+    }
+    const feature = new ValveDebugFeature({
+      panelHost: host,
+      graphDocument: {
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Id: 'V-1', Name: 'Valve' }]
+        }],
+        Map: { Graph: { Vertices: [1], Edges: [] } }
+      },
+      getView: () => ({
+        canvas,
+        width: 100,
+        height: 100,
+        viewportToCanvas: point => point,
+        pick: () => [{ id: 'V1' }],
+        screenToWorld: point => point,
+        zoomTo: () => undefined,
+        isDirty: false
+      }),
+      resolveObjectId: key => key,
+      resolveHandleKeys: () => ['1'],
+      createOverlay: () => null,
+      getLabels: locale => defaultValveDebugLabels(locale),
+      getLocale: () => 'en',
+      getConfiguredStates: () => [configuredState],
+      requestConfiguredStateChange,
+      onStateChanged
+    })
+
+    feature.attach()
+    canvas.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
+    )
+    document
+      .querySelector<HTMLButtonElement>('[data-configured-state-id="state-running"]')!
+      .click()
+
+    expect(requestConfiguredStateChange).toHaveBeenCalledWith('1', configuredState)
+    expect(onStateChanged).not.toHaveBeenCalled()
+    feature.dispose()
+  })
 })

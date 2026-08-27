@@ -25,6 +25,8 @@ export interface PersistedPresentationProfile {
     color: string
     lineWidthPx: number
     opacity: number
+    autoHighlightFlow: boolean
+    flowBehavior: 'conducting' | 'blocking' | 'neutral'
   }>
   utilities: Array<{
     id: string
@@ -46,7 +48,9 @@ export const toPersistedPresentationProfile = (
       displayName: state.displayName,
       color: toHexColor(state.color),
       lineWidthPx: state.lineWidthPx,
-      opacity: state.opacity
+      opacity: state.opacity,
+      autoHighlightFlow: state.autoHighlightFlow,
+      flowBehavior: state.flowBehavior
     }))
   ),
   utilities: profile.utilities.map(utility => ({

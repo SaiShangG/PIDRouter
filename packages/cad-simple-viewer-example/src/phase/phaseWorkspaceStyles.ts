@@ -135,6 +135,8 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .highlight-style-controls input[type='checkbox'], .phase-workspace .highlight-checkbox input[type='checkbox'], .phase-workspace-modal .highlight-style-controls input[type='checkbox'], .phase-workspace-modal .highlight-checkbox input[type='checkbox'] { width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
     .highlight-checkbox { display: inline-flex; align-items: center; gap: 6px; color: #53676e; font-size: 11px; font-weight: 650; }
     .highlight-device-row { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(120px, 1fr) minmax(0, 2fr) 28px; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #e1e7e8; }
+    .highlight-device-row > .highlight-checkbox { grid-column: 1 / 3; }
+    .highlight-device-row > .highlight-style-field:last-child { grid-column: 3 / 4; }
     .highlight-device-row > .phase-icon-button { justify-self: center; align-self: center; }
     .highlight-device-row strong { color: #075d43; font-size: 10px; }
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }

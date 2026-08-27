@@ -434,10 +434,12 @@ export class ValveDebugFeature {
           this.closeMenu()
           if (confirmation instanceof Promise) {
             void confirmation.then(confirmed => {
-              if (confirmed && !this.disposed) this.options.onStateChanged?.(handleKey, 'open')
+              if (confirmed && !this.disposed) {
+                this.setConfiguredValveState(handleKey, candidate)
+              }
             })
           } else if (confirmation !== false) {
-            this.options.onStateChanged?.(handleKey, 'open')
+            this.setConfiguredValveState(handleKey, candidate)
           }
         })
         action.textContent = candidate.displayName
@@ -447,6 +449,18 @@ export class ValveDebugFeature {
         this.menuActions.append(action)
         return action
       })
+  }
+
+  private setConfiguredValveState(
+    handleKey: string,
+    state: DeviceStateStyleDefinition
+  ) {
+    this.states.set(
+      handleKey,
+      state.flowBehavior === 'blocking' ? 'closed' : 'open'
+    )
+    this.activeKey = handleKey
+    this.recomputeResults()
   }
 
   private recomputeResults() {

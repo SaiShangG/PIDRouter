@@ -127,9 +127,25 @@ describe('HighlightStyleDialog', () => {
       )
     ).not.toBeNull()
 
+    const autoHighlightFlow = dialog.element.querySelector<HTMLInputElement>(
+      '[aria-label="自动高亮流路"]'
+    )!
+    const flowBehavior = dialog.element.querySelector<HTMLSelectElement>(
+      '[aria-label="流路行为"]'
+    )!
+    expect(autoHighlightFlow.checked).toBe(false)
+    expect(flowBehavior.value).toBe('neutral')
+    autoHighlightFlow.click()
+    flowBehavior.value = 'conducting'
+    flowBehavior.dispatchEvent(new Event('change'))
+
       ;[...dialog.element.querySelectorAll('button')]
         .find(button => button.textContent === '应用')!
         .click()
     expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(1)
+    expect(dialog.element.querySelector<HTMLInputElement>(
+      '[aria-label="自动高亮流路"]'
+    )?.checked).toBe(true)
+    expect(flowBehavior.value).toBe('conducting')
   })
 })
