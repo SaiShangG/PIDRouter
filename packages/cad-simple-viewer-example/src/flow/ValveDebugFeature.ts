@@ -63,20 +63,29 @@ const injectMenuStyles = () => {
     .valve-debug-context-menu {
       position: fixed;
       z-index: 1200;
-      min-width: 184px;
-      padding: 7px;
-      border: 1px solid #49686f;
+      width: min(232px, calc(100vw - 24px));
+      box-sizing: border-box;
+      overflow: hidden;
+      padding: 0;
+      border: 1px solid #36575e;
+      border-top: 2px solid #28d79a;
       border-radius: 6px;
-      background: #123038;
-      color: #edf7f5;
-      box-shadow: 0 12px 32px rgba(3, 18, 23, .35);
+      background: #10292d;
+      color: #f3f8f7;
+      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .45), 0 2px 8px rgba(0, 0, 0, .3);
     }
     .valve-debug-context-menu[hidden] { display: none; }
     .valve-debug-context-menu-title {
-      padding: 5px 7px 7px;
-      border-bottom: 1px solid #35545b;
-      color: #a8c4c5;
-      font: 11px/1.3 "IBM Plex Mono", monospace;
+      display: flex;
+      min-height: 34px;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid #315057;
+      color: #c7d7d5;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.3;
       overflow-wrap: anywhere;
     }
     .valve-debug-context-menu-actions {
@@ -95,7 +104,9 @@ const injectMenuStyles = () => {
       border-radius: 4px;
       background: #17604d;
       color: #fff;
-      font: 600 12px/1.2 inherit;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
       text-align: left;
       cursor: pointer;
     }
@@ -112,93 +123,176 @@ const injectMenuStyles = () => {
     .valve-debug-context-menu-form {
       display: grid;
       gap: 0;
-      margin-top: 8px;
+      padding: 9px;
     }
     .valve-debug-context-menu-field {
+      position: relative;
       display: grid;
-      grid-template-columns: 14px minmax(0, 1fr);
-      gap: 7px;
+      grid-template-columns: minmax(0, 1fr) 10px;
+      column-gap: 8px;
+      row-gap: 5px;
       align-items: center;
-      padding: 10px 6px;
-      border-top: 1px solid #35545b;
-      color: #a8c4c5;
-      font: 11px/1.3 inherit;
+      margin-top: 8px;
+      padding: 8px 0 0;
+      border-top: 1px solid #315057;
+      color: #dce9e7;
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+    .valve-debug-context-menu-field::after {
+      position: absolute;
+      right: 12px;
+      bottom: 13px;
+      width: 7px;
+      height: 7px;
+      border-right: 1.5px solid #b8cbca;
+      border-bottom: 1.5px solid #b8cbca;
+      content: "";
+      pointer-events: none;
+      transform: translateY(50%) rotate(45deg);
     }
     .valve-debug-context-menu-state-section {
-      padding: 2px 6px 10px;
+      padding: 0;
     }
     .valve-debug-context-menu-section-title {
       display: grid;
-      grid-template-columns: 18px minmax(0, 1fr);
-      gap: 7px;
+      grid-template-columns: minmax(0, 1fr) 10px;
+      gap: 8px;
       align-items: center;
-      margin-bottom: 6px;
-      color: #a8c4c5;
-      font: 11px/1.3 inherit;
+      margin-bottom: 5px;
+      color: #dce9e7;
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+    .valve-debug-context-menu-section-title > :last-child,
+    .valve-debug-context-menu-field > :nth-child(2) {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .valve-debug-context-menu-section-title > .valve-debug-context-menu-swatch,
+    .valve-debug-context-menu-field > .valve-debug-context-menu-swatch {
+      grid-column: 2;
+      grid-row: 1;
     }
     .valve-debug-context-menu-state-options {
       display: grid;
-      gap: 2px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
       max-height: 168px;
       overflow-y: auto;
     }
     .valve-debug-context-menu-state-option {
       display: grid;
-      grid-template-columns: 16px minmax(0, 1fr);
+      grid-template-columns: 13px minmax(0, 1fr);
       gap: 8px;
       align-items: center;
       min-height: 30px;
+      box-sizing: border-box;
+      justify-content: center;
       padding: 0 6px;
+      border: 1px solid transparent;
       border-radius: 4px;
-      color: #edf7f5;
-      font: 12px/1.3 inherit;
+      color: #c7d6d5;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.3;
       cursor: pointer;
+      transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
     }
     .valve-debug-context-menu-state-option:hover {
-      background: rgba(168, 230, 209, .08);
+      border-color: #45666c;
+      background: rgba(255, 255, 255, .025);
     }
     .valve-debug-context-menu-state-option:has(input:checked) {
-      background: rgba(40, 180, 135, .18);
+      border-color: rgba(40, 215, 154, .32);
+      color: #f3f8f7;
+      background: rgba(40, 215, 154, .12);
     }
     .valve-debug-context-menu-state-option:focus-within {
-      outline: 1px solid #a8e6d1;
-      outline-offset: -1px;
+      outline: none;
     }
     .valve-debug-context-menu-state-option input {
-      width: 14px;
-      height: 14px;
+      appearance: none;
+      width: 13px;
+      height: 13px;
       margin: 0;
-      accent-color: #28b487;
+      border: 1px solid #6f888b;
+      border-radius: 50%;
+      background: #0b1d20;
+      box-shadow: inset 0 0 0 3px #0b1d20;
+    }
+    .valve-debug-context-menu-state-option input:checked {
+      border-color: #28d79a;
+      background: #28d79a;
+    }
+    .valve-debug-context-menu-state-option input:focus-visible {
+      outline: 2px solid #71e3bc;
+      outline-offset: 3px;
     }
     .valve-debug-context-menu-field select {
       grid-column: 1 / 3;
+      grid-row: 2;
       width: 100%;
       min-width: 0;
-      padding: 6px 7px;
-      border: 1px solid #49686f;
+      height: 32px;
+      appearance: none;
+      padding: 0 36px 0 9px;
+      border: 1px solid #45666c;
       border-radius: 4px;
-      background: #0c242a;
-      color: #edf7f5;
-      font: 12px/1.3 inherit;
+      outline: none;
+      background: #0c2024;
+      color: #f3f8f7;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.3;
+      cursor: pointer;
+    }
+    .valve-debug-context-menu-field select:hover {
+      border-color: #638188;
+    }
+    .valve-debug-context-menu-field select:focus-visible {
+      border-color: #71e3bc;
+      box-shadow: 0 0 0 2px rgba(113, 227, 188, .16);
     }
     .valve-debug-context-menu-swatch {
-      width: 12px;
-      height: 12px;
-      border: 1px solid rgba(255, 255, 255, .55);
+      width: 10px;
+      height: 10px;
+      box-sizing: border-box;
+      border: 1px solid rgba(255, 255, 255, .42);
       border-radius: 2px;
       background: var(--valve-menu-swatch, transparent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--valve-menu-swatch) 18%, transparent);
     }
     .valve-debug-context-menu-state-swatch {
-      width: 16px;
-      height: 8px;
-      border-radius: 1px;
+      width: 10px;
+      height: 10px;
     }
     .valve-debug-context-menu-form > .valve-debug-context-menu-action {
-      margin-top: 10px;
+      min-height: 32px;
+      margin-top: 9px;
+      padding: 0 8px;
+      border-color: #52e0ad;
+      background: #28d79a;
+      color: #06251a;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .valve-debug-context-menu-form > .valve-debug-context-menu-action:hover,
+    .valve-debug-context-menu-form > .valve-debug-context-menu-action:focus-visible {
+      border-color: #52e0ad;
+      background: #4ce1ad;
+    }
+    .valve-debug-context-menu-form > .valve-debug-context-menu-action:active {
+      transform: translateY(1px);
     }
     .valve-debug-context-menu-empty {
       color: #f4c873;
-      font: 11px/1.35 inherit;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.35;
     }
   `
   document.head.appendChild(style)
