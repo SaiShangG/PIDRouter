@@ -186,6 +186,23 @@ describe('ProcessAssistant endpoint services', () => {
     ])
   })
 
+  it('saves a Phase through the POST save endpoint', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(null, { status: 204 })
+    ) as jest.MockedFunction<typeof fetch>
+    const phase = { id: 20, name: 'Transfer', operationId: 9 }
+
+    await new ProcessAssistantPhaseApi(createClient(fetchMock)).update(20, phase)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.example.test/api/v1/Phase/save/20',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(phase)
+      })
+    )
+  })
+
   it('implements the complete Project endpoint contract', async () => {
     const fetchMock = jest
       .fn()

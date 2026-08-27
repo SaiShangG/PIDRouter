@@ -21,7 +21,7 @@ export class ProcessAssistantPhaseApi {
   }
 
   update(id: number, phase: PhaseDto, signal?: AbortSignal): Promise<void> {
-    return this.client.request('PUT', `/api/v1/Phase/${id}`, {
+    return this.client.request('POST', `/api/v1/Phase/save/${id}`, {
       body: phase,
       signal
     })
