@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
-import type { AcDbObjectId } from '@mlightcad/data-model'
 import type { AcEdBaseView } from '@mlightcad/cad-simple-viewer'
+import type { AcDbObjectId } from '@mlightcad/data-model'
 
 import {
   BrushHighlightFeature,

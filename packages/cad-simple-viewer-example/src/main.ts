@@ -1678,29 +1678,15 @@ class CadViewerApp {
   private setupBrushHighlightFeature() {
     this.brushHighlightFeature = new BrushHighlightFeature({
       getView: () => AcApDocManager.instance.curView,
-      getHighlightStyle: objectId => {
+      getHighlightStyle: (objectId, fallbackStyle) => {
         const primaryValveHandle = objectId
           ? this.getPrimaryFlowHandleForObject(objectId)
           : undefined
         if (primaryValveHandle) {
-          return resolveEntityPresentation(this.getActivePresentationProfile(), {
-            deviceState: {
-              key: primaryValveHandle,
-              label: this.valveDebugFeature?.graph.nodes.get(primaryValveHandle)?.label ?? primaryValveHandle,
-              mode: 'open'
-            }
-          })
+          return this.resolveBrushDeviceHighlightStyle() ?? fallbackStyle ??
+            this.resolveBrushFlowHighlightStyle()
         }
-        const deviceState = objectId
-          ? this.valveDeviceStates.get(objectId)
-          : undefined
-        if (deviceState) {
-          return resolveEntityPresentation(
-            this.getActivePresentationProfile(),
-            { deviceState }
-          )
-        }
-        return this.resolveBrushHighlightStyle()
+        return fallbackStyle ?? this.resolveBrushFlowHighlightStyle()
       },
       createOverlay: (objectIds, style) =>
         this.createBrushHighlightOverlay(objectIds, style),
@@ -1756,17 +1742,33 @@ class CadViewerApp {
           return {
             kind: 'device-state',
             deviceId: stored.deviceId,
-            stateId: stored.stateId
+            stateId: stored.stateId,
+            utilityId: profile.utilities
+              .filter(utility => utility.enabled)
+              .sort((left, right) => left.order - right.order)[0]?.id
           }
         }
       }
       if (stored?.kind === 'utility' && 'utilityId' in stored) {
+        const firstDevice = profile.devices
+          .filter(device => device.states.some(state => state.enabled))
+          .sort((left, right) => left.order - right.order)[0]
         return {
           kind: 'utility',
           utilityId:
             typeof stored.utilityId === 'string'
               ? stored.utilityId
-              : undefined
+              : undefined,
+          deviceId:
+            typeof stored.deviceId === 'string'
+              ? stored.deviceId
+              : firstDevice?.id,
+          stateId:
+            typeof stored.stateId === 'string'
+              ? stored.stateId
+              : firstDevice?.states
+                .filter(state => state.enabled)
+                .sort((left, right) => left.order - right.order)[0]?.id
         }
       }
     } catch {
@@ -1789,21 +1791,10 @@ class CadViewerApp {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`
   }
 
-  private resolveBrushHighlightStyle() {
+  private resolveBrushFlowHighlightStyle() {
     const profile = this.getActivePresentationProfile()
     const selection =
       this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
-    if (selection.kind === 'device-state') {
-      const style = resolveDevicePresetStyle(
-        profile,
-        selection.deviceId,
-        selection.stateId
-      )
-      if (!style) return resolveEntityPresentation(profile, {})
-      return resolveEntityPresentation(profile, {
-        diagnosticStyle: style
-      })
-    }
     const flowPath: FlowPathStatus = {
       id: 'brush-current',
       name: 'Brush',
@@ -1814,6 +1805,20 @@ class CadViewerApp {
       }
     }
     return resolveEntityPresentation(profile, { flowPath })
+  }
+
+  private resolveBrushDeviceHighlightStyle() {
+    const profile = this.getActivePresentationProfile()
+    const selection =
+      this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
+    const style = resolveDevicePresetStyle(
+      profile,
+      selection.deviceId ?? '',
+      selection.stateId ?? ''
+    )
+    return style
+      ? resolveEntityPresentation(profile, { diagnosticStyle: style })
+      : undefined
   }
 
   private handleBrushEntitiesChanged(
@@ -3631,13 +3636,8 @@ class CadViewerApp {
     if (this.manualHighlightedIds.has(objectId)) {
       const primaryValveHandle = this.getPrimaryFlowHandleForObject(objectId)
       if (primaryValveHandle) {
-        const style = resolveEntityPresentation(profile, {
-          deviceState: {
-            key: primaryValveHandle,
-            label: this.valveDebugFeature?.graph.nodes.get(primaryValveHandle)?.label ?? primaryValveHandle,
-            mode: 'open'
-          }
-        })
+        const style = this.resolveBrushDeviceHighlightStyle() ??
+          this.resolveBrushFlowHighlightStyle()
         return [{
           id: `manual:valve:${objectId}`,
           renderOrder: 20000,
@@ -3647,7 +3647,7 @@ class CadViewerApp {
       return [{
         id: `manual:brush:${objectId}`,
         renderOrder: 20000,
-        style: this.resolveBrushHighlightStyle()
+        style: this.resolveBrushFlowHighlightStyle()
       }]
     }
     const deviceState = this.valveDeviceStates.get(objectId)

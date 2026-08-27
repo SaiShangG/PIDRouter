@@ -28,9 +28,12 @@ export const resolveDevicePresetStyle = (
   }
 }
 
-export type StyleSourceSelection =
-  | { kind: 'utility'; utilityId?: string }
-  | { kind: 'device-state'; deviceId: string; stateId: string }
+export interface StyleSourceSelection {
+  kind: 'utility' | 'device-state'
+  utilityId?: string
+  deviceId?: string
+  stateId?: string
+}
 
 export interface StyleSourceDialogOptions {
   mode: 'brush' | 'flow'
@@ -87,46 +90,31 @@ export class StyleSourceDialog {
   }
 
   private normalizeSelection() {
-    if (this.selection.kind === 'utility') {
-      const utilityId = this.selection.utilityId
-      const utilityExists = this.availableUtilities().some(
-        utility => utility.id === utilityId
-      )
-      if (!utilityExists) {
-        this.selection = {
-          kind: 'utility',
-          utilityId: this.availableUtilities()[0]?.id
-        }
-      }
-      return
+    const utilityId = this.selection.utilityId
+    if (!this.availableUtilities().some(utility => utility.id === utilityId)) {
+      this.selection.utilityId = this.availableUtilities()[0]?.id
     }
     if (this.options.mode === 'flow') {
-      this.selection = {
-        kind: 'utility',
-        utilityId: this.availableUtilities()[0]?.id
-      }
+      this.selection.kind = 'utility'
+      delete this.selection.deviceId
+      delete this.selection.stateId
       return
     }
-    if (this.selection.kind !== 'device-state') return
-    const selection = this.selection
     const device = this.availableDevices().find(
-      candidate => candidate.id === selection.deviceId
+      candidate => candidate.id === this.selection.deviceId
     )
     const stateExists = device?.states.some(
-      state => state.id === selection.stateId && state.enabled
+      state => state.id === this.selection.stateId && state.enabled
     )
     if (!stateExists) {
       const firstDevice = this.availableDevices()[0]
-      this.selection = firstDevice
-        ? {
-            kind: 'device-state',
-            deviceId: firstDevice.id,
-            stateId: this.availableDeviceStates(firstDevice)[0].id
-          }
-        : {
-            kind: 'utility',
-            utilityId: this.availableUtilities()[0]?.id
-          }
+      this.selection.deviceId = firstDevice?.id
+      this.selection.stateId = firstDevice
+        ? this.availableDeviceStates(firstDevice)[0]?.id
+        : undefined
+      if (!firstDevice && this.selection.kind === 'device-state') {
+        this.selection.kind = 'utility'
+      }
     }
   }
 
@@ -187,17 +175,20 @@ export class StyleSourceDialog {
     const button = this.button(label, () => {
       if (kind === 'utility') {
         this.selection = {
+          ...this.selection,
           kind: 'utility',
-          utilityId: this.availableUtilities()[0]?.id
+          utilityId:
+            this.selection.utilityId ?? this.availableUtilities()[0]?.id
         }
       } else {
         const device = this.availableDevices()[0]
         const state = device && this.availableDeviceStates(device)[0]
         if (!device || !state) return
         this.selection = {
+          ...this.selection,
           kind: 'device-state',
-          deviceId: device.id,
-          stateId: state.id
+          deviceId: this.selection.deviceId ?? device.id,
+          stateId: this.selection.stateId ?? state.id
         }
       }
       this.render()
@@ -221,6 +212,7 @@ export class StyleSourceDialog {
       select.value = this.selection.utilityId ?? ''
       select.addEventListener('change', () => {
         this.selection = {
+          ...this.selection,
           kind: 'utility',
           utilityId: select.value || undefined
         }
@@ -239,12 +231,13 @@ export class StyleSourceDialog {
       this.availableDevices().forEach(device =>
         deviceSelect.add(new Option(device.name, device.id))
       )
-      deviceSelect.value = selection.deviceId
+      deviceSelect.value = selection.deviceId ?? ''
       deviceSelect.addEventListener('change', () => {
         const device = this.availableDevices().find(
           candidate => candidate.id === deviceSelect.value
         )!
         this.selection = {
+          ...this.selection,
           kind: 'device-state',
           deviceId: device.id,
           stateId: this.availableDeviceStates(device)[0].id
@@ -263,9 +256,10 @@ export class StyleSourceDialog {
       this.availableDeviceStates(device).forEach(state =>
         stateSelect.add(new Option(state.displayName, state.id))
       )
-      stateSelect.value = selection.stateId
+      stateSelect.value = selection.stateId ?? ''
       stateSelect.addEventListener('change', () => {
         this.selection = {
+          ...this.selection,
           kind: 'device-state',
           deviceId: device.id,
           stateId: stateSelect.value
@@ -299,8 +293,8 @@ export class StyleSourceDialog {
     if (this.selection.kind === 'device-state') {
       return resolveDevicePresetStyle(
         this.options.profile,
-        this.selection.deviceId,
-        this.selection.stateId
+        this.selection.deviceId ?? '',
+        this.selection.stateId ?? ''
       ) ?? this.options.profile.defaultFlowStyle
     }
     const utilityId = this.selection.utilityId

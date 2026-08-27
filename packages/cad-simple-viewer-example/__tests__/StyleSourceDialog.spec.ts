@@ -92,7 +92,9 @@ describe('StyleSourceDialog', () => {
 
     expect(onApply).toHaveBeenCalledWith({
       kind: 'utility',
-      utilityId: 'water'
+      utilityId: 'water',
+      deviceId: 'valve',
+      stateId: 'valve-open'
     })
   })
 
@@ -174,7 +176,8 @@ describe('StyleSourceDialog', () => {
     expect(onApply).toHaveBeenCalledWith({
       kind: 'device-state',
       deviceId: 'valve',
-      stateId: 'valve-closed'
+      stateId: 'valve-closed',
+      utilityId: 'water'
     })
   })
 
