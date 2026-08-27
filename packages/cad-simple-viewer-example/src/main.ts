@@ -121,7 +121,6 @@ import {
 } from './presentation/HighlightStyleDialog'
 import { PhasePresentationController } from './presentation/PhasePresentationController'
 import {
-  normalizeHighlightStyle,
   type ResolvedEntityPresentation,
   resolveEntityPresentation
 } from './presentation/presentationStyleResolver'
@@ -130,6 +129,7 @@ import {
   resolveFlowHighlightLayers
 } from './presentation/resolveFlowHighlightLayers'
 import {
+  resolveValvePresetStyle,
   StyleSourceDialog,
   type StyleSourceSelection
 } from './presentation/StyleSourceDialog'
@@ -1740,19 +1740,12 @@ class CadViewerApp {
       const stored = JSON.parse(
         localStorage.getItem(BRUSH_STYLE_STORAGE_KEY) ?? 'null'
       ) as Partial<StyleSourceSelection> | null
-      if (stored?.kind === 'custom' && 'style' in stored && stored.style) {
-        return {
-          kind: 'custom',
-          style: normalizeHighlightStyle(stored.style)
-        }
-      }
       if (
         stored?.kind === 'valve-state' &&
         'state' in stored &&
         (stored.state === 'open' ||
           stored.state === 'closed' ||
-          stored.state === 'pulse') &&
-        profile.deviceStyles.valve[stored.state]
+          stored.state === 'pulse')
       ) {
         return { kind: 'valve-state', state: stored.state }
       }
@@ -1769,8 +1762,10 @@ class CadViewerApp {
       localStorage.removeItem(BRUSH_STYLE_STORAGE_KEY)
     }
     return {
-      kind: 'custom',
-      style: { ...CONNECTED_FLOW_STYLE }
+      kind: 'utility',
+      utilityId: profile.utilities
+        .filter(utility => utility.enabled)
+        .sort((left, right) => left.order - right.order)[0]?.id
     }
   }
 
@@ -1789,24 +1784,17 @@ class CadViewerApp {
       this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
     if (selection.kind === 'valve-state') {
       return resolveEntityPresentation(profile, {
-        deviceState: {
-          key: `brush-valve-${selection.state}`,
-          label: 'Brush',
-          mode: selection.state
-        }
+        diagnosticStyle: resolveValvePresetStyle(profile, selection.state)
       })
     }
     const flowPath: FlowPathStatus = {
       id: 'brush-current',
       name: 'Brush',
       handleKeys: [],
-      styleSource:
-        selection.kind === 'custom'
-          ? { kind: 'custom', style: { ...selection.style } }
-          : {
-            kind: 'utility',
-            utilityId: selection.utilityId
-          }
+      styleSource: {
+        kind: 'utility',
+        utilityId: selection.utilityId
+      }
     }
     return resolveEntityPresentation(profile, { flowPath })
   }

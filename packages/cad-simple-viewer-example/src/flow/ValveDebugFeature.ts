@@ -111,16 +111,64 @@ const injectMenuStyles = () => {
     }
     .valve-debug-context-menu-form {
       display: grid;
-      gap: 8px;
+      gap: 0;
       margin-top: 8px;
     }
     .valve-debug-context-menu-field {
       display: grid;
       grid-template-columns: 14px minmax(0, 1fr);
-      gap: 4px 7px;
+      gap: 7px;
       align-items: center;
+      padding: 10px 6px;
+      border-top: 1px solid #35545b;
       color: #a8c4c5;
       font: 11px/1.3 inherit;
+    }
+    .valve-debug-context-menu-state-section {
+      padding: 2px 6px 10px;
+    }
+    .valve-debug-context-menu-section-title {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 7px;
+      align-items: center;
+      margin-bottom: 6px;
+      color: #a8c4c5;
+      font: 11px/1.3 inherit;
+    }
+    .valve-debug-context-menu-state-options {
+      display: grid;
+      gap: 2px;
+      max-height: 168px;
+      overflow-y: auto;
+    }
+    .valve-debug-context-menu-state-option {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 6px;
+      border-radius: 4px;
+      color: #edf7f5;
+      font: 12px/1.3 inherit;
+      cursor: pointer;
+    }
+    .valve-debug-context-menu-state-option:hover {
+      background: rgba(168, 230, 209, .08);
+    }
+    .valve-debug-context-menu-state-option:has(input:checked) {
+      background: rgba(40, 180, 135, .18);
+    }
+    .valve-debug-context-menu-state-option:focus-within {
+      outline: 1px solid #a8e6d1;
+      outline-offset: -1px;
+    }
+    .valve-debug-context-menu-state-option input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: #28b487;
     }
     .valve-debug-context-menu-field select {
       grid-column: 1 / 3;
@@ -139,6 +187,14 @@ const injectMenuStyles = () => {
       border: 1px solid rgba(255, 255, 255, .55);
       border-radius: 2px;
       background: var(--valve-menu-swatch, transparent);
+    }
+    .valve-debug-context-menu-state-swatch {
+      width: 16px;
+      height: 8px;
+      border-radius: 1px;
+    }
+    .valve-debug-context-menu-form > .valve-debug-context-menu-action {
+      margin-top: 10px;
     }
     .valve-debug-context-menu-empty {
       color: #f4c873;
@@ -210,9 +266,10 @@ export class ValveDebugFeature {
   private readonly openMenuAction: HTMLButtonElement
   private readonly closeMenuAction: HTMLButtonElement
   private readonly configuredForm: HTMLDivElement
-  private readonly stateLabel: HTMLLabelElement
+  private readonly stateSection: HTMLDivElement
+  private readonly stateTitle: HTMLDivElement
   private readonly stateSwatch: HTMLSpanElement
-  private readonly stateSelect: HTMLSelectElement
+  private readonly stateOptions: HTMLDivElement
   private readonly utilityLabel: HTMLLabelElement
   private readonly utilitySwatch: HTMLSpanElement
   private readonly utilitySelect: HTMLSelectElement
@@ -253,14 +310,17 @@ export class ValveDebugFeature {
     })
     this.configuredForm = document.createElement('div')
     this.configuredForm.className = 'valve-debug-context-menu-form'
-    this.stateLabel = document.createElement('label')
-    this.stateLabel.className = 'valve-debug-context-menu-field'
+    this.stateSection = document.createElement('div')
+    this.stateSection.className = 'valve-debug-context-menu-state-section'
+    this.stateTitle = document.createElement('div')
+    this.stateTitle.className = 'valve-debug-context-menu-section-title'
     this.stateSwatch = document.createElement('span')
-    this.stateSwatch.className = 'valve-debug-context-menu-swatch'
-    this.stateSelect = document.createElement('select')
-    this.stateSelect.dataset.valveStateSelect = 'true'
-    this.stateSelect.addEventListener('change', () => this.updateConfiguredPreview())
-    this.stateLabel.append(this.stateSwatch, document.createElement('span'), this.stateSelect)
+    this.stateSwatch.className = 'valve-debug-context-menu-swatch valve-debug-context-menu-state-swatch'
+    this.stateTitle.append(this.stateSwatch, document.createElement('span'))
+    this.stateOptions = document.createElement('div')
+    this.stateOptions.className = 'valve-debug-context-menu-state-options'
+    this.stateOptions.dataset.valveStateOptions = 'true'
+    this.stateSection.append(this.stateTitle, this.stateOptions)
     this.utilityLabel = document.createElement('label')
     this.utilityLabel.className = 'valve-debug-context-menu-field'
     this.utilitySwatch = document.createElement('span')
@@ -274,7 +334,7 @@ export class ValveDebugFeature {
     this.applyMenuAction = this.createMenuAction('open', () => this.applyConfiguredSelection())
     this.applyMenuAction.dataset.valveAction = 'apply-configured'
     this.configuredForm.append(
-      this.stateLabel,
+      this.stateSection,
       this.utilityLabel,
       this.utilityEmpty,
       this.applyMenuAction
@@ -513,18 +573,28 @@ export class ValveDebugFeature {
     if (!hasConfiguredStates) return
 
     const locale = this.options.getLocale()
-    this.stateLabel.children[1].textContent = locale === 'zh' ? '阀门状态' : 'Valve state'
+    this.stateTitle.children[1].textContent = locale === 'zh' ? '阀门状态' : 'Valve state'
     this.utilityLabel.children[1].textContent = locale === 'zh' ? '联通流路样式' : 'Connected flow style'
     this.applyMenuAction.textContent = locale === 'zh' ? '应用' : 'Apply'
     this.utilityEmpty.textContent = locale === 'zh'
       ? '没有已启用的 Utility；状态仍可应用，但不会创建流路高亮。'
       : 'No enabled Utility. The state can be applied without a flow highlight.'
-    this.stateSelect.replaceChildren(...configuredStates.map(candidate =>
-      new Option(candidate.displayName, candidate.id)
-    ))
     const currentStateKey = this.options.getConfiguredStateKey?.(key)
     const currentState = configuredStates.find(candidate => candidate.key === currentStateKey)
-    if (currentState) this.stateSelect.value = currentState.id
+    const selectedStateId = currentState?.id ?? configuredStates[0].id
+    this.stateOptions.replaceChildren(...configuredStates.map(candidate => {
+      const label = document.createElement('label')
+      label.className = 'valve-debug-context-menu-state-option'
+      const input = document.createElement('input')
+      input.type = 'radio'
+      input.name = 'valve-configured-state'
+      input.value = candidate.id
+      input.checked = candidate.id === selectedStateId
+      input.dataset.valveStateRadio = 'true'
+      input.addEventListener('change', () => this.updateConfiguredPreview())
+      label.append(input, document.createTextNode(candidate.displayName))
+      return label
+    }))
     this.utilitySelect.replaceChildren(...utilities.map(utility =>
       new Option(utility.name, utility.id)
     ))
@@ -536,9 +606,10 @@ export class ValveDebugFeature {
 
   private updateConfiguredPreview() {
     const handleKey = this.applyMenuAction.dataset.handleKey
+    const stateId = this.selectedConfiguredStateId()
     const state = handleKey
       ? this.options.getConfiguredStates?.(handleKey).find(
-        candidate => candidate.id === this.stateSelect.value
+        candidate => candidate.id === stateId
       )
       : undefined
     const utility = this.options.getUtilities?.().find(
@@ -556,9 +627,10 @@ export class ValveDebugFeature {
 
   private applyConfiguredSelection() {
     const handleKey = this.applyMenuAction.dataset.handleKey
+    const stateId = this.selectedConfiguredStateId()
     const configuredState = handleKey
       ? this.options.getConfiguredStates?.(handleKey).find(
-        candidate => candidate.id === this.stateSelect.value
+        candidate => candidate.id === stateId
       )
       : undefined
     if (!handleKey || !configuredState) return
@@ -578,6 +650,12 @@ export class ValveDebugFeature {
     } else if (confirmation !== false) {
       this.setConfiguredValveState(handleKey, configuredState)
     }
+  }
+
+  private selectedConfiguredStateId(): string | undefined {
+    return this.stateOptions.querySelector<HTMLInputElement>(
+      'input[type="radio"]:checked'
+    )?.value
   }
 
   private setConfiguredValveState(

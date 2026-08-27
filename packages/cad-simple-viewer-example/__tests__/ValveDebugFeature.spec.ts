@@ -150,6 +150,14 @@ describe('ValveDebugFeature', () => {
       flowBehavior: 'conducting' as const,
       order: 0
     }
+    const alternateState = {
+      ...configuredState,
+      id: 'state-idle',
+      key: 'idle',
+      displayName: 'Idle',
+      color: 0xffcc00,
+      order: 1
+    }
     const feature = new ValveDebugFeature({
       panelHost: host,
       graphDocument: {
@@ -174,7 +182,7 @@ describe('ValveDebugFeature', () => {
       createOverlay: () => null,
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => 'en',
-      getConfiguredStates: () => [configuredState],
+      getConfiguredStates: () => [configuredState, alternateState],
       getUtilities: () => [
         {
           id: 'disabled-first',
@@ -199,13 +207,18 @@ describe('ValveDebugFeature', () => {
     canvas.dispatchEvent(
       new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
     )
-    const stateSelect = document.querySelector<HTMLSelectElement>(
-      '[data-valve-state-select="true"]'
-    )!
+    const stateRadios = document.querySelectorAll<HTMLInputElement>(
+      '[data-valve-state-radio="true"]'
+    )
     const utilitySelect = document.querySelector<HTMLSelectElement>(
       '[data-valve-utility-select="true"]'
     )!
-    expect(stateSelect.selectedOptions[0]?.textContent).toBe('Running')
+    expect(stateRadios).toHaveLength(2)
+    expect(stateRadios[0].checked).toBe(true)
+    expect(stateRadios[0].parentElement?.textContent).toContain('Running')
+    stateRadios[1].click()
+    expect(stateRadios[0].checked).toBe(false)
+    expect(stateRadios[1].checked).toBe(true)
     expect(utilitySelect.options).toHaveLength(1)
     expect(utilitySelect.value).toBe('process-water')
     document
@@ -214,7 +227,7 @@ describe('ValveDebugFeature', () => {
 
     expect(requestConfiguredStateChange).toHaveBeenCalledWith(
       '1',
-      configuredState,
+      alternateState,
       'process-water'
     )
     expect(onStateChanged).not.toHaveBeenCalled()
