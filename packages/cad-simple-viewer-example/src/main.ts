@@ -1418,11 +1418,13 @@ class CadViewerApp {
     const token = ++this.projectLoadToken
     this.cancelAllBackendPhaseSaves()
     this.invalidateLoadedPhaseBinding()
+    const projectDetails = await this.projectRepository.get(project.id)
+    if (token !== this.projectLoadToken) return
     const config = getProcessAssistantConfig()
     const repository = new PhaseWorkspaceRepository({
       baseUrl: config.baseUrl,
-      projectId: project.id,
-      projectConfigure: project.configure,
+      projectId: projectDetails.id,
+      projectConfigure: projectDetails.configure,
       files: this.processAssistantFileApi,
       procedures: this.processAssistantProcedureApi,
       operations: this.processAssistantOperationApi,
@@ -1432,10 +1434,10 @@ class CadViewerApp {
     if (token !== this.projectLoadToken) return
     this.phaseRepository = repository
     this.phaseStore = new PhaseWorkspaceStore(workspace)
-    this.activeProject = project
-    this.activeProjectId = project.id
-    localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(project.id))
-    this.projectManagementButton.title = project.name
+    this.activeProject = projectDetails
+    this.activeProjectId = projectDetails.id
+    localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(projectDetails.id))
+    this.projectManagementButton.title = projectDetails.name
     this.phasePanel?.render()
     this.syncPhaseContextBar()
     if (restorePhase && this.isInitialized) {
