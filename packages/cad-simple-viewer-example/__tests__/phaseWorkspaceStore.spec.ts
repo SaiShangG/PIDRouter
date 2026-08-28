@@ -139,7 +139,8 @@ describe('PhaseWorkspaceStore', () => {
     const sequence = process.sequences[0]
 
     expect(snapshot.version).toBe(4)
-    expect(process.presentationProfile.defaultFlowStyle.color).toBe(0x00c853)
+    expect(snapshot.presentationProfile.defaultFlowStyle.color).toBe(0x00c853)
+    expect(process).not.toHaveProperty('presentationProfile')
     expect(process.activeSequenceId).toBe('sequence-default-process-1')
     expect(sequence.id).toBe('sequence-default-process-1')
     expect(sequence.activePhaseId).toBe(legacyPhase.id)
@@ -464,7 +465,7 @@ describe('PhaseWorkspaceStore', () => {
 
     const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
     expect(snapshot.version).toBe(4)
-    expect(snapshot.processes[0].presentationProfile.defaultFlowStyle).toEqual({
+    expect(snapshot.presentationProfile.defaultFlowStyle).toEqual({
       color: 0x00c853,
       lineWidthPx: 3,
       opacity: 1,
@@ -484,33 +485,33 @@ describe('PhaseWorkspaceStore', () => {
     const utilityId = '0a4e2606-bb00-479d-bb6d-22c2a8607189'
     const state = {
       version: 4,
+      presentationProfile: {
+        deviceStyles: [{
+          id: deviceStyleId,
+          deviceType: 'Valve',
+          deviceState: 'state-1',
+          displayName: '状态 1',
+          color: '#00C853',
+          lineWidthPx: 3,
+          opacity: 1
+        }],
+        utilities: [{
+          id: utilityId,
+          name: 'Water',
+          style: {
+            color: 0x123456,
+            lineWidthPx: 5,
+            opacity: 0.6,
+            visible: true
+          },
+          color: '#00C853',
+          lineWidthPx: 3,
+          opacity: 1
+        }]
+      },
       processes: [{
         id: 'process-1',
         name: 'CIP',
-        presentationProfile: {
-          deviceStyles: [{
-            id: deviceStyleId,
-            deviceType: 'Valve',
-            deviceState: 'state-1',
-            displayName: '状态 1',
-            color: '#00C853',
-            lineWidthPx: 3,
-            opacity: 1
-          }],
-          utilities: [{
-            id: utilityId,
-            name: 'Water',
-            style: {
-              color: 0x123456,
-              lineWidthPx: 5,
-              opacity: 0.6,
-              visible: true
-            },
-            color: '#00C853',
-            lineWidthPx: 3,
-            opacity: 1
-          }]
-        },
         sequences: [],
         createdAt: '2026-08-27T00:00:00.000Z',
         updatedAt: '2026-08-27T00:00:00.000Z'
@@ -519,7 +520,7 @@ describe('PhaseWorkspaceStore', () => {
     } as unknown as PhaseWorkspaceState
 
     const profile = new PhaseWorkspaceStore(state)
-      .snapshot().processes[0].presentationProfile
+      .snapshot().presentationProfile
 
     expect(profile.devices[0].states[0].id).toBe(deviceStyleId)
     expect(profile.devices[0].states[0].key).toBe('state-1')
@@ -557,8 +558,8 @@ describe('PhaseWorkspaceStore', () => {
       }
     })
 
-    store.updatePresentationProfile(process.id, {
-      ...process.presentationProfile,
+    store.updatePresentationProfile({
+      ...store.snapshot().presentationProfile,
       utilities: []
     })
 
@@ -569,6 +570,50 @@ describe('PhaseWorkspaceStore', () => {
       kind: 'utility',
       utilityId: 'removed-utility'
     })
+  })
+
+  it('keeps project presentation styles when phase runtime state changes', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Rinse',
+      source: { kind: 'unassigned' }
+    })
+    const profile = {
+      ...store.snapshot().presentationProfile,
+      defaultFlowStyle: {
+        ...store.snapshot().presentationProfile.defaultFlowStyle,
+        color: 0xff0000,
+        lineWidthPx: 7
+      }
+    }
+
+    store.updatePresentationProfile(profile)
+    store.updatePhaseState(process.id, sequence.id, phase.id, {
+      flowState: {
+        flowPaths: [],
+        deviceStates: {
+          '1A': {
+            key: '1A',
+            label: 'Valve open',
+            mode: 'open',
+            stateKey: 'open',
+            deviceDefinitionId: 'valve',
+            highlightStyleRefId: 'valve-open'
+          }
+        }
+      }
+    })
+
+    const snapshot = store.snapshot()
+    expect(snapshot.presentationProfile.defaultFlowStyle).toMatchObject({
+      color: 0xff0000,
+      lineWidthPx: 7
+    })
+    expect(snapshot.processes[0]).not.toHaveProperty('presentationProfile')
   })
 
   it('associates and replaces drawings while retaining shared old assets', () => {

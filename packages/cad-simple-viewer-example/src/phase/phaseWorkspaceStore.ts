@@ -151,7 +151,7 @@ interface V2SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
 }
 
 interface V2ProcessDefinition
-  extends Omit<ProcessDefinition, 'sequences' | 'presentationProfile'> {
+  extends Omit<ProcessDefinition, 'sequences'> {
   sequences: V2SequenceDefinition[]
 }
 
@@ -171,7 +171,7 @@ interface V3SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
 }
 
 interface V3ProcessDefinition
-  extends Omit<ProcessDefinition, 'sequences' | 'presentationProfile'> {
+  extends Omit<ProcessDefinition, 'sequences'> {
   sequences: V3SequenceDefinition[]
 }
 
@@ -215,15 +215,18 @@ const cloneSequence = (sequence: SequenceDefinition): SequenceDefinition => ({
 const cloneState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
   ...state,
   presentationProfile: clonePresentationProfile(
-    state.presentationProfile ?? state.processes[0]?.presentationProfile ?? createDefaultPresentationProfile()
+    state.presentationProfile ?? createDefaultPresentationProfile()
   ),
   drawingAssets: Object.fromEntries(
     Object.entries(state.drawingAssets).map(([key, asset]) => [key, { ...asset }])
   ),
   processes: state.processes.map(process => ({
-    ...process,
-    presentationProfile: clonePresentationProfile(process.presentationProfile),
-    sequences: process.sequences.map(cloneSequence)
+    id: process.id,
+    name: process.name,
+    sequences: process.sequences.map(cloneSequence),
+    activeSequenceId: process.activeSequenceId,
+    createdAt: process.createdAt,
+    updatedAt: process.updatedAt
   }))
 })
 
@@ -729,7 +732,6 @@ const migrateLegacyState = (
     return {
       id: process.id,
       name: process.name,
-      presentationProfile: createDefaultPresentationProfile(),
       sequences: [
         {
           id: sequenceId,
@@ -759,7 +761,6 @@ const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => (
   ),
   processes: legacy.processes.map(process => ({
     ...process,
-    presentationProfile: createDefaultPresentationProfile(),
     sequences: process.sequences.map(sequence => ({
       ...sequence,
       phases: sequence.phases.map(phase =>
@@ -778,7 +779,6 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
   ),
   processes: legacy.processes.map(process => ({
     ...process,
-    presentationProfile: createDefaultPresentationProfile(),
     sequences: process.sequences.map(sequence => ({
       ...sequence,
       phases: sequence.phases.map(phase => ({
@@ -806,20 +806,13 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
 })
 
 const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
-  const presentationProfile = normalizeProfile(
-    state.presentationProfile ?? state.processes[0]?.presentationProfile
-  )
+  const presentationProfile = normalizeProfile(state.presentationProfile)
   return {
     ...state,
     version: PHASE_WORKSPACE_SCHEMA_VERSION,
     presentationProfile,
-    processes: state.processes.map(process => {
-      const processPresentationProfile = normalizeProfile(
-        process.presentationProfile
-      )
-    return {
+    processes: state.processes.map(process => ({
       ...process,
-      presentationProfile: processPresentationProfile,
       sequences: process.sequences.map(sequence => ({
         ...sequence,
         phases: sequence.phases.map(phase => ({
@@ -853,8 +846,7 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
           updatedAt: phase.updatedAt
         }))
       }))
-    }
-    })
+    }))
   }
 }
 
@@ -918,7 +910,6 @@ export class PhaseWorkspaceStore {
     const process: ProcessDefinition = {
       id: this.createId(),
       name: normalizedName,
-      presentationProfile: createDefaultPresentationProfile(),
       sequences: [sequence],
       activeSequenceId: sequence.id,
       createdAt: timestamp,
@@ -1166,15 +1157,7 @@ export class PhaseWorkspaceStore {
     phase.updatedAt = this.now()
   }
 
-  updatePresentationProfile(
-    presentationProfileOrProcessId: PresentationProfile | string,
-    legacyPresentationProfile?: PresentationProfile
-  ) {
-    const presentationProfile =
-      typeof presentationProfileOrProcessId === 'string'
-        ? legacyPresentationProfile
-        : presentationProfileOrProcessId
-    if (!presentationProfile) return
+  updatePresentationProfile(presentationProfile: PresentationProfile) {
     const normalized = normalizeProfile(presentationProfile)
     this.state.presentationProfile = normalized
   }

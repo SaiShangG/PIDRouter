@@ -916,11 +916,11 @@ export class PhaseWorkspacePanel {
     )
     const status = document.createElement('div')
     status.className = 'phase-overview-statuses'
-    const process = this.getState().processes.find(item => item.id === processId)!
+    const presentationProfile = this.getState().presentationProfile
     status.append(
       this.createStatusBadge(`${phase.flowState.flowPaths.length} 条流路`),
-      this.createStatusBadge(`${process.presentationProfile.utilities.length} 个 Utility`),
-      this.createStatusBadge(`${process.presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`)
+      this.createStatusBadge(`${presentationProfile.utilities.length} 个 Utility`),
+      this.createStatusBadge(`${presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`)
     )
     this.addDetail(details, '状态', status)
     edit.addEventListener('click', () => {

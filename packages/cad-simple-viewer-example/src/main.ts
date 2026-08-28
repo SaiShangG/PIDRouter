@@ -2513,14 +2513,9 @@ class CadViewerApp {
   }
 
   private replaceBackendWorkspace(workspace: PhaseWorkspaceState) {
-    const presentationProfile = this.phaseStore.snapshot().presentationProfile
     this.phaseStore = new PhaseWorkspaceStore({
       ...workspace,
-      presentationProfile,
-      processes: workspace.processes.map(process => ({
-        ...process,
-        presentationProfile
-      }))
+      presentationProfile: workspace.presentationProfile
     })
   }
 
@@ -3677,24 +3672,18 @@ class CadViewerApp {
     return ids
   }
 
-  private getHighlightStyleDraft(processId: string): HighlightStyleDraft | undefined {
-    const process = this.phaseStore
-      .snapshot()
-      .processes.find(item => item.id === processId)
-    return process
-      ? { presentationProfile: process.presentationProfile }
-      : undefined
+  private getHighlightStyleDraft(): HighlightStyleDraft {
+    return { presentationProfile: this.getActivePresentationProfile() }
   }
 
   private getLoadedHighlightStyleDraft() {
     return this.loadedPhase
-      ? this.getHighlightStyleDraft(this.loadedPhase.processId)
+      ? { presentationProfile: this.getActivePresentationProfile() }
       : undefined
   }
 
   private openHighlightStyleDialog(processId: string) {
-    const value = this.getHighlightStyleDraft(processId)
-    if (!value) return
+    const value = this.getHighlightStyleDraft()
     document.querySelector('.highlight-style-modal')?.remove()
     const dialog = new HighlightStyleDialog({
       value,
@@ -3975,7 +3964,7 @@ class CadViewerApp {
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
     const styleWarnings = findPhaseOverlayStyleWarnings(
-      process?.presentationProfile ?? createDefaultPresentationProfile(),
+      state.presentationProfile,
       phase.flowState.flowPaths,
       phase.flowState.deviceStates
     )
@@ -3997,7 +3986,7 @@ class CadViewerApp {
         return
       }
       const configuredState = resolveDeviceStateDefinition(
-        process?.presentationProfile ?? createDefaultPresentationProfile(),
+        state.presentationProfile,
         deviceState
       )?.state
       if (!configuredState && deviceState.deviceDefinitionId && deviceState.stateKey) {

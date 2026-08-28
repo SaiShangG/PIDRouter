@@ -354,7 +354,6 @@ export class PhaseWorkspaceRepository {
     return {
       id: String(procedure.id),
       name: procedure.name?.trim() || `Process ${procedure.id}`,
-      presentationProfile: this.readPresentationProfile(),
       sequences,
       activeSequenceId: sequences[0]?.id,
       createdAt: timestamp,

@@ -145,7 +145,6 @@ describe('PhaseWorkspaceRepository', () => {
     await repository.updateProcess({
       id: '12',
       name: 'CIP',
-      presentationProfile,
       sequences: [],
       createdAt: '2026-08-27T00:00:00.000Z',
       updatedAt: '2026-08-27T00:00:00.000Z'
@@ -285,8 +284,9 @@ describe('PhaseWorkspaceRepository', () => {
     })
     expect(workspace.processes[0].sequences[1].phases[0].pidOverlayPersistence)
       .toBeUndefined()
-    expect(workspace.processes[0].presentationProfile.devices).toEqual([])
-    expect(workspace.processes[0].presentationProfile.utilities).toEqual([])
+    expect(workspace.presentationProfile.devices).toEqual([])
+    expect(workspace.presentationProfile.utilities).toEqual([])
+    expect(workspace.processes[0]).not.toHaveProperty('presentationProfile')
   })
 
   it('keeps a persisted drawing association when the file list is stale', async () => {
@@ -463,7 +463,7 @@ describe('PhaseWorkspaceRepository', () => {
       }
     })
 
-    const profile = (await repository.load()).processes[0].presentationProfile
+    const profile = (await repository.load()).presentationProfile
 
     expect(profile.utilities).toHaveLength(1)
     expect(profile.utilities[0].name).toBe('Utility 1')

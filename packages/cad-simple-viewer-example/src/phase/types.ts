@@ -154,7 +154,6 @@ export interface SequenceDefinition {
 export interface ProcessDefinition {
   id: string
   name: string
-  presentationProfile: PresentationProfile
   sequences: SequenceDefinition[]
   activeSequenceId?: string
   createdAt: string
