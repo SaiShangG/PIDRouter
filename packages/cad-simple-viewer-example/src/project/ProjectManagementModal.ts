@@ -406,12 +406,17 @@ export class ProjectManagementModal {
       this.selectedDrawingIds = new Set(project.fileIds.map(String))
       this.drawingQuery = ''
       this.isEditing = false
-      await this.options.onSelect?.(project)
+      this.busy = false
+      this.render()
+      void Promise.resolve(this.options.onSelect?.(project)).catch(error => {
+        this.message = error instanceof Error ? error.message : String(error)
+        if (!this.element.hidden) this.render()
+      })
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error)
     } finally {
       this.busy = false
-      this.render()
+      if (!this.element.hidden) this.render()
     }
   }
 

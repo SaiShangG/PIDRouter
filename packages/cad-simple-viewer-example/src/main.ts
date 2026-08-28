@@ -1461,7 +1461,8 @@ class CadViewerApp {
           this.activeProject.description !== project.description ||
           !areEqualNumberSets(this.activeProject.fileIds, project.fileIds))
       if (shouldReloadActiveWorkspace) {
-        await this.loadProjectWorkspace(project)
+        const loaded = await this.loadProjectWorkspace(project)
+        if (!loaded) return
         await this.prepareProjectForPhaseSelection()
         this.syncAppToolbarContext()
         return
@@ -1469,11 +1470,13 @@ class CadViewerApp {
       this.activeProject = project
       this.projectManagementButton.title = project.name
       this.phasePanel?.render()
+      await this.prepareProjectForPhaseSelection()
       this.syncAppToolbarContext()
       return
     }
     try {
-      await this.loadProjectWorkspace(project)
+      const loaded = await this.loadProjectWorkspace(project)
+      if (!loaded) return
       await this.prepareProjectForPhaseSelection()
       this.showMessage(`已切换到 Project：${project.name}`, 'success')
     } catch (error) {
@@ -1485,12 +1488,12 @@ class CadViewerApp {
   private async loadProjectWorkspace(
     project: ProjectRecord,
     restorePhase = false
-  ): Promise<void> {
+  ): Promise<boolean> {
     const token = ++this.projectLoadToken
     this.cancelAllBackendPhaseSaves()
     this.invalidateLoadedPhaseBinding()
     const projectDetails = await this.projectRepository.get(project.id)
-    if (token !== this.projectLoadToken) return
+    if (token !== this.projectLoadToken) return false
     const config = getProcessAssistantConfig()
     const repository = new PhaseWorkspaceRepository({
       baseUrl: config.baseUrl,
@@ -1502,7 +1505,7 @@ class CadViewerApp {
       phases: this.processAssistantPhaseApi
     })
     const workspace = await repository.load()
-    if (token !== this.projectLoadToken) return
+    if (token !== this.projectLoadToken) return false
     this.phaseRepository = repository
     this.phaseStore = new PhaseWorkspaceStore(workspace)
     this.activeProject = projectDetails
@@ -1514,6 +1517,7 @@ class CadViewerApp {
     if (restorePhase && this.isInitialized) {
       await this.restoreActiveWorkspacePhase()
     }
+    return true
   }
 
   private async prepareProjectForPhaseSelection(): Promise<void> {
@@ -1524,6 +1528,18 @@ class CadViewerApp {
     const sequence = process?.sequences.find(
       item => item.id === process.activeSequenceId
     )
+    const phase = sequence?.phases.find(
+      item => item.drawing.kind === 'assigned'
+    )
+    if (process && sequence && phase) {
+      await this.activateWorkspacePhase(
+        process.id,
+        sequence.id,
+        phase.id,
+        false
+      )
+      return
+    }
     if (process && sequence) {
       this.phaseStore.activate(process.id, sequence.id, undefined)
       this.phaseStore.persist()
@@ -1539,7 +1555,8 @@ class CadViewerApp {
     if (projectId !== this.activeProjectId) return
     const replacement = (await this.projectRepository.list())[0]
     if (replacement) {
-      await this.loadProjectWorkspace(replacement)
+      const loaded = await this.loadProjectWorkspace(replacement)
+      if (!loaded) return
       await this.prepareProjectForPhaseSelection()
       return
     }
@@ -3211,6 +3228,31 @@ class CadViewerApp {
     if (!success && this.pendingPhase?.token === token) {
       this.invalidateLoadedPhaseBinding()
       throw new Error(`Unable to open ${phase.drawing.displayName}`)
+    }
+    if (success && token !== this.phaseActivationToken) {
+      const currentState = this.phaseStore.snapshot()
+      const currentProcess = currentState.processes.find(
+        item => item.id === currentState.activeProcessId
+      )
+      const currentSequence = currentProcess?.sequences.find(
+        item => item.id === currentProcess.activeSequenceId
+      )
+      const currentPhase = currentSequence?.phases.find(
+        item => item.id === currentSequence.activePhaseId
+      )
+      if (!currentPhase || currentPhase.drawing.kind === 'unassigned') {
+        const command = new AcApQNewCmd()
+        await command.execute(AcApDocManager.instance.context)
+        document.title = 'CAD Viewer'
+      }
+      return
+    }
+    if (success && token === this.phaseActivationToken) {
+      this.pendingPhase = undefined
+      if (!this.applyPhaseSnapshot(processId, sequenceId, phaseId)) {
+        this.invalidateLoadedPhaseBinding()
+        throw new Error('Unable to apply Phase state')
+      }
     }
   }
 

@@ -115,6 +115,51 @@ describe('ProjectManagementModal', () => {
     expect(onSelect).toHaveBeenCalledWith(existingProject)
   })
 
+  it('remains interactive while asynchronous Project activation finishes', async () => {
+    const { modal, onSelect } = createHarness([existingProject])
+    let finishActivation: () => void = () => undefined
+    onSelect.mockImplementation(
+      () => new Promise<void>(resolve => (finishActivation = resolve))
+    )
+    await modal.open()
+
+    document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
+    await flushPromises()
+
+    expect(onSelect).toHaveBeenCalledWith(existingProject)
+    expect(modal.element.hidden).toBe(false)
+    expect(document.body.textContent).toContain('Project 详情')
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        button => button.textContent === '编辑'
+      )?.disabled
+    ).toBe(false)
+    expect(
+      document.querySelector<HTMLButtonElement>('[aria-label="关闭 Project 管理"]')
+        ?.disabled
+    ).toBe(false)
+
+    finishActivation()
+    await flushPromises()
+  })
+
+  it('reports asynchronous Project activation failures without locking the modal', async () => {
+    const { modal, onSelect } = createHarness([existingProject])
+    onSelect.mockRejectedValue(new Error('PID activation failed'))
+    await modal.open()
+
+    document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
+    await flushPromises()
+
+    expect(document.body.textContent).toContain('PID activation failed')
+    expect(modal.element.hidden).toBe(false)
+    expect(
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        button => button.textContent === '编辑'
+      )?.disabled
+    ).toBe(false)
+  })
+
   it('filters PID drawings by name, number, or file name', async () => {
     const { modal } = createHarness()
     await modal.open()
