@@ -2,7 +2,6 @@ import type {
   DeviceState,
   DeviceStateStyleDefinition,
   DeviceStyleDefinition,
-  FlowBehavior,
   PresentationProfile
 } from './types'
 
@@ -24,12 +23,3 @@ export const resolveDeviceStateDefinition = (
   )
   return device && state ? { device, state } : undefined
 }
-
-export const deviceModeFromFlowBehavior = (
-  flowBehavior: FlowBehavior
-): DeviceState['mode'] =>
-  flowBehavior === 'conducting'
-    ? 'open'
-    : flowBehavior === 'blocking'
-      ? 'closed'
-      : 'unknown'

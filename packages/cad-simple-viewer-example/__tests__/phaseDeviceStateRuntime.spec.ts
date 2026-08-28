@@ -1,7 +1,4 @@
-import {
-  deviceModeFromFlowBehavior,
-  resolveDeviceStateDefinition
-} from '../src/phase/phaseDeviceStateRuntime'
+import { resolveDeviceStateDefinition } from '../src/phase/phaseDeviceStateRuntime'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('phase device state runtime', () => {
@@ -71,13 +68,5 @@ describe('phase device state runtime', () => {
       deviceDefinitionId: 'valve',
       stateKey: 'Running'
     })).toBeUndefined()
-  })
-
-  it.each([
-    ['conducting', 'open'],
-    ['blocking', 'closed'],
-    ['neutral', 'unknown']
-  ] as const)('derives %s flow behavior as %s runtime mode', (behavior, mode) => {
-    expect(deviceModeFromFlowBehavior(behavior)).toBe(mode)
   })
 })

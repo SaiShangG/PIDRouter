@@ -1,6 +1,5 @@
 import {
   type CreatePhaseInput,
-  type DeviceMode,
   type DeviceState,
   type DeviceStateStyleDefinition,
   type DeviceStyleDefinition,
@@ -118,6 +117,9 @@ const cloneDeviceStates = (
 
 const cloneFlowState = (flowState: PhaseSnapshot['flowState']) => ({
   flowPaths: flowState.flowPaths.map(cloneFlowPath),
+  ...(flowState.activeFlowPathId
+    ? { activeFlowPathId: flowState.activeFlowPathId }
+    : {}),
   ...(flowState.deviceStates
     ? { deviceStates: cloneDeviceStates(flowState.deviceStates) }
     : {})
@@ -628,22 +630,20 @@ const normalizeFlowPaths = (
   })
 }
 
-const DEVICE_MODES = new Set<DeviceMode>([
-  'open',
-  'closed',
-  'pulse',
-  'start',
-  'stop',
-  'active',
-  'unknown'
-])
-
 const normalizeDeviceStates = (
   value: unknown
 ): Record<string, DeviceState> | undefined => {
   if (!isRecord(value)) return undefined
   const entries = Object.entries(value).flatMap(([recordKey, candidate]) => {
-    if (!isRecord(candidate) || !DEVICE_MODES.has(candidate.mode as DeviceMode)) {
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.stateKey !== 'string' ||
+      !candidate.stateKey.trim() ||
+      typeof candidate.deviceDefinitionId !== 'string' ||
+      !candidate.deviceDefinitionId.trim() ||
+      typeof candidate.highlightStyleRefId !== 'string' ||
+      !candidate.highlightStyleRefId.trim()
+    ) {
       return []
     }
     const key =
@@ -655,22 +655,9 @@ const normalizeDeviceStates = (
       key,
       {
         key,
-        label:
-          typeof candidate.label === 'string' && candidate.label.trim()
-            ? candidate.label.trim()
-            : key,
-        mode: candidate.mode as DeviceMode,
-        ...(typeof candidate.stateKey === 'string' && candidate.stateKey.trim()
-          ? { stateKey: candidate.stateKey.trim() }
-          : {}),
-        ...(typeof candidate.deviceDefinitionId === 'string' &&
-          candidate.deviceDefinitionId.trim()
-          ? { deviceDefinitionId: candidate.deviceDefinitionId.trim() }
-          : {}),
-        ...(typeof candidate.highlightStyleRefId === 'string' &&
-          candidate.highlightStyleRefId.trim()
-          ? { highlightStyleRefId: candidate.highlightStyleRefId.trim() }
-          : {})
+        stateKey: candidate.stateKey.trim(),
+        deviceDefinitionId: candidate.deviceDefinitionId.trim(),
+        highlightStyleRefId: candidate.highlightStyleRefId.trim()
       }
     ] as const]
   })
@@ -1155,6 +1142,18 @@ export class PhaseWorkspaceStore {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     phase.flowState = cloneFlowState(state.flowState)
     phase.updatedAt = this.now()
+  }
+
+  replacePhase(
+    processId: string,
+    sequenceId: string,
+    phase: PhaseSnapshot
+  ) {
+    const sequence = this.requireSequence(processId, sequenceId)
+    const index = sequence.phases.findIndex(candidate => candidate.id === phase.id)
+    if (index < 0) throw new Error('Phase was not found')
+    sequence.phases[index] = clonePhase(phase)
+    sequence.updatedAt = this.now()
   }
 
   updatePresentationProfile(presentationProfile: PresentationProfile) {

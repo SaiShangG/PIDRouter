@@ -598,8 +598,6 @@ describe('PhaseWorkspaceStore', () => {
         deviceStates: {
           '1A': {
             key: '1A',
-            label: 'Valve open',
-            mode: 'open',
             stateKey: 'open',
             deviceDefinitionId: 'valve',
             highlightStyleRefId: 'valve-open'

@@ -5,6 +5,7 @@ describe('PhaseWorkspaceRepository', () => {
   it('persists the drawing with PUT after creating a Phase', async () => {
     const phases = {
       list: jest.fn(),
+      get: jest.fn(),
       create: jest.fn().mockResolvedValue(20),
       update: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn()
@@ -70,6 +71,7 @@ describe('PhaseWorkspaceRepository', () => {
       },
       phases: {
         list: jest.fn(),
+        get: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn()
@@ -111,6 +113,7 @@ describe('PhaseWorkspaceRepository', () => {
       },
       phases: {
         list: jest.fn(),
+        get: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn()
@@ -235,6 +238,7 @@ describe('PhaseWorkspaceRepository', () => {
             ]
         )
       ),
+      get: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn()
@@ -269,8 +273,6 @@ describe('PhaseWorkspaceRepository', () => {
     expect(phase.flowState.deviceStates).toEqual({
       '1A': {
         key: '1A',
-        label: '1A',
-        mode: 'unknown',
         stateKey: 'Open',
         deviceDefinitionId: 'device-valve',
         highlightStyleRefId: 'state-open'
@@ -324,6 +326,7 @@ describe('PhaseWorkspaceRepository', () => {
             textNotes: []
           })
         }]),
+        get: jest.fn(),
         create: jest.fn(), update: jest.fn(), delete: jest.fn()
       }
     })
@@ -340,6 +343,7 @@ describe('PhaseWorkspaceRepository', () => {
   it('writes v2 Phase data and protects unsafe persisted overlays', async () => {
     const phases = {
       list: jest.fn(),
+      get: jest.fn(),
       create: jest.fn(),
       update: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn()
@@ -457,6 +461,7 @@ describe('PhaseWorkspaceRepository', () => {
       },
       phases: {
         list: jest.fn(),
+        get: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn()
@@ -476,3 +481,4 @@ describe('PhaseWorkspaceRepository', () => {
     }))
   })
 })
+

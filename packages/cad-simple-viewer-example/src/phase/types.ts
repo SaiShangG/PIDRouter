@@ -98,22 +98,11 @@ export interface DrawingAssetRef {
   url?: string
 }
 
-export type DeviceMode =
-  | 'open'
-  | 'closed'
-  | 'pulse'
-  | 'start'
-  | 'stop'
-  | 'active'
-  | 'unknown'
-
 export interface DeviceState {
   key: string
-  label: string
-  mode: DeviceMode
-  stateKey?: string
-  deviceDefinitionId?: string
-  highlightStyleRefId?: string
+  stateKey: string
+  deviceDefinitionId: string
+  highlightStyleRefId: string
 }
 
 export interface FlowStateSnapshot {

@@ -53,28 +53,8 @@ const resolveDeviceStyle = (
   }
   const configuredState = configuredDevices
     .flatMap(device => device.states)
-    .find(candidate => candidate.key === (state?.stateKey ?? state?.mode))
-  if (configuredState) {
-    return deviceStateStyle(configuredState)
-  }
-  switch (state?.mode) {
-    case 'open':
-      return profile.deviceStyles.valve.open ?? undefined
-    case 'closed':
-      return profile.deviceStyles.valve.closed ?? undefined
-    case 'pulse':
-      return profile.deviceStyles.valve.pulse ?? undefined
-    case 'start':
-      return profile.deviceStyles.motor.start ?? undefined
-    case 'stop':
-      return profile.deviceStyles.motor.stop ?? undefined
-    case 'active':
-      return profile.deviceStyles.processEquipment.active ?? undefined
-    case 'unknown':
-      return profile.unknownDeviceStyle ?? undefined
-    default:
-      return undefined
-  }
+    .find(candidate => candidate.key === state?.stateKey)
+  return configuredState ? deviceStateStyle(configuredState) : undefined
 }
 
 const deviceStateStyle = (

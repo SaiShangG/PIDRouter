@@ -94,7 +94,7 @@ export interface PhaseWorkspaceRepositoryOptions {
   >
   phases: Pick<
     ProcessAssistantPhaseApi,
-    'list' | 'create' | 'update' | 'delete'
+    'list' | 'get' | 'create' | 'update' | 'delete'
   >
   now?: () => string
 }
@@ -166,6 +166,20 @@ export class PhaseWorkspaceRepository {
       activeProcessId: processes[0]?.id
     }
     return new PhaseWorkspaceStore(state).snapshot()
+  }
+
+  async loadPhase(
+    phaseId: string,
+    drawingAssets: Record<string, DrawingAssetRef>,
+    position: number,
+    signal?: AbortSignal
+  ): Promise<PhaseSnapshot> {
+    const dto = await this.options.phases.get(
+      this.requireBackendId(phaseId, 'Phase'),
+      signal
+    )
+    if (!hasId(dto)) throw new Error('Phase API 返回了无效数据')
+    return this.mapPhase(dto, position, drawingAssets)
   }
 
   async uploadDrawing(
@@ -490,8 +504,6 @@ export class PhaseWorkspaceRepository {
           this.fromPersistedHandleKey(deviceState.handleKey),
           {
             key: this.fromPersistedHandleKey(deviceState.handleKey),
-            label: this.fromPersistedHandleKey(deviceState.handleKey),
-            mode: 'unknown',
             stateKey: deviceState.stateKey,
             deviceDefinitionId: deviceState.deviceType,
             highlightStyleRefId: deviceState.highlightStyleRefId

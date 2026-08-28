@@ -94,7 +94,6 @@ import {
 import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import {
-  deviceModeFromFlowBehavior,
   resolveDeviceStateDefinition
 } from './phase/phaseDeviceStateRuntime'
 import {
@@ -1739,9 +1738,6 @@ class CadViewerApp {
       zoomToObject: objectId => this.zoomToValveDebugObject(objectId),
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => this.appLocale as ValveDebugLocale,
-      requestStateChange: () => true,
-      onStateChanged: (handleKey, state) =>
-        this.handleValveStateChanged(handleKey, state),
       getConfiguredStates: () => this.getConfiguredValveStates(),
       getConfiguredStateKey: handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
@@ -1927,8 +1923,6 @@ class CadViewerApp {
         if (valveHandle && device && deviceState) {
           this.valveDeviceStates.set(objectId, {
             key: handleKey,
-            label: deviceState.displayName,
-            mode: deviceModeFromFlowBehavior(deviceState.flowBehavior),
             stateKey: deviceState.key,
             deviceDefinitionId: device.id,
             highlightStyleRefId: deviceState.id
@@ -3184,14 +3178,39 @@ class CadViewerApp {
     phaseId: string,
     captureCurrentState = true
   ) {
+    const activationToken = ++this.phaseActivationToken
     if (captureCurrentState) this.captureLoadedPhaseState()
+    if (captureCurrentState && this.loadedPhase) {
+      this.cancelBackendPhaseSave(this.loadedPhase.phaseId)
+      await this.saveBackendPhase(
+        this.loadedPhase.processId,
+        this.loadedPhase.sequenceId,
+        this.loadedPhase.phaseId
+      )
+    }
+    if (activationToken !== this.phaseActivationToken) return
+
     const state = this.phaseStore.snapshot()
     const process = state.processes.find(item => item.id === processId)
     const sequence = process?.sequences.find(item => item.id === sequenceId)
-    const phase = sequence?.phases.find(item => item.id === phaseId)
-    if (!phase) throw new Error('Phase was not found')
+    const cachedPhase = sequence?.phases.find(item => item.id === phaseId)
+    const repository = this.phaseRepository
+    if (!cachedPhase || !repository) throw new Error('Phase was not found')
+    const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId) ?? 0
+    const phase = await repository.loadPhase(
+      phaseId,
+      state.drawingAssets,
+      phaseIndex
+    )
+    if (activationToken !== this.phaseActivationToken) return
+    this.phaseStore.replacePhase(processId, sequenceId, phase)
+    const refreshedState = this.phaseStore.snapshot()
+    const refreshedProcess = refreshedState.processes.find(item => item.id === processId)
+    const refreshedSequence = refreshedProcess?.sequences.find(item => item.id === sequenceId)
+    const refreshedPhase = refreshedSequence?.phases.find(item => item.id === phaseId)
+    if (!refreshedPhase) throw new Error('Phase was not found')
     const targetAssetId =
-      phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
+      refreshedPhase.drawing.kind === 'assigned' ? refreshedPhase.drawing.assetId : undefined
     const hotSwitch = shouldHotSwitchPhase({
       loadedAssetId: this.loadedDrawingAssetId,
       targetAssetId,
@@ -3203,7 +3222,6 @@ class CadViewerApp {
     this.phasePanel?.render()
     this.syncPhaseContextBar()
     if (hotSwitch) {
-      this.phaseActivationToken++
       this.pendingPhase = undefined
       this.resetPhaseRuntimeState(true)
       if (!this.applyPhaseSnapshot(processId, sequenceId, phaseId)) {
@@ -3212,14 +3230,14 @@ class CadViewerApp {
       }
       return
     }
-    const token = ++this.phaseActivationToken
+    const token = activationToken
     this.pendingPhase = { processId, sequenceId, phaseId, token }
-    if (phase.drawing.kind === 'unassigned') {
+    if (refreshedPhase.drawing.kind === 'unassigned') {
       const command = new AcApQNewCmd()
       await command.execute(AcApDocManager.instance.context)
       return
     }
-    const drawing = state.drawingAssets[phase.drawing.assetId]
+    const drawing = refreshedState.drawingAssets[refreshedPhase.drawing.assetId]
     if (!drawing) {
       this.invalidateLoadedPhaseBinding()
       throw new Error('Drawing asset was not found')
@@ -3227,7 +3245,7 @@ class CadViewerApp {
     const success = await this.openPhaseDrawing(drawing)
     if (!success && this.pendingPhase?.token === token) {
       this.invalidateLoadedPhaseBinding()
-      throw new Error(`Unable to open ${phase.drawing.displayName}`)
+      throw new Error(`Unable to open ${refreshedPhase.drawing.displayName}`)
     }
     if (success && token !== this.phaseActivationToken) {
       const currentState = this.phaseStore.snapshot()
@@ -3385,7 +3403,7 @@ class CadViewerApp {
       )?.state
       : undefined
     if (configuredState) return configuredState.flowBehavior
-    return state?.mode === 'open' ? 'conducting' : 'blocking'
+    return 'blocking' as const
   }
 
   private isFlowBoundaryObject(objectId: AcDbObjectId) {
@@ -3419,14 +3437,6 @@ class CadViewerApp {
     })
   }
 
-  private getConfiguredValveState(mode: 'open' | 'closed') {
-    const expectedBehavior = mode === 'closed' ? 'blocking' : 'conducting'
-    return this.getConfiguredValveStates()
-      .filter(state => state.enabled)
-      .sort((left, right) => left.order - right.order)
-      .find(state => state.flowBehavior === expectedBehavior)
-  }
-
   private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
     return collectHighlightHandleKeys(objectIds, objectId =>
       handleKeysFromObjectId(objectId)
@@ -3446,8 +3456,6 @@ class CadViewerApp {
     this.removeOpenHighlightRootsForIds(new Set([ownerId]))
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
-      label: state.displayName,
-      mode: state.flowBehavior === 'blocking' ? 'closed' : 'open',
       stateKey: state.key,
       deviceDefinitionId: this.getConfiguredValveDefinition()?.id ?? 'valve',
       highlightStyleRefId: state.id
@@ -3485,74 +3493,6 @@ class CadViewerApp {
     this.recomputeOpenHighlightGroups()
     this.captureLoadedPhaseState()
     return true
-  }
-
-  private handleValveStateChanged(
-    handleKey: string,
-    state: 'open' | 'closed'
-  ) {
-    const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-    if (!ownerId) return
-    const device = this.getConfiguredValveDefinition()
-    const configuredState = this.getConfiguredValveState(state)
-    if (!device || !configuredState) {
-      log.warn('[PhasePidOverlay] Valve state cannot be persisted:', {
-        handleKey,
-        mode: state,
-        reason: 'No matching enabled configured state'
-      })
-    }
-    this.removeOpenHighlightRootsForIds(new Set([ownerId]))
-    this.valveDeviceStates.set(ownerId, {
-      key: handleKey,
-      label:
-        configuredState?.displayName ??
-        this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
-        handleKey,
-      mode: state,
-      ...(device && configuredState
-        ? {
-          stateKey: configuredState.key,
-          deviceDefinitionId: device.id,
-          highlightStyleRefId: configuredState.id
-        }
-        : {})
-    })
-    if (state === 'closed') {
-      this.openHighlightGroups.delete(ownerId)
-      this.openHighlightConnections.delete(ownerId)
-      this.openHighlightPaths.delete(ownerId)
-      this.recomputeOpenHighlightGroups()
-      this.captureLoadedPhaseState()
-      return
-    }
-
-    const utility = this.getActivePresentationProfile().utilities
-      .filter(candidate => candidate.enabled)
-      .sort((left, right) => left.order - right.order)[0]
-    if (!utility) {
-      this.recomputeOpenHighlightGroups()
-      this.captureLoadedPhaseState()
-      return
-    }
-    const traversal = this.getFlowConnectionTraversal(ownerId)
-    const highlightedIds = this.getOpenHighlightObjectIds(
-      ownerId,
-      traversal.connectedHandles
-    )
-    this.openHighlightGroups.delete(ownerId)
-    this.openHighlightConnections.delete(ownerId)
-    this.openHighlightPaths.delete(ownerId)
-    this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-    this.openHighlightGroups.set(ownerId, highlightedIds)
-    this.openHighlightPaths.set(ownerId, {
-      id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
-      name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
-      handleKeys: this.getHighlightHandleKeys(highlightedIds),
-      styleSource: { kind: 'utility', utilityId: utility.id }
-    })
-    this.recomputeOpenHighlightGroups()
-    this.captureLoadedPhaseState()
   }
 
   private removeOpenHighlightRootsForIds(ids: ReadonlySet<AcDbObjectId>) {
@@ -3996,15 +3936,11 @@ class CadViewerApp {
           stateKey: deviceState.stateKey
         })
       }
-      const restoredState = configuredState
-        ? {
-          ...deviceState,
-          label: configuredState.displayName,
-          mode: deviceModeFromFlowBehavior(configuredState.flowBehavior)
-        }
-        : { ...deviceState }
-      this.valveDeviceStates.set(ownerId, restoredState)
-      if (restoredState.mode === 'open') restoredValveKeys.add(deviceState.key)
+      if (!configuredState) return
+      this.valveDeviceStates.set(ownerId, { ...deviceState })
+      if (configuredState.flowBehavior === 'conducting') {
+        restoredValveKeys.add(deviceState.key)
+      }
     })
     this.activeFlowPathId = phase.flowState.activeFlowPathId
     phase.flowState.flowPaths.forEach(flowPath => {
@@ -4013,7 +3949,10 @@ class CadViewerApp {
         return ownerId !== undefined && this.isFlowBoundaryObject(ownerId)
       })
       const restoredDeviceOwnerHandleKeys = [...this.valveDeviceStates.values()]
-        .filter(deviceState => deviceState.mode === 'open')
+        .filter(deviceState =>
+          resolveDeviceStateDefinition(state.presentationProfile, deviceState)
+            ?.state.flowBehavior === 'conducting'
+        )
         .filter(deviceState => {
           const ownerId = this.resolveObjectIdByHandleKey(deviceState.key)
           if (!ownerId || !this.isFlowBoundaryObject(ownerId)) return false
@@ -4057,16 +3996,12 @@ class CadViewerApp {
                 : undefined
         })
         if (this.isFlowBoundaryObject(ownerId)) {
-          if (!this.valveDeviceStates.has(ownerId)) {
-            this.valveDeviceStates.set(ownerId, {
-              key: handleKey,
-              label:
-                this.valveDebugFeature?.graph.nodes.get(handleKey)?.label ??
-                handleKey,
-              mode: 'open'
-            })
+          const deviceState = this.valveDeviceStates.get(ownerId)
+          if (deviceState &&
+            resolveDeviceStateDefinition(state.presentationProfile, deviceState)
+              ?.state.flowBehavior === 'conducting') {
+            restoredValveKeys.add(handleKey)
           }
-          restoredValveKeys.add(handleKey)
         }
       })
     })
