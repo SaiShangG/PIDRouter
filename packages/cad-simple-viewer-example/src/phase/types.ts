@@ -163,6 +163,7 @@ export interface ProcessDefinition {
 
 export interface PhaseWorkspaceState {
   version: typeof PHASE_WORKSPACE_SCHEMA_VERSION
+  presentationProfile: PresentationProfile
   processes: ProcessDefinition[]
   drawingAssets: Record<string, DrawingAssetRef>
   activeProcessId?: string

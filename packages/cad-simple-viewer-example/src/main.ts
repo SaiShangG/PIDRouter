@@ -3392,10 +3392,7 @@ class CadViewerApp {
 
   private getActivePresentationProfile(): PresentationProfile {
     const state = this.phaseStore.snapshot()
-    return (
-      state.processes.find(process => process.id === state.activeProcessId)
-        ?.presentationProfile ?? createDefaultPresentationProfile()
-    )
+    return state.presentationProfile ?? createDefaultPresentationProfile()
   }
 
   private getConfiguredValveStates() {
@@ -3698,14 +3695,14 @@ class CadViewerApp {
     profile: PresentationProfile
   ) {
     try {
-      this.phaseStore.updatePresentationProfile(processId, profile)
+      this.phaseStore.updatePresentationProfile(profile)
       this.phaseStore.persist()
       const process = this.phaseStore
         .snapshot()
         .processes.find(item => item.id === processId)
       if (process && this.activeProjectId) {
         const presentationProfile = toPersistedPresentationProfile(
-          process.presentationProfile
+          this.phaseStore.snapshot().presentationProfile
         )
         const jsonData = JSON.stringify({ presentationProfile })
         console.log(

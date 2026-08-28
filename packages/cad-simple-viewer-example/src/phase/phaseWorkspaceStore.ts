@@ -184,6 +184,7 @@ interface V3PhaseWorkspaceState {
 
 const createEmptyState = (): PhaseWorkspaceState => ({
   version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  presentationProfile: createDefaultPresentationProfile(),
   processes: [],
   drawingAssets: {}
 })
@@ -213,6 +214,9 @@ const cloneSequence = (sequence: SequenceDefinition): SequenceDefinition => ({
 
 const cloneState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
   ...state,
+  presentationProfile: clonePresentationProfile(
+    state.presentationProfile ?? state.processes[0]?.presentationProfile ?? createDefaultPresentationProfile()
+  ),
   drawingAssets: Object.fromEntries(
     Object.entries(state.drawingAssets).map(([key, asset]) => [key, { ...asset }])
   ),
@@ -230,6 +234,7 @@ const isWorkspaceState = (value: unknown): value is PhaseWorkspaceState => {
   if (!isRecord(value)) return false
   return (
     value.version === PHASE_WORKSPACE_SCHEMA_VERSION &&
+    (value.presentationProfile === undefined || isRecord(value.presentationProfile)) &&
     Array.isArray(value.processes) &&
     value.processes.every(
       process => isRecord(process) && Array.isArray(process.sequences)
@@ -709,6 +714,7 @@ const migrateLegacyState = (
   legacy: LegacyPhaseWorkspaceState
 ): PhaseWorkspaceState => ({
   version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  presentationProfile: createDefaultPresentationProfile(),
   activeProcessId: legacy.activeProcessId,
   drawingAssets: Object.fromEntries(
     Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
@@ -746,6 +752,7 @@ const migrateLegacyState = (
 
 const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => ({
   version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  presentationProfile: createDefaultPresentationProfile(),
   activeProcessId: legacy.activeProcessId,
   drawingAssets: Object.fromEntries(
     Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
@@ -764,6 +771,7 @@ const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => (
 
 const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => ({
   version: PHASE_WORKSPACE_SCHEMA_VERSION,
+  presentationProfile: createDefaultPresentationProfile(),
   activeProcessId: legacy.activeProcessId,
   drawingAssets: Object.fromEntries(
     Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
@@ -797,14 +805,21 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
   }))
 })
 
-const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
-  ...state,
-  version: PHASE_WORKSPACE_SCHEMA_VERSION,
-  processes: state.processes.map(process => {
-    const presentationProfile = normalizeProfile(process.presentationProfile)
+const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
+  const presentationProfile = normalizeProfile(
+    state.presentationProfile ?? state.processes[0]?.presentationProfile
+  )
+  return {
+    ...state,
+    version: PHASE_WORKSPACE_SCHEMA_VERSION,
+    presentationProfile,
+    processes: state.processes.map(process => {
+      const processPresentationProfile = normalizeProfile(
+        process.presentationProfile
+      )
     return {
       ...process,
-      presentationProfile,
+      presentationProfile: processPresentationProfile,
       sequences: process.sequences.map(sequence => ({
         ...sequence,
         phases: sequence.phases.map(phase => ({
@@ -839,8 +854,9 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
         }))
       }))
     }
-  })
-})
+    })
+  }
+}
 
 export class PhaseWorkspaceStore {
   private state: PhaseWorkspaceState
@@ -1151,12 +1167,16 @@ export class PhaseWorkspaceStore {
   }
 
   updatePresentationProfile(
-    processId: string,
-    presentationProfile: PresentationProfile
+    presentationProfileOrProcessId: PresentationProfile | string,
+    legacyPresentationProfile?: PresentationProfile
   ) {
-    const process = this.requireProcess(processId)
-    process.presentationProfile = normalizeProfile(presentationProfile)
-    process.updatedAt = this.now()
+    const presentationProfile =
+      typeof presentationProfileOrProcessId === 'string'
+        ? legacyPresentationProfile
+        : presentationProfileOrProcessId
+    if (!presentationProfile) return
+    const normalized = normalizeProfile(presentationProfile)
+    this.state.presentationProfile = normalized
   }
 
   renameDrawing(

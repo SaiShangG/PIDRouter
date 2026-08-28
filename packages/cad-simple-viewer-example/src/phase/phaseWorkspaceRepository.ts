@@ -160,6 +160,7 @@ export class PhaseWorkspaceRepository {
     )
     const state: PhaseWorkspaceState = {
       version: PHASE_WORKSPACE_SCHEMA_VERSION,
+      presentationProfile: this.readPresentationProfile(),
       processes,
       drawingAssets,
       activeProcessId: processes[0]?.id
@@ -438,9 +439,12 @@ export class PhaseWorkspaceRepository {
   }
 
   private readPresentationProfile(): PresentationProfile {
-    const profile = isRecord(this.options.projectConfigure)
+    const configure = isRecord(this.options.projectConfigure)
       ? this.options.projectConfigure
       : undefined
+    const profile = isRecord(configure?.presentationProfile)
+      ? configure.presentationProfile
+      : configure
     return profile
       ? (profile as unknown as PresentationProfile)
       : createDefaultPresentationProfile()
