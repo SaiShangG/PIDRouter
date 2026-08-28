@@ -127,7 +127,8 @@ import type {
   DrawingAssetRef,
   FlowPathStatus,
   FlowStateSnapshot,
-  PresentationProfile
+  PresentationProfile,
+  PhaseWorkspaceState
 } from './phase/types'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
 import {
@@ -1494,7 +1495,11 @@ class CadViewerApp {
     const workspace = await repository.load()
     if (token !== this.projectLoadToken) return false
     this.phaseRepository = repository
-    this.phaseStore = new PhaseWorkspaceStore(workspace)
+    if (this.activeProjectId === projectDetails.id) {
+      this.replaceBackendWorkspace(workspace)
+    } else {
+      this.phaseStore = new PhaseWorkspaceStore(workspace)
+    }
     this.activeProject = projectDetails
     this.activeProjectId = projectDetails.id
     localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(projectDetails.id))
@@ -2122,7 +2127,7 @@ class CadViewerApp {
     try {
       const processId = await repository.createProcess(name)
       const workspace = await repository.load()
-      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      this.replaceBackendWorkspace(workspace)
       this.phaseStore.activate(String(processId))
       this.phasePanel?.render()
       this.syncPhaseContextBar()
@@ -2382,7 +2387,7 @@ class CadViewerApp {
       const wasLoaded = this.loadedPhase?.processId === processId
       await repository.deleteProcess(processId)
       const workspace = await repository.load()
-      this.phaseStore = new PhaseWorkspaceStore(workspace)
+      this.replaceBackendWorkspace(workspace)
       this.phaseStore.persist()
       this.reportStore.reconcile(workspace)
       this.reportStore.persist()
@@ -2403,7 +2408,7 @@ class CadViewerApp {
       try {
         const sequenceId = await this.phaseRepository.createSequence(request)
         const workspace = await this.phaseRepository.load()
-        this.phaseStore = new PhaseWorkspaceStore(workspace)
+        this.replaceBackendWorkspace(workspace)
         this.phaseStore.activate(request.processId, String(sequenceId))
         this.phaseStore.persist()
         this.phasePanel?.render()
@@ -2500,11 +2505,23 @@ class CadViewerApp {
     const repository = this.phaseRepository
     if (!repository) return
     const workspace = await repository.load()
-    this.phaseStore = new PhaseWorkspaceStore(workspace)
+    this.replaceBackendWorkspace(workspace)
     if (processId) this.phaseStore.activate(processId, sequenceId, phaseId)
     this.phaseStore.persist()
     this.phasePanel?.render()
     this.syncPhaseContextBar()
+  }
+
+  private replaceBackendWorkspace(workspace: PhaseWorkspaceState) {
+    const presentationProfile = this.phaseStore.snapshot().presentationProfile
+    this.phaseStore = new PhaseWorkspaceStore({
+      ...workspace,
+      presentationProfile,
+      processes: workspace.processes.map(process => ({
+        ...process,
+        presentationProfile
+      }))
+    })
   }
 
   private async copyWorkspaceSequence(request: CopySequenceRequest) {
@@ -2839,7 +2856,7 @@ class CadViewerApp {
           this.loadedPhase.phaseId === phaseId
         await this.phaseRepository.deletePhase(phaseId)
         const workspace = await this.phaseRepository.load()
-        this.phaseStore = new PhaseWorkspaceStore(workspace)
+        this.replaceBackendWorkspace(workspace)
         const nextPhase = workspace.processes
           .find(process => process.id === processId)
           ?.sequences.find(sequence => sequence.id === sequenceId)?.phases[0]
@@ -3702,7 +3719,7 @@ class CadViewerApp {
         .processes.find(item => item.id === processId)
       if (process && this.activeProjectId) {
         const presentationProfile = toPersistedPresentationProfile(
-          this.phaseStore.snapshot().presentationProfile
+          profile
         )
         const jsonData = JSON.stringify({ presentationProfile })
         console.log(
