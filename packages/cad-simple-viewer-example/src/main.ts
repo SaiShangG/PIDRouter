@@ -117,6 +117,7 @@ import {
 } from './phase/phaseWorkspaceRepository'
 import {
   createDefaultPresentationProfile,
+  clonePresentationProfile,
   PhaseWorkspaceStore
 } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
@@ -419,6 +420,10 @@ class CadViewerApp {
   private readonly manualHiddenIds = new Set<AcDbObjectId>()
   private readonly phasePresentationController = new PhasePresentationController()
   private phaseStore = new PhaseWorkspaceStore()
+  private readonly projectPresentationProfiles = new Map<
+    number,
+    PresentationProfile
+  >()
   private phaseRepository?: PhaseWorkspaceRepository
   private readonly reportStore = ReportManifestStore.load()
   private readonly drawingAssetStore = new DrawingAssetStore()
@@ -1493,12 +1498,12 @@ class CadViewerApp {
     })
     const workspace = await repository.load()
     if (token !== this.projectLoadToken) return false
+    const presentationProfile = this.getOrCreateProjectPresentationProfile(
+      projectDetails.id,
+      workspace.presentationProfile
+    )
     this.phaseRepository = repository
-    if (this.activeProjectId === projectDetails.id) {
-      this.replaceBackendWorkspace(workspace)
-    } else {
-      this.phaseStore = new PhaseWorkspaceStore(workspace)
-    }
+    this.replaceBackendWorkspace(workspace, presentationProfile)
     this.activeProject = projectDetails
     this.activeProjectId = projectDetails.id
     localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(projectDetails.id))
@@ -1694,11 +1699,7 @@ class CadViewerApp {
     if (!styleButton) throw new Error('Highlight style button was not found')
     styleButton.replaceChildren(createPhaseIcon(Palette))
     styleButton.addEventListener('click', () => {
-      const state = this.phaseStore.snapshot()
-      const process = state.processes.find(
-        item => item.id === state.activeProcessId
-      )
-      if (process) this.openHighlightStyleDialog(process.id)
+      this.openHighlightStyleDialog()
     })
     const sidebar = document.querySelector<HTMLElement>('.phase-sidebar')
     const resizeHandle = document.getElementById('phaseSidebarResizeHandle')
@@ -2121,7 +2122,10 @@ class CadViewerApp {
     try {
       const processId = await repository.createProcess(name)
       const workspace = await repository.load()
-      this.replaceBackendWorkspace(workspace)
+      this.replaceBackendWorkspace(
+        workspace,
+        this.getProjectPresentationProfile()
+      )
       this.phaseStore.activate(String(processId))
       this.phasePanel?.render()
       this.syncPhaseContextBar()
@@ -2381,7 +2385,7 @@ class CadViewerApp {
       const wasLoaded = this.loadedPhase?.processId === processId
       await repository.deleteProcess(processId)
       const workspace = await repository.load()
-      this.replaceBackendWorkspace(workspace)
+      this.replaceBackendWorkspace(workspace, this.getProjectPresentationProfile())
       this.phaseStore.persist()
       this.reportStore.reconcile(workspace)
       this.reportStore.persist()
@@ -2401,8 +2405,9 @@ class CadViewerApp {
     if (this.phaseRepository) {
       try {
         const sequenceId = await this.phaseRepository.createSequence(request)
+        const presentationProfile = this.getProjectPresentationProfile()
         const workspace = await this.phaseRepository.load()
-        this.replaceBackendWorkspace(workspace)
+        this.replaceBackendWorkspace(workspace, presentationProfile)
         this.phaseStore.activate(request.processId, String(sequenceId))
         this.phaseStore.persist()
         this.phasePanel?.render()
@@ -2498,19 +2503,44 @@ class CadViewerApp {
   ): Promise<void> {
     const repository = this.phaseRepository
     if (!repository) return
+    const presentationProfile = this.getProjectPresentationProfile()
     const workspace = await repository.load()
-    this.replaceBackendWorkspace(workspace)
+    this.replaceBackendWorkspace(workspace, presentationProfile)
     if (processId) this.phaseStore.activate(processId, sequenceId, phaseId)
     this.phaseStore.persist()
     this.phasePanel?.render()
     this.syncPhaseContextBar()
   }
 
-  private replaceBackendWorkspace(workspace: PhaseWorkspaceState) {
+  private replaceBackendWorkspace(
+    workspace: PhaseWorkspaceState,
+    presentationProfile: PresentationProfile
+  ) {
     this.phaseStore = new PhaseWorkspaceStore({
       ...workspace,
-      presentationProfile: workspace.presentationProfile
+      presentationProfile
     })
+  }
+
+  private getOrCreateProjectPresentationProfile(
+    projectId: number,
+    fallback: PresentationProfile
+  ): PresentationProfile {
+    const existing = this.projectPresentationProfiles.get(projectId)
+    if (existing) return clonePresentationProfile(existing)
+    const profile = clonePresentationProfile(fallback)
+    this.projectPresentationProfiles.set(projectId, profile)
+    return clonePresentationProfile(profile)
+  }
+
+  private getProjectPresentationProfile(): PresentationProfile {
+    if (this.activeProjectId === undefined) {
+      return clonePresentationProfile(this.phaseStore.snapshot().presentationProfile)
+    }
+    return this.getOrCreateProjectPresentationProfile(
+      this.activeProjectId,
+      this.phaseStore.snapshot().presentationProfile
+    )
   }
 
   private async copyWorkspaceSequence(request: CopySequenceRequest) {
@@ -2845,7 +2875,7 @@ class CadViewerApp {
           this.loadedPhase.phaseId === phaseId
         await this.phaseRepository.deletePhase(phaseId)
         const workspace = await this.phaseRepository.load()
-        this.replaceBackendWorkspace(workspace)
+        this.replaceBackendWorkspace(workspace, this.getProjectPresentationProfile())
         const nextPhase = workspace.processes
           .find(process => process.id === processId)
           ?.sequences.find(sequence => sequence.id === sequenceId)?.phases[0]
@@ -3430,11 +3460,12 @@ class CadViewerApp {
   }
 
   private getConfiguredValveDefinition() {
-    return this.getActivePresentationProfile().devices.find(device => {
+    const devices = this.getActivePresentationProfile().devices
+    return devices.find(device => {
       const id = device.id.trim().toLocaleLowerCase()
       const name = device.name.trim().toLocaleLowerCase()
       return id === 'valve' || name === 'valve' || name === '阀门'
-    })
+    }) ?? devices.find(device => device.states.some(state => state.enabled))
   }
 
   private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
@@ -3622,33 +3653,34 @@ class CadViewerApp {
       : undefined
   }
 
-  private openHighlightStyleDialog(processId: string) {
+  private openHighlightStyleDialog() {
     const value = this.getHighlightStyleDraft()
     document.querySelector('.highlight-style-modal')?.remove()
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
       onApply: draft => {
-        void this.savePresentationProfile(processId, draft.presentationProfile)
+        void this.savePresentationProfile(draft.presentationProfile)
       },
       onClose: () => undefined
     })
     dialog.open()
   }
 
-  private async savePresentationProfile(
-    processId: string,
-    profile: PresentationProfile
-  ) {
+  private async savePresentationProfile(profile: PresentationProfile) {
     try {
       this.phaseStore.updatePresentationProfile(profile)
+      const normalizedProfile = this.phaseStore.snapshot().presentationProfile
+      if (this.activeProjectId !== undefined) {
+        this.projectPresentationProfiles.set(
+          this.activeProjectId,
+          clonePresentationProfile(normalizedProfile)
+        )
+      }
       this.phaseStore.persist()
-      const process = this.phaseStore
-        .snapshot()
-        .processes.find(item => item.id === processId)
-      if (process && this.activeProjectId) {
+      if (this.activeProjectId !== undefined) {
         const presentationProfile = toPersistedPresentationProfile(
-          profile
+          normalizedProfile
         )
         const jsonData = JSON.stringify({ presentationProfile })
         console.log(
