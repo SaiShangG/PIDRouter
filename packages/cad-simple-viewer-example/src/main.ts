@@ -4017,7 +4017,28 @@ class CadViewerApp {
     })
     this.activeFlowPathId = phase.flowState.activeFlowPathId
     phase.flowState.flowPaths.forEach(flowPath => {
-      flowPath.handleKeys.forEach(handleKey => {
+      const ownerHandleKeys = flowPath.handleKeys.filter(handleKey => {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        return ownerId !== undefined && this.isFlowBoundaryObject(ownerId)
+      })
+      const restoredDeviceOwnerHandleKeys = [...this.valveDeviceStates.values()]
+        .filter(deviceState => deviceState.mode === 'open')
+        .filter(deviceState => {
+          const ownerId = this.resolveObjectIdByHandleKey(deviceState.key)
+          if (!ownerId || !this.isFlowBoundaryObject(ownerId)) return false
+          const traversal = this.getFlowConnectionTraversal(ownerId)
+          return flowPath.handleKeys.some(handleKey => {
+            const handleId = Number.parseInt(handleKey, 16)
+            return Number.isFinite(handleId) && traversal.connectedHandles.has(handleId)
+          })
+        })
+        .map(deviceState => deviceState.key)
+      const restoreHandleKeys = ownerHandleKeys.length > 0
+        ? ownerHandleKeys
+        : restoredDeviceOwnerHandleKeys.length > 0
+          ? restoredDeviceOwnerHandleKeys
+          : flowPath.handleKeys
+      restoreHandleKeys.forEach(handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
         if (!ownerId) {
           log.warn(`Unable to restore phase highlight handle: ${handleKey}`)
