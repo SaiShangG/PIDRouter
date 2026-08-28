@@ -3417,7 +3417,7 @@ class CadViewerApp {
     this.openHighlightConnections.delete(ownerId)
     this.openHighlightPaths.delete(ownerId)
 
-    if (state.autoHighlightFlow && utility) {
+    if (state.flowBehavior === 'conducting' && state.autoHighlightFlow && utility) {
       const traversal = this.getFlowConnectionTraversal(ownerId)
       const highlightedIds = this.getOpenHighlightObjectIds(
         ownerId,
@@ -3431,7 +3431,11 @@ class CadViewerApp {
         handleKeys: this.getHighlightHandleKeys(highlightedIds),
         styleSource: { kind: 'utility', utilityId: utility.id }
       })
-    } else if (state.autoHighlightFlow && !utility) {
+    } else if (
+      state.flowBehavior === 'conducting' &&
+      state.autoHighlightFlow &&
+      !utility
+    ) {
       this.showMessage(
         this.appLocale === 'zh'
           ? '没有已启用的 Utility，已应用阀门状态但未创建流路高亮'
