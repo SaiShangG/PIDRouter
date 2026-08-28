@@ -31,19 +31,30 @@ describe('presentationStyleResolver', () => {
     expect(
       resolveEntityPresentation(profile, {
         flowPath,
-        deviceState: { key: '1a', label: 'XV-1', mode: 'closed' }
+        deviceState: { key: '1a', stateKey: 'CLOSED', deviceType: 'VALVE', highlightStyleRefId: 'closed-style' }
       })
     ).toMatchObject({ color: 0x445566, source: 'flow' })
-    profile.deviceStyles.valve.closed = {
-      color: 0xd32f2f,
-      lineWidthPx: 3,
-      opacity: 1,
-      visible: true
-    }
+    profile.devices.push({
+      id: 'VALVE',
+      name: 'VALVE',
+      order: 0,
+      states: [{
+        id: 'closed-style',
+        key: 'CLOSED',
+        displayName: 'Closed',
+        color: 0xd32f2f,
+        lineWidthPx: 3,
+        opacity: 1,
+        enabled: true,
+        autoHighlightFlow: false,
+        flowBehavior: 'blocking',
+        order: 0
+      }]
+    })
     expect(
       resolveEntityPresentation(profile, {
         flowPath,
-        deviceState: { key: '1a', label: 'XV-1', mode: 'closed' }
+        deviceState: { key: '1a', stateKey: 'CLOSED', deviceType: 'VALVE', highlightStyleRefId: 'closed-style' }
       })
     ).toMatchObject({ color: 0xd32f2f, source: 'device' })
     expect(
@@ -158,10 +169,9 @@ describe('presentationStyleResolver', () => {
       },
       deviceState: {
         key: '1a',
-        label: 'XV-1',
-        mode: 'open',
         stateKey: 'running',
-        deviceDefinitionId: 'valve'
+        deviceType: 'Valve',
+        highlightStyleRefId: 'valve-running'
       }
     })).toMatchObject({
       color: 0x00cc66,
@@ -194,10 +204,8 @@ describe('presentationStyleResolver', () => {
     expect(resolveEntityPresentation(profile, {
       deviceState: {
         key: '1A',
-        label: 'XV-1',
-        mode: 'unknown',
         stateKey: 'stale-key',
-        deviceDefinitionId: 'valve',
+        deviceType: 'Valve',
         highlightStyleRefId: 'valve-open-style'
       }
     })).toMatchObject({ color: 0x00cc66, source: 'device' })
@@ -221,10 +229,8 @@ describe('presentationStyleResolver', () => {
     expect(resolveEntityPresentation(profile, {
       deviceState: {
         key: '1A',
-        label: 'XV-1',
-        mode: 'unknown',
         stateKey: 'Open',
-        deviceDefinitionId: 'valve',
+        deviceType: 'Valve',
         highlightStyleRefId: 'missing-style'
       }
     })).toMatchObject({

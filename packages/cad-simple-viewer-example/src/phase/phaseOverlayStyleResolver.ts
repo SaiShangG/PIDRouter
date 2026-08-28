@@ -34,7 +34,9 @@ export const findPhaseOverlayStyleWarnings = (
   deviceStates: Readonly<Record<string, DeviceState>> = {}
 ): PhaseOverlayStyleWarning[] => {
   const utilityIds = new Set(profile.utilities.map(utility => utility.id))
-  const deviceById = new Map(profile.devices.map(device => [device.id, device]))
+  const deviceStyles = profile.devices.flatMap(device =>
+    device.states.map(state => ({ device, state }))
+  )
   const warnings: PhaseOverlayStyleWarning[] = []
 
   flowPaths.forEach(flowPath => {
@@ -51,33 +53,26 @@ export const findPhaseOverlayStyleWarnings = (
   })
 
   Object.values(deviceStates).forEach(deviceState => {
-    const deviceType = deviceState.deviceDefinitionId
-    if (!deviceType) return
-    const device = deviceById.get(deviceType)
-    if (!device) {
+    const deviceType = deviceState.deviceType
+    const style = deviceStyles.find(
+      candidate => candidate.state.id === deviceState.highlightStyleRefId
+    )
+    if (!style) {
       warnings.push({
-        kind: 'missing-device-definition',
+        kind: 'missing-device-state-style',
         handleKey: deviceState.key,
-        deviceType
+        deviceType,
+        styleRefId: deviceState.highlightStyleRefId
       })
       return
     }
     const stateKey = deviceState.stateKey
-    if (stateKey && !device.states.some(state => state.key === stateKey)) {
+    if (style.state.key !== stateKey || style.device.name !== deviceType) {
       warnings.push({
         kind: 'missing-device-state',
         handleKey: deviceState.key,
         deviceType,
         stateKey
-      })
-    }
-    const styleRefId = deviceState.highlightStyleRefId
-    if (styleRefId && !device.states.some(state => state.id === styleRefId)) {
-      warnings.push({
-        kind: 'missing-device-state-style',
-        handleKey: deviceState.key,
-        deviceType,
-        styleRefId
       })
     }
   })

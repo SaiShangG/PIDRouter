@@ -2,7 +2,7 @@ import { resolveDeviceStateDefinition } from '../src/phase/phaseDeviceStateRunti
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('phase device state runtime', () => {
-  it('resolves a state by the exact deviceType and stateKey pair', () => {
+  it('resolves a state by its globally unique style reference', () => {
     const profile = createDefaultPresentationProfile()
     profile.devices.push({
       id: 'motor',
@@ -39,12 +39,11 @@ describe('phase device state runtime', () => {
     })
 
     expect(resolveDeviceStateDefinition(profile, {
-      deviceDefinitionId: 'valve',
-      stateKey: 'Running'
+      highlightStyleRefId: 'valve-running'
     })?.state.id).toBe('valve-running')
   })
 
-  it('does not fall back to a state from another device definition', () => {
+  it('returns no state for an unknown style reference', () => {
     const profile = createDefaultPresentationProfile()
     profile.devices.push({
       id: 'motor',
@@ -65,8 +64,7 @@ describe('phase device state runtime', () => {
     })
 
     expect(resolveDeviceStateDefinition(profile, {
-      deviceDefinitionId: 'valve',
-      stateKey: 'Running'
+      highlightStyleRefId: 'missing-style'
     })).toBeUndefined()
   })
 })

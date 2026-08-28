@@ -40,21 +40,15 @@ const resolveDeviceStyle = (
   profile: PresentationProfile,
   state?: DeviceState
 ): HighlightStyle | undefined => {
-  const configuredDevices = state?.deviceDefinitionId
-    ? profile.devices.filter(device => device.id === state.deviceDefinitionId)
-    : profile.devices
   if (state?.highlightStyleRefId) {
-    const referencedState = configuredDevices
+    const referencedState = profile.devices
       .flatMap(device => device.states)
       .find(candidate => candidate.id === state.highlightStyleRefId)
     return referencedState
       ? deviceStateStyle(referencedState)
       : profile.unknownDeviceStyle ?? undefined
   }
-  const configuredState = configuredDevices
-    .flatMap(device => device.states)
-    .find(candidate => candidate.key === state?.stateKey)
-  return configuredState ? deviceStateStyle(configuredState) : undefined
+  return undefined
 }
 
 const deviceStateStyle = (

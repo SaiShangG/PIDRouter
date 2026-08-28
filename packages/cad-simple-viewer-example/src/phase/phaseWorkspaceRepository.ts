@@ -505,7 +505,7 @@ export class PhaseWorkspaceRepository {
           {
             key: this.fromPersistedHandleKey(deviceState.handleKey),
             stateKey: deviceState.stateKey,
-            deviceDefinitionId: deviceState.deviceType,
+            deviceType: deviceState.deviceType,
             highlightStyleRefId: deviceState.highlightStyleRefId
           } satisfies DeviceState
         ])
@@ -575,7 +575,10 @@ export class PhaseWorkspaceRepository {
         const handleKey = this.toPersistedHandleKey(deviceState.key)
         const stateKey = deviceState.stateKey
         const highlightStyleRefId = deviceState.highlightStyleRefId
-        const deviceType = deviceState.deviceDefinitionId
+        const deviceType = this.resolvePersistedDeviceType(
+          highlightStyleRefId,
+          deviceState.deviceType
+        )
         return handleKey && stateKey && highlightStyleRefId && deviceType
           ? [{ handleKey, stateKey, highlightStyleRefId, deviceType }]
           : []
@@ -616,6 +619,23 @@ export class PhaseWorkspaceRepository {
     return /^[0-9A-F]+$/.test(handleKey)
       ? BigInt(`0x${handleKey}`).toString(10)
       : undefined
+  }
+
+  private resolvePersistedDeviceType(
+    highlightStyleRefId: string,
+    fallbackDeviceType: string
+  ): string {
+    const configure = this.options.projectConfigure
+    const rawStyles = configure && Array.isArray(configure.deviceStyles)
+      ? configure.deviceStyles
+      : []
+    const style = rawStyles.find(candidate =>
+      isRecord(candidate) && String(candidate.id) === highlightStyleRefId
+    )
+    if (isRecord(style) && typeof style.deviceType === 'string' && style.deviceType.trim()) {
+      return style.deviceType.trim()
+    }
+    return fallbackDeviceType
   }
 
   private fromPersistedHandleKey(value: string): string {

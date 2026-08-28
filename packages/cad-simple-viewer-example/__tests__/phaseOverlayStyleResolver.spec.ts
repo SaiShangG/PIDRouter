@@ -37,10 +37,8 @@ describe('findPhaseOverlayStyleWarnings', () => {
     }], {
       '1A': {
         key: '1A',
-        label: 'XV-1',
-        mode: 'unknown',
         stateKey: 'Open',
-        deviceDefinitionId: 'valve',
+        deviceType: 'Valve',
         highlightStyleRefId: 'valve-open'
       }
     })).toEqual([])
@@ -56,10 +54,8 @@ describe('findPhaseOverlayStyleWarnings', () => {
     }
     const deviceState = {
       key: '1A',
-      label: 'XV-1',
-      mode: 'unknown' as const,
       stateKey: 'Open',
-      deviceDefinitionId: 'valve',
+      deviceType: 'Valve',
       highlightStyleRefId: 'missing-style'
     }
     const before = JSON.stringify({ flowPath, deviceState })
@@ -75,9 +71,10 @@ describe('findPhaseOverlayStyleWarnings', () => {
         styleRefId: 'missing-utility'
       },
       {
-        kind: 'missing-device-definition',
+        kind: 'missing-device-state-style',
         handleKey: '1A',
-        deviceType: 'valve'
+        deviceType: 'Valve',
+        styleRefId: 'missing-style'
       }
     ])
     expect(JSON.stringify({ flowPath, deviceState })).toBe(before)
@@ -106,16 +103,14 @@ describe('findPhaseOverlayStyleWarnings', () => {
     expect(findPhaseOverlayStyleWarnings(profile, [], {
       '1A': {
         key: '1A',
-        label: 'XV-1',
-        mode: 'unknown',
         stateKey: 'Missing',
-        deviceDefinitionId: 'valve',
+        deviceType: 'Valve',
         highlightStyleRefId: 'valve-open'
       }
     })).toEqual([{
       kind: 'missing-device-state',
       handleKey: '1A',
-      deviceType: 'valve',
+      deviceType: 'Valve',
       stateKey: 'Missing'
     }])
   })

@@ -1924,7 +1924,7 @@ class CadViewerApp {
           this.valveDeviceStates.set(objectId, {
             key: handleKey,
             stateKey: deviceState.key,
-            deviceDefinitionId: device.id,
+            deviceType: device.name,
             highlightStyleRefId: deviceState.id
           })
           return
@@ -3457,7 +3457,7 @@ class CadViewerApp {
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
       stateKey: state.key,
-      deviceDefinitionId: this.getConfiguredValveDefinition()?.id ?? 'valve',
+      deviceType: this.getConfiguredValveDefinition()?.name ?? 'VALVE',
       highlightStyleRefId: state.id
     })
     this.openHighlightGroups.delete(ownerId)
@@ -3929,10 +3929,10 @@ class CadViewerApp {
         state.presentationProfile,
         deviceState
       )?.state
-      if (!configuredState && deviceState.deviceDefinitionId && deviceState.stateKey) {
+      if (!configuredState && deviceState.deviceType && deviceState.stateKey) {
         log.warn('[PhasePidOverlay] Unable to resolve device state:', {
           handleKey: deviceState.key,
-          deviceType: deviceState.deviceDefinitionId,
+          deviceType: deviceState.deviceType,
           stateKey: deviceState.stateKey
         })
       }

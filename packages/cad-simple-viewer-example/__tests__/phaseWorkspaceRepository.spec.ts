@@ -13,6 +13,19 @@ describe('PhaseWorkspaceRepository', () => {
     const repository = new PhaseWorkspaceRepository({
       baseUrl: '',
       projectId: 1,
+      projectConfigure: {
+        deviceStyles: [{
+          id: 'state-open',
+          deviceType: 'VALVE',
+          deviceState: 'OPEN',
+          displayName: 'Open',
+          color: '#00C853',
+          lineWidthPx: 3,
+          opacity: 1,
+          autoHighlightFlow: true,
+          flowBehavior: 'conducting'
+        }]
+      },
       files: { list: jest.fn(), upload: jest.fn() },
       procedures: {
         list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
@@ -274,7 +287,7 @@ describe('PhaseWorkspaceRepository', () => {
       '1A': {
         key: '1A',
         stateKey: 'Open',
-        deviceDefinitionId: 'device-valve',
+        deviceType: 'device-valve',
         highlightStyleRefId: 'state-open'
       }
     })
@@ -351,6 +364,19 @@ describe('PhaseWorkspaceRepository', () => {
     const repository = new PhaseWorkspaceRepository({
       baseUrl: '',
       projectId: 1,
+      projectConfigure: {
+        deviceStyles: [{
+          id: 'state-open',
+          deviceType: 'VALVE',
+          deviceState: 'OPEN',
+          displayName: 'Open',
+          color: '#00C853',
+          lineWidthPx: 3,
+          opacity: 1,
+          autoHighlightFlow: true,
+          flowBehavior: 'conducting'
+        }]
+      },
       files: { list: jest.fn(), upload: jest.fn() },
       procedures: {
         list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
@@ -375,10 +401,8 @@ describe('PhaseWorkspaceRepository', () => {
         deviceStates: {
           '1A': {
             key: '1a',
-            label: 'XV-101',
-            mode: 'open' as const,
-            stateKey: 'Open',
-            deviceDefinitionId: 'device-valve',
+            stateKey: 'OPEN',
+            deviceType: 'VALVE',
             highlightStyleRefId: 'state-open'
           }
         }
@@ -404,9 +428,9 @@ describe('PhaseWorkspaceRepository', () => {
       }],
       deviceStates: [{
         handleKey: '26',
-        stateKey: 'Open',
+        stateKey: 'OPEN',
         highlightStyleRefId: 'state-open',
-        deviceType: 'device-valve'
+        deviceType: 'VALVE'
       }],
       textNotes: []
     })

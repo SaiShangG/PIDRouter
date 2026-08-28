@@ -101,7 +101,7 @@ export interface DrawingAssetRef {
 export interface DeviceState {
   key: string
   stateKey: string
-  deviceDefinitionId: string
+  deviceType: string
   highlightStyleRefId: string
 }
 

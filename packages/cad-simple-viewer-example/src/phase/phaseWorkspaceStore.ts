@@ -639,8 +639,8 @@ const normalizeDeviceStates = (
       !isRecord(candidate) ||
       typeof candidate.stateKey !== 'string' ||
       !candidate.stateKey.trim() ||
-      typeof candidate.deviceDefinitionId !== 'string' ||
-      !candidate.deviceDefinitionId.trim() ||
+      typeof candidate.deviceType !== 'string' ||
+      !candidate.deviceType.trim() ||
       typeof candidate.highlightStyleRefId !== 'string' ||
       !candidate.highlightStyleRefId.trim()
     ) {
@@ -656,7 +656,7 @@ const normalizeDeviceStates = (
       {
         key,
         stateKey: candidate.stateKey.trim(),
-        deviceDefinitionId: candidate.deviceDefinitionId.trim(),
+        deviceType: candidate.deviceType.trim(),
         highlightStyleRefId: candidate.highlightStyleRefId.trim()
       }
     ] as const]
