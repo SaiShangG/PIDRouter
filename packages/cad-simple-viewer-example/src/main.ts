@@ -127,8 +127,8 @@ import type {
   DrawingAssetRef,
   FlowPathStatus,
   FlowStateSnapshot,
-  PresentationProfile,
-  PhaseWorkspaceState
+  PhaseWorkspaceState,
+  PresentationProfile
 } from './phase/types'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
 import {
