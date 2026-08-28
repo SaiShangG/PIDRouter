@@ -31,3 +31,18 @@ export const retainUnresolvedFlowPaths = (
       )
     }))
     .filter(flowPath => flowPath.handleKeys.length > 0)
+
+export const selectFlowPathRestoreHandleKeys = (
+  flowPathHandleKeys: readonly string[],
+  boundaryHandleKeys: readonly string[],
+  conductingBoundaryHandleKeys: readonly string[],
+  relatedOpenBoundaryHandleKeys: readonly string[]
+): string[] => {
+  if (conductingBoundaryHandleKeys.length > 0) {
+    return [...new Set(conductingBoundaryHandleKeys)]
+  }
+  if (relatedOpenBoundaryHandleKeys.length > 0) {
+    return [...new Set(relatedOpenBoundaryHandleKeys)]
+  }
+  return boundaryHandleKeys.length > 0 ? [] : [...new Set(flowPathHandleKeys)]
+}

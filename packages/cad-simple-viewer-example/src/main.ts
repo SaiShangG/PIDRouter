@@ -23,7 +23,7 @@ import {
   AcCmColorMethod,
   type AcDbObjectId,
   AcDbSysVarManager,
-  AcGeBox2d,
+  AcGePoint2d,
   log
 } from '@mlightcad/data-model'
 import { Brush, Eraser, Languages, Palette, PanelLeft, Save } from 'lucide'
@@ -196,6 +196,8 @@ interface FlowConnectionBounds {
   minY: number
   maxX: number
   maxY: number
+  width: number
+  height: number
 }
 
 const CONNECTED_FLOW_STYLE = {
@@ -257,52 +259,30 @@ const parseFlowConnectionDocument = (
 const resolveFlowConnectionAreaBounds = (
   document: FlowConnectionDocumentInput
 ): FlowConnectionBounds | null => {
-  const areas = document.Areas ?? []
-  let bounds: FlowConnectionBounds | null = null
-
-  areas.forEach(area => {
-    const min = area.BoundingBox?.Min
-    const max = area.BoundingBox?.Max
-    if (
-      !isFiniteNumber(min?.X) ||
-      !isFiniteNumber(min?.Y) ||
-      !isFiniteNumber(max?.X) ||
-      !isFiniteNumber(max?.Y)
-    ) {
-      return
-    }
-
-    bounds = expandBoundsWithPoint(bounds, min.X, min.Y)
-    bounds = expandBoundsWithPoint(bounds, max.X, max.Y)
-  })
-
-  return bounds
-}
-
-const expandBoundsWithPoint = (
-  bounds: FlowConnectionBounds | null,
-  x: number,
-  y: number
-): FlowConnectionBounds => {
-  return mergeBounds(bounds, { minX: x, minY: y, maxX: x, maxY: y })!
-}
-
-const mergeBounds = (
-  bounds: FlowConnectionBounds | null,
-  nextBounds: FlowConnectionBounds | null
-): FlowConnectionBounds | null => {
-  if (!nextBounds) {
-    return bounds
+  const area = document.Areas?.[0]
+  const min = area?.BoundingBox?.Min
+  const max = area?.BoundingBox?.Max
+  if (
+    !isFiniteNumber(min?.X) ||
+    !isFiniteNumber(min?.Y) ||
+    !isFiniteNumber(max?.X) ||
+    !isFiniteNumber(max?.Y)
+  ) {
+    return null
   }
 
-  return bounds
-    ? {
-      minX: Math.min(bounds.minX, nextBounds.minX),
-      minY: Math.min(bounds.minY, nextBounds.minY),
-      maxX: Math.max(bounds.maxX, nextBounds.maxX),
-      maxY: Math.max(bounds.maxY, nextBounds.maxY)
-    }
-    : nextBounds
+  return {
+    minX: min.X,
+    minY: min.Y,
+    maxX: max.X,
+    maxY: max.Y,
+    width: isFiniteNumber(area?.BoundingBox?.LengthX)
+      ? area.BoundingBox.LengthX
+      : max.X - min.X,
+    height: isFiniteNumber(area?.BoundingBox?.LengthY)
+      ? area.BoundingBox.LengthY
+      : max.Y - min.Y
+  }
 }
 
 let flowConnectionDocument: FlowConnectionDocumentInput = {}
@@ -317,29 +297,36 @@ const useFlowConnectionDocument = (jsonText?: string) => {
   flowConnectionPidBounds = resolveFlowConnectionAreaBounds(flowConnectionDocument)
 }
 
-const getFlowConnectionViewBox = () => {
-  if (!flowConnectionPidBounds) return undefined
-
-  return new AcGeBox2d()
-    .expandByPoint({ x: flowConnectionPidBounds.minX, y: flowConnectionPidBounds.minY })
-    .expandByPoint({ x: flowConnectionPidBounds.maxX, y: flowConnectionPidBounds.maxY })
-}
-
 const selectFlowConnectionDocumentAndView = (jsonText?: string) => {
   useFlowConnectionDocument(jsonText)
-  const viewBox = getFlowConnectionViewBox()
-  if (!viewBox) return
-
-  const zoomToDrawing = () => {
+  const positionViewFromArea = () => {
     const view = AcApDocManager.instance.curView
-    if (!view) return
-    view.zoomTo(viewBox, 1)
+    const bounds = flowConnectionPidBounds
+    if (!view || !bounds) return
+
+    const centerX = (bounds.minX + bounds.maxX) / 2
+    const centerY = (bounds.minY + bounds.maxY) / 2
+    const areaWidth = Math.max(bounds.width, Number.EPSILON)
+    const areaHeight = Math.max(bounds.height, Number.EPSILON)
+    const aspect = view.width / Math.max(view.height, 1)
+    const camera = view.internalCamera
+    if (!camera) return
+    const frustum = camera.top
+    const zoom = Math.min(
+      (2 * aspect * frustum) / areaWidth,
+      (2 * frustum) / areaHeight
+    )
+
+    view.flyTo(new AcGePoint2d(centerX, centerY), zoom)
+
+    if (view.isProcessingEntities) {
+      requestAnimationFrame(positionViewFromArea)
+    }
   }
 
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      zoomToDrawing()
-      window.setTimeout(zoomToDrawing, 250)
+      positionViewFromArea()
     })
   })
 }
@@ -703,7 +690,7 @@ class CadViewerApp {
           minimumChunkSize: 1000,
           progressiveRendering: true,
           mode: AcEdOpenMode.Write,
-          openViewMode: AcApOpenViewMode.Extents,
+          openViewMode: AcApOpenViewMode.Saved,
           sysVars: { lwdisplay: false }
         }
       )
@@ -1334,7 +1321,7 @@ class CadViewerApp {
           minimumChunkSize: 1000,
           progressiveRendering: true,
           mode: AcEdOpenMode.Write,
-          openViewMode: AcApOpenViewMode.Extents,
+          openViewMode: AcApOpenViewMode.Saved,
           sysVars: {
             lwdisplay: false
           }
@@ -3263,7 +3250,7 @@ class CadViewerApp {
       minimumChunkSize: 1000,
       progressiveRendering: false,
       mode: AcEdOpenMode.Write,
-      openViewMode: AcApOpenViewMode.Extents,
+      openViewMode: AcApOpenViewMode.Saved,
       sysVars: { lwdisplay: false }
     }
     if (drawing.kind === 'url') {
@@ -4282,7 +4269,7 @@ class CadViewerApp {
         minimumChunkSize: 1000,
         progressiveRendering: true,
         mode: AcEdOpenMode.Write,
-        openViewMode: AcApOpenViewMode.Extents,
+        openViewMode: AcApOpenViewMode.Saved,
         sysVars: {
           lwdisplay: false
         }
@@ -4321,7 +4308,7 @@ class CadViewerApp {
         minimumChunkSize: 1000,
         progressiveRendering: true,
         mode: AcEdOpenMode.Write,
-        openViewMode: AcApOpenViewMode.Extents
+        openViewMode: AcApOpenViewMode.Saved
       }
 
       const success = await AcApDocManager.instance.openUrl(url, options)

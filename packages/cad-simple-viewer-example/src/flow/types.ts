@@ -18,6 +18,9 @@ export interface DocumentAreaInput {
   BoundingBox?: {
     Min?: { X?: number; Y?: number; Z?: number }
     Max?: { X?: number; Y?: number; Z?: number }
+    LengthX?: number
+    LengthY?: number
+    LengthZ?: number
   }
   ControlModules?: DocumentControlModuleInput[]
   ContainCadEntityHandles?: number[]

@@ -1,7 +1,8 @@
 import {
   collectHighlightHandleKeys,
   findStaleHighlightRootIds,
-  retainUnresolvedFlowPaths
+  retainUnresolvedFlowPaths,
+  selectFlowPathRestoreHandleKeys
 } from '../src/phase/phaseFlowPathRuntime'
 
 describe('collectHighlightHandleKeys', () => {
@@ -69,5 +70,40 @@ describe('retainUnresolvedFlowPaths', () => {
       name: 'Transfer',
       handleKeys: ['1A']
     }], () => true)).toEqual([])
+  })
+})
+
+describe('selectFlowPathRestoreHandleKeys', () => {
+  it('does not restore a connected flow from a closed valve boundary', () => {
+    expect(selectFlowPathRestoreHandleKeys(
+      ['1A', '2B', '3C'],
+      ['2B'],
+      [],
+      []
+    )).toEqual([])
+  })
+
+  it('restores from conducting or related open valve boundaries', () => {
+    expect(selectFlowPathRestoreHandleKeys(
+      ['1A', '2B'],
+      ['2B'],
+      ['2B'],
+      ['3C']
+    )).toEqual(['2B'])
+    expect(selectFlowPathRestoreHandleKeys(
+      ['1A'],
+      [],
+      [],
+      ['3C']
+    )).toEqual(['3C'])
+  })
+
+  it('keeps direct highlights when the flow path has no valve boundary', () => {
+    expect(selectFlowPathRestoreHandleKeys(
+      ['1A', '1A', '2B'],
+      [],
+      [],
+      []
+    )).toEqual(['1A', '2B'])
   })
 })
