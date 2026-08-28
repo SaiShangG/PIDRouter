@@ -235,6 +235,10 @@ describe('PhaseWorkspaceRepository', () => {
                     stateKey: 'Open',
                     highlightStyleRefId: 'state-open',
                     deviceType: 'device-valve'
+                  }, {
+                    handleKey: '27',
+                    stateKey: 'Open',
+                    highlightStyleRefId: 'state-open'
                   }],
                   textNotes: []
                 })
@@ -288,6 +292,12 @@ describe('PhaseWorkspaceRepository', () => {
         key: '1A',
         stateKey: 'Open',
         deviceType: 'device-valve',
+        highlightStyleRefId: 'state-open'
+      },
+      '1B': {
+        key: '1B',
+        stateKey: 'Open',
+        deviceType: 'UNKNOWN',
         highlightStyleRefId: 'state-open'
       }
     })

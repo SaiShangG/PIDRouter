@@ -24,7 +24,7 @@ export interface PhasePidOverlayDeviceState {
   handleKey: string
   stateKey: string
   highlightStyleRefId: string
-  deviceType: string
+  deviceType?: string
 }
 
 export interface PhasePidOverlayTextLocation {
@@ -150,7 +150,7 @@ const readDeviceState = (
     !isRecord(value) ||
     !isNonEmptyString(value.stateKey) ||
     !isNonEmptyString(value.highlightStyleRefId) ||
-    !isNonEmptyString(value.deviceType)
+    (value.deviceType !== undefined && !isNonEmptyString(value.deviceType))
   ) {
     return undefined
   }
@@ -160,7 +160,9 @@ const readDeviceState = (
       handleKey,
       stateKey: value.stateKey.trim(),
       highlightStyleRefId: value.highlightStyleRefId.trim(),
-      deviceType: value.deviceType.trim()
+      ...(isNonEmptyString(value.deviceType)
+        ? { deviceType: value.deviceType.trim() }
+        : {})
     }
     : undefined
 }

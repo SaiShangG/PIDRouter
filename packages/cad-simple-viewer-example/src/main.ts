@@ -3952,9 +3952,21 @@ class CadViewerApp {
 
     const restoredValveKeys = new Set<string>()
     Object.values(phase.flowState.deviceStates ?? {}).forEach(deviceState => {
+      log.info('[PhasePidOverlay] Looking for valve:', {
+        phaseId,
+        handleKey: deviceState.key,
+        deviceType: deviceState.deviceType,
+        stateKey: deviceState.stateKey,
+        highlightStyleRefId: deviceState.highlightStyleRefId
+      })
       const ownerId = this.resolveObjectIdByHandleKey(deviceState.key)
       if (!ownerId) {
-        log.warn(`Unable to restore device state handle: ${deviceState.key}`)
+        log.warn('[PhasePidOverlay] Valve not found:', {
+          phaseId,
+          handleKey: deviceState.key,
+          deviceType: deviceState.deviceType,
+          stateKey: deviceState.stateKey
+        })
         return
       }
       const configuredState = resolveDeviceStateDefinition(
@@ -3969,6 +3981,13 @@ class CadViewerApp {
         })
       }
       if (!configuredState) return
+      log.info('[PhasePidOverlay] Restored valve:', {
+        phaseId,
+        handleKey: deviceState.key,
+        stateKey: deviceState.stateKey,
+        color: `#${configuredState.color.toString(16).padStart(6, '0').toUpperCase()}`,
+        colorValue: configuredState.color
+      })
       this.valveDeviceStates.set(ownerId, { ...deviceState })
       if (configuredState.flowBehavior === 'conducting') {
         restoredValveKeys.add(deviceState.key)

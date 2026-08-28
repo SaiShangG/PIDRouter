@@ -55,6 +55,23 @@ describe('parsePhasePidOverlay', () => {
     expect(result.overlay.textNotes[0].linkedObjectHandleKey).toBe('61270')
   })
 
+  it('retains backend device states when deviceType is omitted', () => {
+    const overlay = createValidOverlay()
+    const { deviceType: _deviceType, ...deviceState } = overlay.deviceStates[0]
+    overlay.deviceStates = [deviceState as typeof overlay.deviceStates[number]]
+
+    const result = parsePhasePidOverlay(overlay)
+
+    expect(result.status).toBe('valid')
+    if (result.status !== 'valid') return
+    expect(result.warnings).toEqual([])
+    expect(result.overlay.deviceStates).toEqual([{
+      handleKey: '52532',
+      stateKey: 'Open',
+      highlightStyleRefId: 'state-style-1'
+    }])
+  })
+
   it('skips invalid and duplicate entries while retaining valid entries', () => {
     const overlay = createValidOverlay()
     overlay.flowPaths.push(

@@ -505,7 +505,11 @@ export class PhaseWorkspaceRepository {
           {
             key: this.fromPersistedHandleKey(deviceState.handleKey),
             stateKey: deviceState.stateKey,
-            deviceType: deviceState.deviceType,
+            deviceType: deviceState.deviceType ??
+              this.resolvePersistedDeviceType(
+                deviceState.highlightStyleRefId,
+                'UNKNOWN'
+              ),
             highlightStyleRefId: deviceState.highlightStyleRefId
           } satisfies DeviceState
         ])
