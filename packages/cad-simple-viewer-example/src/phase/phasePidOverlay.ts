@@ -1,5 +1,3 @@
-export const PHASE_PID_OVERLAY_SCHEMA_VERSION = 2 as const
-
 export enum TextAttachmentPoint {
   TopLeft = 1,
   TopCenter = 2,
@@ -53,12 +51,13 @@ export interface PhasePidOverlayTextNote {
 }
 
 export interface PhasePidOverlay {
-  schemaVersion: typeof PHASE_PID_OVERLAY_SCHEMA_VERSION
+  Index: number
+  OrderId: number
+  Name: string
+  Comment: string | null
   drawing?: PhasePidOverlayDrawing
-  highlightedObjects: {
-    flowPaths: PhasePidOverlayFlowPath[]
-    deviceStates: PhasePidOverlayDeviceState[]
-  }
+  flowPaths: PhasePidOverlayFlowPath[]
+  deviceStates: PhasePidOverlayDeviceState[]
   textNotes: PhasePidOverlayTextNote[]
 }
 
@@ -81,11 +80,6 @@ export type PhasePidOverlayParseResult =
     status: 'valid'
     overlay: PhasePidOverlay
     warnings: PhasePidOverlayWarning[]
-  }
-  | {
-    status: 'unsupported'
-    schemaVersion: unknown
-    warnings: []
   }
   | {
     status: 'invalid'
@@ -238,17 +232,13 @@ export const parsePhasePidOverlay = (
   if (!isRecord(value)) {
     return { status: 'invalid', reason: 'invalid-root', warnings: [] }
   }
-  if (value.schemaVersion !== PHASE_PID_OVERLAY_SCHEMA_VERSION) {
-    return {
-      status: 'unsupported',
-      schemaVersion: value.schemaVersion,
-      warnings: []
-    }
-  }
   if (
-    !isRecord(value.highlightedObjects) ||
-    !Array.isArray(value.highlightedObjects.flowPaths) ||
-    !Array.isArray(value.highlightedObjects.deviceStates) ||
+    !Number.isInteger(value.Index) ||
+    !Number.isInteger(value.OrderId) ||
+    !isNonEmptyString(value.Name) ||
+    (value.Comment !== null && typeof value.Comment !== 'string') ||
+    (value.flowPaths !== null && !Array.isArray(value.flowPaths)) ||
+    (value.deviceStates !== null && !Array.isArray(value.deviceStates)) ||
     !Array.isArray(value.textNotes)
   ) {
     return { status: 'invalid', reason: 'invalid-root', warnings: [] }
@@ -262,12 +252,13 @@ export const parsePhasePidOverlay = (
 
   const flowPaths: PhasePidOverlayFlowPath[] = []
   const flowPathKeys = new Set<string>()
-  value.highlightedObjects.flowPaths.forEach((candidate, index) => {
+  const flowPathValues = Array.isArray(value.flowPaths) ? value.flowPaths : []
+  flowPathValues.forEach((candidate, index) => {
     const flowPath = readFlowPath(candidate)
     if (!flowPath) {
       warnings.push({
         code: 'invalid-flow-path',
-        path: `highlightedObjects.flowPaths[${index}]`
+        path: `flowPaths[${index}]`
       })
       return
     }
@@ -275,7 +266,7 @@ export const parsePhasePidOverlay = (
     if (flowPathKeys.has(key)) {
       warnings.push({
         code: 'duplicate-flow-path',
-        path: `highlightedObjects.flowPaths[${index}]`
+        path: `flowPaths[${index}]`
       })
       return
     }
@@ -285,19 +276,22 @@ export const parsePhasePidOverlay = (
 
   const deviceStates: PhasePidOverlayDeviceState[] = []
   const deviceStateHandles = new Set<string>()
-  value.highlightedObjects.deviceStates.forEach((candidate, index) => {
+  const deviceStateValues = Array.isArray(value.deviceStates)
+    ? value.deviceStates
+    : []
+  deviceStateValues.forEach((candidate, index) => {
     const deviceState = readDeviceState(candidate)
     if (!deviceState) {
       warnings.push({
         code: 'invalid-device-state',
-        path: `highlightedObjects.deviceStates[${index}]`
+        path: `deviceStates[${index}]`
       })
       return
     }
     if (deviceStateHandles.has(deviceState.handleKey)) {
       warnings.push({
         code: 'duplicate-device-state',
-        path: `highlightedObjects.deviceStates[${index}]`
+        path: `deviceStates[${index}]`
       })
       return
     }
@@ -327,9 +321,13 @@ export const parsePhasePidOverlay = (
   return {
     status: 'valid',
     overlay: {
-      schemaVersion: PHASE_PID_OVERLAY_SCHEMA_VERSION,
+      Index: Number(value.Index),
+      OrderId: Number(value.OrderId),
+      Name: value.Name.trim(),
+      Comment: typeof value.Comment === 'string' ? value.Comment : null,
       ...(drawing ? { drawing } : {}),
-      highlightedObjects: { flowPaths, deviceStates },
+      flowPaths,
+      deviceStates,
       textNotes
     },
     warnings

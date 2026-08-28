@@ -4,17 +4,18 @@ import {
 } from '../src/phase/phasePidOverlay'
 
 const createValidOverlay = () => ({
-  schemaVersion: 2,
+  Index: 1,
+  OrderId: 1,
+  Name: ' S1-1 ',
+  Comment: null,
   drawing: { fileId: 5, displayName: ' PID-1001.dwg ' },
-  highlightedObjects: {
-    flowPaths: [{ handleKey: ' 43794 ', highlightStyleRefId: ' utility-1 ' }],
-    deviceStates: [{
+  flowPaths: [{ handleKey: ' 43794 ', highlightStyleRefId: ' utility-1 ' }],
+  deviceStates: [{
       handleKey: ' 52532 ',
       stateKey: 'Open',
       highlightStyleRefId: ' state-style-1 ',
       deviceType: ' valve-1 '
-    }]
-  },
+  }],
   textNotes: [{
     id: ' note-1 ',
     contents: 'Open valve',
@@ -30,7 +31,7 @@ const createValidOverlay = () => ({
 })
 
 describe('parsePhasePidOverlay', () => {
-  it('parses v2 data, normalizes handles, and preserves stateKey case', () => {
+  it('parses current data, normalizes values, and preserves stateKey case', () => {
     const result = parsePhasePidOverlay(JSON.stringify(createValidOverlay()))
 
     expect(result.status).toBe('valid')
@@ -40,11 +41,12 @@ describe('parsePhasePidOverlay', () => {
       fileId: 5,
       displayName: 'PID-1001.dwg'
     })
-    expect(result.overlay.highlightedObjects.flowPaths[0]).toEqual({
+    expect(result.overlay.Name).toBe('S1-1')
+    expect(result.overlay.flowPaths[0]).toEqual({
       handleKey: '43794',
       highlightStyleRefId: 'utility-1'
     })
-    expect(result.overlay.highlightedObjects.deviceStates[0]).toEqual({
+    expect(result.overlay.deviceStates[0]).toEqual({
       handleKey: '52532',
       stateKey: 'Open',
       highlightStyleRefId: 'state-style-1',
@@ -55,11 +57,11 @@ describe('parsePhasePidOverlay', () => {
 
   it('skips invalid and duplicate entries while retaining valid entries', () => {
     const overlay = createValidOverlay()
-    overlay.highlightedObjects.flowPaths.push(
+    overlay.flowPaths.push(
       { handleKey: 'not-a-handle', highlightStyleRefId: 'utility-2' },
       { handleKey: '43794', highlightStyleRefId: 'utility-2' }
     )
-    overlay.highlightedObjects.deviceStates.push({
+    overlay.deviceStates.push({
       handleKey: '52532',
       stateKey: 'Closed',
       highlightStyleRefId: 'state-style-2',
@@ -71,8 +73,8 @@ describe('parsePhasePidOverlay', () => {
 
     expect(result.status).toBe('valid')
     if (result.status !== 'valid') return
-    expect(result.overlay.highlightedObjects.flowPaths).toHaveLength(1)
-    expect(result.overlay.highlightedObjects.deviceStates).toHaveLength(1)
+    expect(result.overlay.flowPaths).toHaveLength(1)
+    expect(result.overlay.deviceStates).toHaveLength(1)
     expect(result.overlay.textNotes).toHaveLength(1)
     expect(result.warnings.map(warning => warning.code)).toEqual([
       'invalid-flow-path',
@@ -82,26 +84,25 @@ describe('parsePhasePidOverlay', () => {
     ])
   })
 
-  it('rejects v1 and unknown schema versions as unsupported', () => {
-    expect(parsePhasePidOverlay({ schemaVersion: 1 })).toEqual({
-      status: 'unsupported',
-      schemaVersion: 1,
-      warnings: []
-    })
-    expect(parsePhasePidOverlay({ schemaVersion: 3 })).toEqual({
-      status: 'unsupported',
-      schemaVersion: 3,
+  it('rejects the removed schemaVersion and highlightedObjects format', () => {
+    expect(parsePhasePidOverlay({
+      schemaVersion: 2,
+      highlightedObjects: { flowPaths: [], deviceStates: [] },
+      textNotes: []
+    })).toEqual({
+      status: 'invalid',
+      reason: 'invalid-root',
       warnings: []
     })
   })
 
-  it('rejects invalid JSON and malformed v2 roots', () => {
+  it('rejects invalid JSON and malformed current roots', () => {
     expect(parsePhasePidOverlay('{invalid')).toEqual({
       status: 'invalid',
       reason: 'invalid-json',
       warnings: []
     })
-    expect(parsePhasePidOverlay({ schemaVersion: 2 })).toEqual({
+    expect(parsePhasePidOverlay({ Index: 1 })).toEqual({
       status: 'invalid',
       reason: 'invalid-root',
       warnings: []

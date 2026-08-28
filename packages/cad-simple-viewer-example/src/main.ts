@@ -3123,6 +3123,7 @@ class CadViewerApp {
       },
       phaseIndex! + 1
     )
+    this.invalidateLoadedPhaseBinding()
     await this.reloadBackendWorkspace(
       request.processId,
       request.sequenceId,

@@ -158,20 +158,21 @@ describe('PhaseWorkspaceRepository', () => {
                 index: 1,
                 operationId: 10,
                 jsonData: JSON.stringify({
-                  schemaVersion: 2,
+                  Index: 1,
+                  OrderId: 1,
+                  Name: 'Transfer',
+                  Comment: null,
                   drawing: { fileId: 5, displayName: 'Supply PID' },
-                  highlightedObjects: {
-                    flowPaths: [
-                      { handleKey: '26', highlightStyleRefId: 'utility-water' },
-                      { handleKey: 'invalid', highlightStyleRefId: 'utility-water' }
-                    ],
-                    deviceStates: [{
-                      handleKey: '26',
-                      stateKey: 'Open',
-                      highlightStyleRefId: 'state-open',
-                      deviceType: 'device-valve'
-                    }]
-                  },
+                  flowPaths: [
+                    { handleKey: '26', highlightStyleRefId: 'utility-water' },
+                    { handleKey: 'invalid', highlightStyleRefId: 'utility-water' }
+                  ],
+                  deviceStates: [{
+                    handleKey: '26',
+                    stateKey: 'Open',
+                    highlightStyleRefId: 'state-open',
+                    deviceType: 'device-valve'
+                  }],
                   textNotes: []
                 })
               }
@@ -240,6 +241,54 @@ describe('PhaseWorkspaceRepository', () => {
     expect(workspace.processes[0].presentationProfile.utilities).toEqual([])
   })
 
+  it('keeps a persisted drawing association when the file list is stale', async () => {
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '',
+      projectId: 1,
+      files: {
+        list: jest.fn().mockResolvedValue([]),
+        upload: jest.fn()
+      },
+      procedures: {
+        list: jest.fn().mockResolvedValue([{ id: 2, name: 'CIP' }]),
+        create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      operations: {
+        list: jest.fn().mockResolvedValue([{
+          id: 10, name: 'Supply', index: 1, procedureId: 2
+        }]),
+        create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      phases: {
+        list: jest.fn().mockResolvedValue([{
+          id: 20,
+          name: 'Transfer',
+          index: 1,
+          operationId: 10,
+          jsonData: JSON.stringify({
+            Index: 1,
+            OrderId: 1,
+            Name: 'Transfer',
+            Comment: null,
+            drawing: { fileId: 5, displayName: 'Supply PID' },
+            flowPaths: null,
+            deviceStates: null,
+            textNotes: []
+          })
+        }]),
+        create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      }
+    })
+
+    const workspace = await repository.load()
+
+    expect(workspace.processes[0].sequences[0].phases[0].drawing).toEqual({
+      kind: 'assigned',
+      assetId: 'file:5',
+      displayName: 'Supply PID'
+    })
+  })
+
   it('writes v2 Phase data and protects unsafe persisted overlays', async () => {
     const phases = {
       list: jest.fn(),
@@ -292,20 +341,21 @@ describe('PhaseWorkspaceRepository', () => {
     const persistedOverlay = JSON.parse(payload.jsonData)
     expect(payload.jsonData).not.toContain('"mode"')
     expect(persistedOverlay).toEqual({
-      schemaVersion: 2,
+      Index: 1,
+      OrderId: 1,
+      Name: 'Transfer',
+      Comment: null,
       drawing: { fileId: 5, displayName: 'PID' },
-      highlightedObjects: {
-        flowPaths: [{
-          handleKey: '43',
-          highlightStyleRefId: 'utility-water'
-        }],
-        deviceStates: [{
-          handleKey: '26',
-          stateKey: 'Open',
-          highlightStyleRefId: 'state-open',
-          deviceType: 'device-valve'
-        }]
-      },
+      flowPaths: [{
+        handleKey: '43',
+        highlightStyleRefId: 'utility-water'
+      }],
+      deviceStates: [{
+        handleKey: '26',
+        stateKey: 'Open',
+        highlightStyleRefId: 'state-open',
+        deviceType: 'device-valve'
+      }],
       textNotes: []
     })
 

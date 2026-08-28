@@ -10,7 +10,6 @@ import type {
 } from '../api/processAssistantTypes'
 import {
   parsePhasePidOverlay,
-  PHASE_PID_OVERLAY_SCHEMA_VERSION,
   type PhasePidOverlay
 } from './phasePidOverlay'
 import {
@@ -107,7 +106,12 @@ export interface CreateBackendSequenceInput {
   orderIndex?: number
 }
 
-export type PersistedPhaseData = PhasePidOverlay
+export type PersistedPhaseData = Omit<PhasePidOverlay, 'deviceStates' | 'flowPaths'> & {
+  Comment: string | null
+  drawing?: PhasePidOverlay['drawing']
+  deviceStates: PhasePidOverlay['deviceStates'] | null
+  flowPaths: PhasePidOverlay['flowPaths'] | null
+}
 
 export interface CreateBackendPhaseInput {
   sequenceId: string
@@ -278,13 +282,19 @@ export class PhaseWorkspaceRepository {
     input: CreateBackendPhaseInput,
     signal?: AbortSignal
   ): Promise<number> {
+    const data = input.data ?? this.createEmptyPhaseData()
     return this.options.phases.create(
       {
         name: this.requireName(input.name, 'Phase'),
         index: this.requirePositiveInteger(input.number, 'Phase number'),
         orderIndex: input.orderIndex ?? input.number,
         operationId: this.requireBackendId(input.sequenceId, 'Sequence'),
-        jsonData: JSON.stringify(input.data ?? this.createEmptyPhaseData())
+        jsonData: JSON.stringify({
+          ...data,
+          Index: input.number,
+          OrderId: input.orderIndex ?? input.number,
+          Name: input.name
+        })
       },
       signal
     )
@@ -314,7 +324,7 @@ export class PhaseWorkspaceRepository {
         index: this.requirePositiveInteger(phase.number, 'Phase number'),
         orderIndex,
         operationId: this.requireBackendId(sequenceId, 'Sequence'),
-        jsonData: JSON.stringify(this.toPersistedPhaseData(phase))
+        jsonData: JSON.stringify(this.toPersistedPhaseData(phase, orderIndex))
       },
       signal
     )
@@ -445,19 +455,18 @@ export class PhaseWorkspaceRepository {
     }
     const assetId = `file:${value.fileId}`
     const asset = drawingAssets[assetId]
-    if (!asset) return { kind: 'unassigned' }
     return {
       kind: 'assigned',
       assetId,
       displayName:
         typeof value.displayName === 'string' && value.displayName.trim()
           ? value.displayName.trim()
-          : asset.sourceName
+          : asset?.sourceName ?? `File ${value.fileId}`
     }
   }
 
   private readFlowState(overlay: PhasePidOverlay): FlowStateSnapshot {
-    const flowPaths: FlowPathStatus[] = overlay.highlightedObjects.flowPaths.map(
+    const flowPaths: FlowPathStatus[] = overlay.flowPaths.map(
       (flowPath, index) => {
         const handleKey = this.fromPersistedHandleKey(flowPath.handleKey)
         return {
@@ -472,9 +481,9 @@ export class PhaseWorkspaceRepository {
         }
       }
     )
-    const deviceStates = overlay.highlightedObjects.deviceStates.length > 0
+    const deviceStates = overlay.deviceStates.length > 0
       ? Object.fromEntries(
-        overlay.highlightedObjects.deviceStates.map(deviceState => [
+        overlay.deviceStates.map(deviceState => [
           this.fromPersistedHandleKey(deviceState.handleKey),
           {
             key: this.fromPersistedHandleKey(deviceState.handleKey),
@@ -505,13 +514,20 @@ export class PhaseWorkspaceRepository {
 
   private createEmptyPhaseData(): PersistedPhaseData {
     return {
-      schemaVersion: PHASE_PID_OVERLAY_SCHEMA_VERSION,
-      highlightedObjects: { flowPaths: [], deviceStates: [] },
+      Index: 1,
+      OrderId: 1,
+      Name: '',
+      Comment: null,
+      flowPaths: null,
+      deviceStates: null,
       textNotes: []
     }
   }
 
-  private toPersistedPhaseData(phase: PhaseSnapshot): PersistedPhaseData {
+  private toPersistedPhaseData(
+    phase: PhaseSnapshot,
+    orderIndex = phase.number
+  ): PersistedPhaseData {
     const fileId =
       phase.drawing.kind === 'assigned'
         ? this.readFileId(phase.drawing.assetId)
@@ -551,7 +567,10 @@ export class PhaseWorkspaceRepository {
       }
     )
     return {
-      schemaVersion: PHASE_PID_OVERLAY_SCHEMA_VERSION,
+      Index: phase.number,
+      OrderId: orderIndex,
+      Name: phase.name,
+      Comment: null,
       drawing:
         fileId !== undefined && phase.drawing.kind === 'assigned'
           ? {
@@ -559,7 +578,8 @@ export class PhaseWorkspaceRepository {
             displayName: phase.drawing.displayName
           }
           : undefined,
-      highlightedObjects: { flowPaths, deviceStates },
+      flowPaths: flowPaths.length > 0 ? flowPaths : null,
+      deviceStates: deviceStates.length > 0 ? deviceStates : null,
       textNotes: phase.textNotes?.flatMap(note => {
         const linkedObjectHandleKey = note.linkedObjectHandleKey === undefined
           ? undefined

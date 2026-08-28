@@ -1,7 +1,4 @@
-export {
-  PHASE_PID_OVERLAY_SCHEMA_VERSION,
-  TextAttachmentPoint
-} from './phasePidOverlay'
+export { TextAttachmentPoint } from './phasePidOverlay'
 export type {
   PhasePidOverlay,
   PhasePidOverlayDeviceState,
@@ -138,7 +135,6 @@ export interface PhaseSnapshot {
   flowState: FlowStateSnapshot
   textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]
   pidOverlayPersistence?:
-    | { status: 'unsupported'; schemaVersion: unknown }
     | { status: 'invalid'; reason: 'invalid-json' | 'invalid-root' }
     | { status: 'warnings'; warningCodes: string[] }
   createdAt: string

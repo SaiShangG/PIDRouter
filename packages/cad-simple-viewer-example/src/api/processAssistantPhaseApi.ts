@@ -2,7 +2,7 @@ import { ProcessAssistantClient } from './processAssistantClient'
 import type { PhaseDto } from './processAssistantTypes'
 
 export class ProcessAssistantPhaseApi {
-  constructor(private readonly client: ProcessAssistantClient) {}
+  constructor(private readonly client: ProcessAssistantClient) { }
 
   list(operationId: number, signal?: AbortSignal): Promise<PhaseDto[]> {
     const query = new URLSearchParams({ operationId: String(operationId) })
@@ -21,7 +21,7 @@ export class ProcessAssistantPhaseApi {
   }
 
   update(id: number, phase: PhaseDto, signal?: AbortSignal): Promise<void> {
-    return this.client.request('POST', `/api/v1/Phase/save/${id}`, {
+    return this.client.request('PUT', `/api/v1/Phase/${id}`, {
       body: phase,
       signal
     })
