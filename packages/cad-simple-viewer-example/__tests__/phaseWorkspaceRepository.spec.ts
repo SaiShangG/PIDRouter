@@ -2,6 +2,54 @@ import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
+  it('persists the drawing with PUT after creating a Phase', async () => {
+    const phases = {
+      list: jest.fn(),
+      create: jest.fn().mockResolvedValue(20),
+      update: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn()
+    }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '',
+      projectId: 1,
+      files: { list: jest.fn(), upload: jest.fn() },
+      procedures: {
+        list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      operations: {
+        list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn()
+      },
+      phases
+    })
+
+    await expect(repository.createPhase({
+      sequenceId: '10',
+      number: 1,
+      name: 'Transfer',
+      data: repository.createPhaseData(undefined, {
+        fileId: 5,
+        displayName: 'Supply PID'
+      })
+    })).resolves.toBe(20)
+
+    const createdPhase = phases.create.mock.calls[0][0]
+    expect(phases.update).toHaveBeenCalledWith(
+      20,
+      { ...createdPhase, id: 20 },
+      undefined
+    )
+    expect(JSON.parse(createdPhase.jsonData)).toEqual({
+      Index: 1,
+      OrderId: 1,
+      Name: 'Transfer',
+      Comment: null,
+      drawing: { fileId: 5, displayName: 'Supply PID' },
+      flowPaths: null,
+      deviceStates: null,
+      textNotes: []
+    })
+  })
+
   it('creates a Process through the Procedure API', async () => {
     const procedures = {
       list: jest.fn(),

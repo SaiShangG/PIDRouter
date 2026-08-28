@@ -135,8 +135,8 @@ export interface PhaseSnapshot {
   flowState: FlowStateSnapshot
   textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]
   pidOverlayPersistence?:
-    | { status: 'invalid'; reason: 'invalid-json' | 'invalid-root' }
-    | { status: 'warnings'; warningCodes: string[] }
+  | { status: 'invalid'; reason: 'invalid-json' | 'invalid-root' }
+  | { status: 'warnings'; warningCodes: string[] }
   createdAt: string
   updatedAt: string
 }

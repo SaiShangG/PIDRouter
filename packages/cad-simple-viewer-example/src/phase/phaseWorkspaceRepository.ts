@@ -278,26 +278,26 @@ export class PhaseWorkspaceRepository {
     )
   }
 
-  createPhase(
+  async createPhase(
     input: CreateBackendPhaseInput,
     signal?: AbortSignal
   ): Promise<number> {
     const data = input.data ?? this.createEmptyPhaseData()
-    return this.options.phases.create(
-      {
-        name: this.requireName(input.name, 'Phase'),
-        index: this.requirePositiveInteger(input.number, 'Phase number'),
-        orderIndex: input.orderIndex ?? input.number,
-        operationId: this.requireBackendId(input.sequenceId, 'Sequence'),
-        jsonData: JSON.stringify({
-          ...data,
-          Index: input.number,
-          OrderId: input.orderIndex ?? input.number,
-          Name: input.name
-        })
-      },
-      signal
-    )
+    const phase: PhaseDto = {
+      name: this.requireName(input.name, 'Phase'),
+      index: this.requirePositiveInteger(input.number, 'Phase number'),
+      orderIndex: input.orderIndex ?? input.number,
+      operationId: this.requireBackendId(input.sequenceId, 'Sequence'),
+      jsonData: JSON.stringify({
+        ...data,
+        Index: input.number,
+        OrderId: input.orderIndex ?? input.number,
+        Name: input.name
+      })
+    }
+    const id = await this.options.phases.create(phase, signal)
+    await this.options.phases.update(id, { ...phase, id }, signal)
+    return id
   }
 
   updatePhase(

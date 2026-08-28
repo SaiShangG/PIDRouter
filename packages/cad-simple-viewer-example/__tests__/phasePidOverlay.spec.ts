@@ -11,10 +11,10 @@ const createValidOverlay = () => ({
   drawing: { fileId: 5, displayName: ' PID-1001.dwg ' },
   flowPaths: [{ handleKey: ' 43794 ', highlightStyleRefId: ' utility-1 ' }],
   deviceStates: [{
-      handleKey: ' 52532 ',
-      stateKey: 'Open',
-      highlightStyleRefId: ' state-style-1 ',
-      deviceType: ' valve-1 '
+    handleKey: ' 52532 ',
+    stateKey: 'Open',
+    highlightStyleRefId: ' state-style-1 ',
+    deviceType: ' valve-1 '
   }],
   textNotes: [{
     id: ' note-1 ',
