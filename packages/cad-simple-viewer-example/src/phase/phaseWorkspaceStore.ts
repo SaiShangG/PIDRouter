@@ -1137,10 +1137,14 @@ export class PhaseWorkspaceStore {
     processId: string,
     sequenceId: string,
     phaseId: string,
-    state: Pick<PhaseSnapshot, 'flowState'>
+    state: Pick<PhaseSnapshot, 'flowState' | 'textNotes'>
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     phase.flowState = cloneFlowState(state.flowState)
+    phase.textNotes = state.textNotes?.map(note => ({
+      ...note,
+      location: { ...note.location }
+    }))
     phase.updatedAt = this.now()
   }
 

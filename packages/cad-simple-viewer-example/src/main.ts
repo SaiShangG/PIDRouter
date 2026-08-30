@@ -6,6 +6,7 @@ import {
 } from '@mlightcad/cad-simple-ui-plugin'
 import { registerSimpleUiPlugin } from '@mlightcad/cad-simple-ui-plugin/register'
 import {
+  AcApAnnotation,
   AcApDocManager,
   AcApI18n,
   AcApOpenDatabaseOptions,
@@ -21,6 +22,7 @@ import {
 import {
   AcCmColor,
   AcCmColorMethod,
+  AcDbMText,
   type AcDbObjectId,
   AcDbSysVarManager,
   AcGePoint2d,
@@ -127,6 +129,7 @@ import type {
   DrawingAssetRef,
   FlowPathStatus,
   FlowStateSnapshot,
+  PhaseSnapshot,
   PhaseWorkspaceState,
   PresentationProfile
 } from './phase/types'
@@ -416,6 +419,8 @@ class CadViewerApp {
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
   private activeFlowPathId?: string
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
+  private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
+  private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
   private readonly manualHighlightedIds = new Set<AcDbObjectId>()
   private readonly manualHiddenIds = new Set<AcDbObjectId>()
   private readonly phasePresentationController = new PhasePresentationController()
@@ -3735,6 +3740,91 @@ class CadViewerApp {
     return entries.length > 0 ? Object.fromEntries(entries) : undefined
   }
 
+  private captureTextNotes(currentNotes: PhaseSnapshot['textNotes'] = []) {
+    if (!this.loadedPhase) return []
+    const db = AcApDocManager.instance.curDocument.database
+    const annotationLayer = new AcApAnnotation(db).getAnnotationLayer()
+    const existingById = new Map(
+      (currentNotes ?? []).map(note => [note.id, note])
+    )
+    return [...db.tables.blockTable.modelSpace.newIterator()]
+      .filter(entity => entity instanceof AcDbMText && entity.layer === annotationLayer)
+      .map(entity => {
+        const mtext = entity as AcDbMText
+        const id = this.phaseTextNoteIds.get(mtext.objectId) ??
+          globalThis.crypto?.randomUUID?.() ?? `text-note-${mtext.objectId}`
+        const previous = existingById.get(id)
+        const createdAt = this.phaseTextNoteCreatedAt.get(mtext.objectId) ??
+          previous?.createdAt ?? new Date().toISOString()
+        this.phaseTextNoteIds.set(mtext.objectId, id)
+        this.phaseTextNoteCreatedAt.set(mtext.objectId, createdAt)
+        return {
+          id,
+          contents: mtext.contents,
+          location: { ...mtext.location },
+          width: mtext.width,
+          height: mtext.height,
+          attachmentPoint: mtext.attachmentPoint as unknown as PhaseSnapshot['textNotes'] extends Array<infer Note>
+            ? Note extends { attachmentPoint: infer AttachmentPoint }
+              ? AttachmentPoint
+              : never
+            : never,
+          lineSpacingFactor: mtext.lineSpacingFactor,
+          visible: true,
+          createdAt,
+          updatedAt: previous &&
+            previous.contents === mtext.contents &&
+            JSON.stringify(previous.location) === JSON.stringify(mtext.location)
+            ? previous.updatedAt
+            : new Date().toISOString()
+        }
+      })
+  }
+
+  private clearPhaseTextNotes() {
+    const db = AcApDocManager.instance.curDocument.database
+    const annotationLayer = new AcApAnnotation(db).getAnnotationLayer()
+    for (const entity of [...db.tables.blockTable.modelSpace.newIterator()]) {
+      if (entity instanceof AcDbMText && entity.layer === annotationLayer) {
+        const objectId = entity.objectId
+        entity.erase()
+        this.phaseTextNoteIds.delete(objectId)
+        this.phaseTextNoteCreatedAt.delete(objectId)
+      }
+    }
+  }
+
+  private restoreTextNotes(
+    phaseId: string,
+    notes: NonNullable<PhaseSnapshot['textNotes']>
+  ) {
+    const db = AcApDocManager.instance.curDocument.database
+    const annotationLayer = new AcApAnnotation(db).getAnnotationLayer()
+    log.info('[PhasePidOverlay] Restoring text notes:', {
+      phaseId,
+      count: notes.length,
+      ids: notes.map(note => note.id)
+    })
+    notes.forEach(note => {
+      const mtext = new AcDbMText()
+      mtext.layer = annotationLayer
+      mtext.location = { ...note.location }
+      mtext.contents = note.contents
+      mtext.width = note.width
+      if (note.height !== undefined) mtext.height = note.height
+      if (note.lineSpacingFactor !== undefined) {
+        mtext.lineSpacingFactor = note.lineSpacingFactor
+      }
+      mtext.attachmentPoint = note.attachmentPoint as unknown as typeof mtext.attachmentPoint
+      db.tables.blockTable.modelSpace.appendEntity(mtext)
+      this.phaseTextNoteIds.set(mtext.objectId, note.id)
+      this.phaseTextNoteCreatedAt.set(mtext.objectId, note.createdAt)
+    })
+    if (notes.length > 0) {
+      AcApDocManager.instance.curView.isDirty = true
+    }
+  }
+
   private resolveHighlightLayersForObjectId(
     objectId: AcDbObjectId,
     draft = this.getLoadedHighlightStyleDraft()
@@ -3814,6 +3904,7 @@ class CadViewerApp {
       handleKey => this.resolveObjectIdByHandleKey(handleKey) != null
     )
     const capturedDeviceStates = this.captureDeviceStates() ?? {}
+    const textNotes = this.captureTextNotes(currentPhase.textNotes)
     const retainedDeviceStates = Object.fromEntries(
       Object.entries(currentPhase.flowState.deviceStates ?? {}).filter(
         ([, deviceState]) =>
@@ -3837,11 +3928,14 @@ class CadViewerApp {
         ...(Object.keys(deviceStates).length > 0
           ? { deviceStates }
           : {})
-      }
+      },
+      textNotes
     }
     const stateChanged =
       JSON.stringify(currentPhase.flowState) !==
-      JSON.stringify(nextState.flowState)
+      JSON.stringify(nextState.flowState) ||
+      JSON.stringify(currentPhase.textNotes ?? []) !==
+      JSON.stringify(nextState.textNotes)
     if (!stateChanged) return
     this.phaseStore.updatePhaseState(
       this.loadedPhase.processId,
@@ -3935,6 +4029,7 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
+    this.clearPhaseTextNotes()
     const styleWarnings = findPhaseOverlayStyleWarnings(
       state.presentationProfile,
       phase.flowState.flowPaths,
@@ -4058,6 +4153,7 @@ class CadViewerApp {
     })
     this.recomputeOpenHighlightGroups()
     this.valveDebugFeature?.restoreOpenStates([...restoredValveKeys])
+    this.restoreTextNotes(phaseId, phase.textNotes ?? [])
     this.loadedPhase = {
       processId,
       sequenceId,

@@ -41,6 +41,17 @@ export interface PersistedPresentationProfile {
   }>
 }
 
+interface PersistedTextAnnotation {
+  id: string
+  content: string
+  position: { X: number; Y: number; Z: number }
+  width: number
+  height: number
+  lineSpacingFactor: number
+  attachmentPoint: number
+  style?: { id: string }
+}
+
 export const toPersistedPresentationProfile = (
   profile: PresentationProfile
 ): PersistedPresentationProfile => ({
@@ -106,11 +117,12 @@ export interface CreateBackendSequenceInput {
   orderIndex?: number
 }
 
-export type PersistedPhaseData = Omit<PhasePidOverlay, 'deviceStates' | 'flowPaths'> & {
+export type PersistedPhaseData = Omit<PhasePidOverlay, 'deviceStates' | 'flowPaths' | 'textNotes'> & {
   Comment: string | null
   drawing?: PhasePidOverlay['drawing']
   deviceStates: PhasePidOverlay['deviceStates'] | null
   flowPaths: PhasePidOverlay['flowPaths'] | null
+  textNotes: PersistedTextAnnotation[]
 }
 
 export interface CreateBackendPhaseInput {
@@ -331,6 +343,16 @@ export class PhaseWorkspaceRepository {
     signal?: AbortSignal
   ): Promise<void> {
     const id = this.requireBackendId(phase.id, 'Phase')
+    const jsonData = JSON.stringify(this.toPersistedPhaseData(phase, orderIndex))
+    console.log('[Phase] Payload prepared for backend:', {
+      id,
+      name: phase.name,
+      index: phase.number,
+      orderIndex,
+      operationId: this.requireBackendId(sequenceId, 'Sequence'),
+      jsonData: JSON.parse(jsonData),
+      textNotes: JSON.parse(jsonData).textNotes
+    })
     return this.options.phases.update(
       id,
       {
@@ -339,7 +361,7 @@ export class PhaseWorkspaceRepository {
         index: this.requirePositiveInteger(phase.number, 'Phase number'),
         orderIndex,
         operationId: this.requireBackendId(sequenceId, 'Sequence'),
-        jsonData: JSON.stringify(this.toPersistedPhaseData(phase, orderIndex))
+        jsonData
       },
       signal
     )
@@ -610,9 +632,20 @@ export class PhaseWorkspaceRepository {
           return []
         }
         return [{
-          ...note,
-          linkedObjectHandleKey,
-          location: { ...note.location }
+          id: note.id,
+          content: note.contents,
+          position: {
+            X: note.location.x,
+            Y: note.location.y,
+            Z: note.location.z
+          },
+          width: note.width,
+          height: note.height ?? 0,
+          lineSpacingFactor: note.lineSpacingFactor ?? 1,
+          attachmentPoint: note.attachmentPoint,
+          ...(note.textStyleRefId
+            ? { style: { id: note.textStyleRefId } }
+            : {})
         }]
       }) ?? []
     }

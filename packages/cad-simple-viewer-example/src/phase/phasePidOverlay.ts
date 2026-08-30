@@ -101,9 +101,6 @@ const isPositiveFiniteNumber = (value: unknown): value is number =>
 const isOptionalPositiveFiniteNumber = (value: unknown): value is number | undefined =>
   value === undefined || isPositiveFiniteNumber(value)
 
-const isOptionalFiniteNumber = (value: unknown): value is number | undefined =>
-  value === undefined || (typeof value === 'number' && Number.isFinite(value))
-
 const isUtcIsoTimestamp = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
@@ -168,55 +165,55 @@ const readDeviceState = (
 }
 
 const readTextNote = (value: unknown): PhasePidOverlayTextNote | undefined => {
+  const record = isRecord(value) ? value : undefined
+  const position = record?.Position
+  const x = isRecord(position) ? position.X : undefined
+  const y = isRecord(position) ? position.Y : undefined
+  const z = isRecord(position) ? position.Z : undefined
   if (
-    !isRecord(value) ||
-    !isRecord(value.location) ||
-    !isNonEmptyString(value.id) ||
-    typeof value.contents !== 'string' ||
-    typeof value.location.x !== 'number' ||
-    !Number.isFinite(value.location.x) ||
-    typeof value.location.y !== 'number' ||
-    !Number.isFinite(value.location.y) ||
-    typeof value.location.z !== 'number' ||
-    !Number.isFinite(value.location.z) ||
-    !isPositiveFiniteNumber(value.width) ||
-    !isOptionalPositiveFiniteNumber(value.height) ||
-    !isOptionalFiniteNumber(value.rotation) ||
-    !isTextAttachmentPoint(value.attachmentPoint) ||
-    !isOptionalPositiveFiniteNumber(value.lineSpacingFactor) ||
-    !isOptionalPositiveFiniteNumber(value.textHeight) ||
-    (value.textStyleRefId !== undefined && !isNonEmptyString(value.textStyleRefId)) ||
-    typeof value.visible !== 'boolean' ||
-    !isUtcIsoTimestamp(value.createdAt) ||
-    !isUtcIsoTimestamp(value.updatedAt)
+    !record ||
+    !isRecord(position) ||
+    !isNonEmptyString(record.Id) ||
+    typeof record.Content !== 'string' ||
+    typeof x !== 'number' ||
+    !Number.isFinite(x) ||
+    typeof y !== 'number' ||
+    !Number.isFinite(y) ||
+    typeof z !== 'number' ||
+    !Number.isFinite(z) ||
+    !isPositiveFiniteNumber(record.Width) ||
+    !isOptionalPositiveFiniteNumber(record.Height) ||
+    !isTextAttachmentPoint(record.AttachmentPoint) ||
+    !isOptionalPositiveFiniteNumber(record.LineSpacingFactor) ||
+    (record.visible !== undefined && typeof record.visible !== 'boolean') ||
+    (record.createdAt !== undefined && !isUtcIsoTimestamp(record.createdAt)) ||
+    (record.updatedAt !== undefined && !isUtcIsoTimestamp(record.updatedAt))
   ) {
     return undefined
   }
-  const linkedObjectHandleKey = value.linkedObjectHandleKey === undefined
+  const linkedObjectHandleKey = record.linkedObjectHandleKey === undefined
     ? undefined
-    : normalizeHandleKey(value.linkedObjectHandleKey)
-  if (value.linkedObjectHandleKey !== undefined && !linkedObjectHandleKey) {
+    : normalizeHandleKey(record.linkedObjectHandleKey)
+  if (record.linkedObjectHandleKey !== undefined && !linkedObjectHandleKey) {
     return undefined
   }
+  const timestamp = new Date(0).toISOString()
   return {
-    id: value.id.trim(),
-    contents: value.contents,
+    id: record.Id.trim(),
+    contents: record.Content,
     location: {
-      x: value.location.x,
-      y: value.location.y,
-      z: value.location.z
+      x,
+      y,
+      z
     },
-    width: value.width,
-    height: value.height,
-    rotation: value.rotation,
-    attachmentPoint: value.attachmentPoint,
-    lineSpacingFactor: value.lineSpacingFactor,
-    textHeight: value.textHeight,
-    textStyleRefId: value.textStyleRefId?.trim(),
+    width: record.Width,
+    height: record.Height,
+    attachmentPoint: record.AttachmentPoint,
+    lineSpacingFactor: record.LineSpacingFactor,
     linkedObjectHandleKey,
-    visible: value.visible,
-    createdAt: value.createdAt,
-    updatedAt: value.updatedAt
+    visible: record.visible ?? true,
+    createdAt: record.createdAt ?? timestamp,
+    updatedAt: record.updatedAt ?? timestamp
   }
 }
 
