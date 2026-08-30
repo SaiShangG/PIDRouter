@@ -17,7 +17,7 @@ import { AcTrView2d } from '../../view'
 export async function createMTextEntity(
   context: AcApContext,
   mtextEditor = new AcEdMTextEditor()
-) {
+): Promise<boolean> {
     const boxPrompt = new AcEdPromptBoxOptions(
       AcApI18n.t('main.inputManager.firstCorner'),
       AcApI18n.t('main.inputManager.secondCorner')
@@ -25,7 +25,7 @@ export async function createMTextEntity(
     boxPrompt.useBasePoint = false
     boxPrompt.useDashedLine = false
     const boxResult = await AcApDocManager.instance.editor.getBox(boxPrompt)
-    if (boxResult.status !== AcEdPromptStatus.OK || !boxResult.value) return
+    if (boxResult.status !== AcEdPromptStatus.OK || !boxResult.value) return false
     const box = boxResult.value
 
     const width = Math.max(Math.abs(box.max.x - box.min.x), 1e-4)
@@ -47,10 +47,10 @@ export async function createMTextEntity(
       textHeight,
       toolbarFontFamilies
     })
-    if (!result) return
+    if (!result) return false
 
     const contents = result.contents.trim()
-    if (!contents) return
+    if (!contents) return false
 
     const mtext = new AcDbMText()
     mtext.location = result.location
@@ -61,6 +61,7 @@ export async function createMTextEntity(
     mtext.attachmentPoint = result.attachmentPoint
 
     context.doc.database.tables.blockTable.modelSpace.appendEntity(mtext)
+    return true
   }
 
 function pixelsToWorldY(view: AcTrView2d, pixels: number) {
