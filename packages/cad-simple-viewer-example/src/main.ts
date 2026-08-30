@@ -3766,8 +3766,8 @@ class CadViewerApp {
           height: mtext.height,
           attachmentPoint: mtext.attachmentPoint as unknown as PhaseSnapshot['textNotes'] extends Array<infer Note>
             ? Note extends { attachmentPoint: infer AttachmentPoint }
-              ? AttachmentPoint
-              : never
+            ? AttachmentPoint
+            : never
             : never,
           lineSpacingFactor: mtext.lineSpacingFactor,
           visible: true,
