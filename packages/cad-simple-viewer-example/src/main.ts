@@ -98,7 +98,8 @@ import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import {
   type PhaseConfigImportLabels,
-  PhaseConfigImportModal} from './phase/PhaseConfigImportModal'
+  PhaseConfigImportModal
+} from './phase/PhaseConfigImportModal'
 import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import {
   resolveDeviceStateDefinition
@@ -168,6 +169,7 @@ import type { PhaseReportProgress } from './report/PhaseReportExporter'
 import { ReportManifestStore } from './report/reportManifest'
 import {
   type MatrixExportSelection,
+  type PhaseReportExportOptions,
   ReportWorkspaceModal
 } from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
@@ -655,8 +657,8 @@ class CadViewerApp {
       () => this.phaseStore.snapshot(),
       this.reportStore,
       {
-        export: (mode, signal, onProgress) =>
-          this.exportPhaseReport(mode, signal, onProgress),
+        export: (options, signal, onProgress) =>
+          this.exportPhaseReport(options, signal, onProgress),
         exportMatrix: (selection, signal) =>
           this.exportMatrix(selection, signal)
       },
@@ -727,7 +729,7 @@ class CadViewerApp {
   }
 
   private async exportPhaseReport(
-    mode: 'merged' | 'per-sequence',
+    options: PhaseReportExportOptions,
     signal: AbortSignal,
     onProgress: (progress: PhaseReportProgress) => void
   ) {
@@ -740,9 +742,9 @@ class CadViewerApp {
     if (!process) throw new Error('Process is required to export a report')
     const task = await this.processAssistantReportApi.create({
       processId: this.requireExportBackendId(process.id, 'Process'),
-      mode: mode === 'merged' ? 'COMBINED' : 'PER_SEQUENCE',
-      sequenceIds: process.sequences.map(sequence =>
-        this.requireExportBackendId(sequence.id, 'Sequence')
+      mode: options.mode === 'merged' ? 'COMBINED' : 'PER_SEQUENCE',
+      sequenceIds: options.sequenceIds.map(sequenceId =>
+        this.requireExportBackendId(sequenceId, 'Sequence')
       ),
       includeCover: true,
       includeValveMatrix: false,
@@ -754,10 +756,10 @@ class CadViewerApp {
       current => this.processAssistantReportApi.get(reportId, current),
       signal,
       status => {
-        const total = status.totalPhases ?? process.sequences.reduce(
-          (sum, sequence) => sum + sequence.phases.length,
-          0
-        )
+        const selectedSequenceIds = new Set(options.sequenceIds)
+        const total = status.totalPhases ?? process.sequences
+          .filter(sequence => selectedSequenceIds.has(sequence.id))
+          .reduce((sum, sequence) => sum + sequence.phases.length, 0)
         const completedCount = status.processedPhases ?? Math.round(
           Math.max(0, Math.min(100, status.progress ?? 0)) / 100 * total
         )
@@ -772,13 +774,9 @@ class CadViewerApp {
     )
     if (!completed) return { status: 'canceled' } as const
     const file = await this.processAssistantReportApi.download(reportId, signal)
-    const fallback = mode === 'merged'
-      ? 'process-report.pdf'
-      : 'process-reports.zip'
-    const fileName = file.fileName ?? task.fileName ?? fallback
     return {
       status: 'completed',
-      fileName,
+      fileName: options.fileName,
       bytes: new Uint8Array(await file.blob.arrayBuffer())
     } as const
   }

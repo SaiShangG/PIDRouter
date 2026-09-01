@@ -6,14 +6,16 @@ import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceSto
 import type { PhaseWorkspaceState } from '../src/phase/types'
 import type {
   PhaseReportExportResult,
-  PhaseReportOutputMode,
   PhaseReportProgress
 } from '../src/report/PhaseReportExporter'
 import { ReportManifestStore } from '../src/report/reportManifest'
-import { ReportWorkspaceModal } from '../src/report/ReportWorkspaceModal'
+import {
+  type PhaseReportExportOptions,
+  ReportWorkspaceModal
+} from '../src/report/ReportWorkspaceModal'
 
 type ExportReport = (
-  mode: PhaseReportOutputMode,
+  options: PhaseReportExportOptions,
   signal: AbortSignal,
   onProgress: (progress: PhaseReportProgress) => void
 ) => Promise<PhaseReportExportResult>
@@ -156,7 +158,111 @@ describe('ReportWorkspaceModal', () => {
     await Promise.resolve()
 
     expect(exportReport).toHaveBeenCalledWith(
-      'merged',
+      {
+        fileName: 'CIP-report.pdf',
+        mode: 'merged',
+        sequenceIds: ['sequence']
+      },
+      expect.any(AbortSignal),
+      expect.any(Function)
+    )
+  })
+
+  it('filters pages by Sequence and batch excludes or restores only that Sequence', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes[0].sequences.push({
+      ...state.processes[0].sequences[0],
+      id: 'sequence-2',
+      number: 2,
+      name: 'Second tank',
+      phases: state.processes[0].sequences[0].phases.map(phase => ({
+        ...phase,
+        id: `${phase.id}-second`
+      }))
+    })
+    const { store } = createHarness('zh', state)
+    const sequenceFilter = document.querySelector<HTMLSelectElement>(
+      '[aria-label="按序列筛选"]'
+    )!
+    sequenceFilter.value = 'sequence-2'
+    sequenceFilter.dispatchEvent(new Event('change'))
+    await Promise.resolve()
+
+    buttonByText('批量排除')?.click()
+    expect(store.snapshot().pages.filter(page => page.sequenceId === 'sequence')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ excluded: false })])
+    )
+    expect(store.snapshot().pages
+      .filter(page => page.sequenceId === 'sequence-2')
+      .every(page => page.excluded)).toBe(true)
+
+    buttonByText('批量恢复')?.click()
+    expect(store.snapshot().pages.every(page => !page.excluded)).toBe(true)
+  })
+
+  it('exports the current Sequence with a custom filename', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.activeProcessId = 'process'
+    state.processes[0].activeSequenceId = 'sequence'
+    const { exportReport } = createHarness('zh', state)
+    openExportSettings()
+    const fileName = document.querySelector<HTMLInputElement>(
+      '[aria-label="自定义 PDF 文件名"]'
+    )!
+    fileName.value = 'CIP Batch 42.pdf'
+    fileName.dispatchEvent(new Event('input'))
+    const current = document.querySelector<HTMLInputElement>(
+      'input[name="pdfExportScope"][value="current"]'
+    )!
+    current.checked = true
+    current.dispatchEvent(new Event('change'))
+    buttonByText('合并为一个 PDF')?.click()
+    await Promise.resolve()
+
+    expect(exportReport).toHaveBeenCalledWith(
+      {
+        fileName: 'CIP Batch 42.pdf',
+        mode: 'merged',
+        sequenceIds: ['sequence']
+      },
+      expect.any(AbortSignal),
+      expect.any(Function)
+    )
+  })
+
+  it('exports only checked Sequences in selected scope', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes[0].sequences.push({
+      ...state.processes[0].sequences[0],
+      id: 'sequence-2',
+      number: 2,
+      name: 'Second tank',
+      phases: state.processes[0].sequences[0].phases.map(phase => ({
+        ...phase,
+        id: `${phase.id}-second`
+      }))
+    })
+    const { exportReport } = createHarness('zh', state)
+    openExportSettings()
+    const selected = document.querySelector<HTMLInputElement>(
+      'input[name="pdfExportScope"][value="selected"]'
+    )!
+    selected.checked = true
+    selected.dispatchEvent(new Event('change'))
+    const checkboxes = document.querySelectorAll<HTMLInputElement>(
+      '.report-export-sequences input[type="checkbox"]'
+    )
+    checkboxes[0].checked = false
+    checkboxes[0].dispatchEvent(new Event('change'))
+    buttonByText('合并为一个 PDF')?.click()
+    await Promise.resolve()
+
+    expect(exportReport).toHaveBeenCalledWith(
+      {
+        fileName: 'CIP-report.pdf',
+        mode: 'merged',
+        sequenceIds: ['sequence-2']
+      },
       expect.any(AbortSignal),
       expect.any(Function)
     )
@@ -332,7 +438,7 @@ describe('ReportWorkspaceModal', () => {
   it('localizes the overlay and aborts export when cancellation is requested', async () => {
     let exportSignal: AbortSignal | undefined
     const exportReport = jest.fn(
-      (_mode, signal: AbortSignal, onProgress) =>
+      (_options, signal: AbortSignal, onProgress) =>
         new Promise<PhaseReportExportResult>(resolve => {
           exportSignal = signal
           onProgress({

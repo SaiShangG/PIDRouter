@@ -25,8 +25,11 @@ export function injectReportWorkspaceStyles() {
     .report-workspace-modal .report-icon-button { display: grid; place-items: center; width: 34px; padding: 0; }
     .report-workspace-body { display: grid; grid-template-columns: minmax(290px, 35%) minmax(0, 65%); min-height: 0; }
     .report-page-browser, .report-page-inspector { min-width: 0; min-height: 0; padding: 14px; }
-    .report-page-browser { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 9px; border-right: 1px solid #c9d3d5; background: #f8fafa; }
+    .report-page-browser { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 9px; border-right: 1px solid #c9d3d5; background: #f8fafa; }
     .report-search-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 7px; }
+    .report-sequence-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; }
+    .report-sequence-row select { min-width: 0; font-size: 10px; }
+    .report-workspace-modal .report-sequence-row button { min-height: 30px; padding: 4px 8px; white-space: nowrap; font-size: 10px; }
     .report-filter-row { display: flex; gap: 5px; overflow-x: auto; }
     .report-filter-row button { min-height: 29px; padding: 4px 8px; white-space: nowrap; font-size: 10px; }
     .report-filter-row button.is-active { border-color: var(--app-accent, #087b58); color: #fff; background: var(--app-accent, #087b58); }
@@ -69,6 +72,12 @@ export function injectReportWorkspaceStyles() {
     .report-export-controls { display: grid; gap: 8px; margin-top: auto; padding: 14px; }
     .report-export-controls h3 { margin: 0; }
     .report-export-controls p { min-height: 32px; margin: 0; color: #65777d; font-size: 11px; line-height: 1.45; }
+    .report-export-field { display: grid; gap: 6px; color: #52676d; font-size: 10px; font-weight: 750; }
+    .report-export-scope { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 10px; border: 1px solid #d2dcde; background: #fff; }
+    .report-export-scope legend { padding: 0 4px; color: #52676d; font-size: 10px; font-weight: 750; }
+    .report-export-scope label { display: flex; align-items: center; gap: 6px; color: #33484e; font-size: 10px; }
+    .report-export-scope input { width: 15px; min-height: 15px; margin: 0; padding: 0; accent-color: #087b58; }
+    .report-export-sequences { display: grid; flex: 1 0 100%; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px 12px; padding-top: 8px; border-top: 1px solid #e1e7e8; }
     .report-matrix-workspace { min-height: 0; overflow: auto; padding: 24px; background: #e7eeee; }
     .report-matrix-controls { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(320px, 1.3fr); gap: 14px 18px; width: min(920px, 100%); margin: 0 auto; padding: 20px; border: 1px solid #c4d0d2; background: #f8fafa; }
     .report-matrix-controls > h3, .report-matrix-controls > p, .report-matrix-controls > button { grid-column: 1 / -1; }
@@ -140,6 +149,8 @@ export function injectReportWorkspaceStyles() {
       .report-workspace-modal .report-export-tab { flex: 1; }
       .report-workspace-body { grid-template-columns: 1fr; }
       .report-page-browser { border-right: 0; }
+      .report-sequence-row { grid-template-columns: minmax(0, 1fr) auto; }
+      .report-sequence-row select { grid-column: 1 / -1; }
       .report-pdf-panel { border-top: 1px solid #c9d3d5; }
       .report-pdf-tabs { overflow-x: auto; }
       .report-workspace-modal .report-pdf-tabs button { min-width: 104px; }

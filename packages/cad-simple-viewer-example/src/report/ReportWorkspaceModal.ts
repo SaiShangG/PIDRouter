@@ -40,7 +40,7 @@ export interface MatrixExportSelection {
 
 interface ReportWorkspaceActions {
   export(
-    mode: PhaseReportOutputMode,
+    options: PhaseReportExportOptions,
     signal: AbortSignal,
     onProgress: (progress: PhaseReportProgress) => void
   ): Promise<PhaseReportExportResult>
@@ -48,6 +48,12 @@ interface ReportWorkspaceActions {
     selection: MatrixExportSelection,
     signal: AbortSignal
   ): Promise<void>
+}
+
+export interface PhaseReportExportOptions {
+  mode: PhaseReportOutputMode
+  fileName: string
+  sequenceIds: string[]
 }
 
 interface PageContext {
@@ -84,6 +90,7 @@ export class ReportWorkspaceModal {
   private manifest: ReportManifest
   private selectedSlotId?: string
   private query = ''
+  private sequenceFilterId = 'all'
   private filter: 'all' | 'excluded' | 'replaced' | 'issues' = 'all'
   private listViewport?: HTMLElement
   private listScrollTop = 0
@@ -91,7 +98,10 @@ export class ReportWorkspaceModal {
   private exportProgress?: PhaseReportProgress
   private exportMessage = ''
   private failedExport?: Extract<PhaseReportExportResult, { status: 'failed' }>
-  private pendingWarningMode?: PhaseReportOutputMode
+  private pendingWarningOptions?: PhaseReportExportOptions
+  private exportScope: 'all' | 'current' | 'selected' = 'all'
+  private exportFileName = ''
+  private exportSequenceIds = new Set<string>()
   private matrixProcessId = ''
   private matrixSequenceIds = new Set<string>()
   private matrixPhaseIds = new Set<string>()
@@ -141,6 +151,7 @@ export class ReportWorkspaceModal {
     const workspace = this.getWorkspace()
     this.manifest = this.store.reconcile(workspace)
     this.store.persist()
+    this.initializePdfExportSelection(workspace)
     this.initializeMatrixSelection(workspace)
     this.selectedSlotId =
       this.manifest.pages.find(page => page.id === this.selectedSlotId)?.id ??
@@ -233,27 +244,27 @@ export class ReportWorkspaceModal {
     tabs.className = 'report-export-tabs'
     tabs.setAttribute('role', 'tablist')
     tabs.setAttribute('aria-label', '报告导出类型')
-    ;([
-      ['pdf', '导出 PDF'],
-      ['matrix', '导出 Matrix']
-    ] as const).forEach(([value, label]) => {
-      if (value === 'matrix' && !this.actions.exportMatrix) return
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.id = `${value}ExportTab`
-      button.className = 'report-export-tab'
-      button.setAttribute('role', 'tab')
-      button.setAttribute('aria-controls', `${value}ExportPanel`)
-      button.setAttribute('aria-selected', String(this.activeTab === value))
-      button.tabIndex = this.activeTab === value ? 0 : -1
-      button.disabled = Boolean(this.exportController)
-      button.textContent = label
-      button.addEventListener('click', () => {
-        this.activeTab = value
-        this.render()
+      ; ([
+        ['pdf', '导出 PDF'],
+        ['matrix', '导出 Matrix']
+      ] as const).forEach(([value, label]) => {
+        if (value === 'matrix' && !this.actions.exportMatrix) return
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.id = `${value}ExportTab`
+        button.className = 'report-export-tab'
+        button.setAttribute('role', 'tab')
+        button.setAttribute('aria-controls', `${value}ExportPanel`)
+        button.setAttribute('aria-selected', String(this.activeTab === value))
+        button.tabIndex = this.activeTab === value ? 0 : -1
+        button.disabled = Boolean(this.exportController)
+        button.textContent = label
+        button.addEventListener('click', () => {
+          this.activeTab = value
+          this.render()
+        })
+        tabs.append(button)
       })
-      tabs.append(button)
-    })
     return tabs
   }
 
@@ -333,6 +344,40 @@ export class ReportWorkspaceModal {
     searchRow.className = 'report-search-row'
     searchRow.append(search, jump)
 
+    const sequenceRow = document.createElement('div')
+    sequenceRow.className = 'report-sequence-row'
+    const sequence = document.createElement('select')
+    sequence.setAttribute('aria-label', '按序列筛选')
+    sequence.add(new Option('全部序列', 'all'))
+    const seenSequenceIds = new Set<string>()
+    contexts.forEach(context => {
+      if (!context.sequence || seenSequenceIds.has(context.sequence.id)) return
+      seenSequenceIds.add(context.sequence.id)
+      sequence.add(new Option(
+        `序列 ${String(context.sequence.number).padStart(2, '0')} · ${context.sequence.name}`,
+        context.sequence.id
+      ))
+    })
+    sequence.value = seenSequenceIds.has(this.sequenceFilterId)
+      ? this.sequenceFilterId
+      : 'all'
+    sequence.addEventListener('change', () => {
+      this.sequenceFilterId = sequence.value
+      this.listScrollTop = 0
+      this.render()
+    })
+    const excludeVisible = document.createElement('button')
+    excludeVisible.type = 'button'
+    excludeVisible.textContent = '批量排除'
+    excludeVisible.disabled = Boolean(this.exportController)
+    excludeVisible.addEventListener('click', () => this.setFilteredPagesExcluded(true))
+    const restoreVisible = document.createElement('button')
+    restoreVisible.type = 'button'
+    restoreVisible.textContent = '批量恢复'
+    restoreVisible.disabled = Boolean(this.exportController)
+    restoreVisible.addEventListener('click', () => this.setFilteredPagesExcluded(false))
+    sequenceRow.append(sequence, excludeVisible, restoreVisible)
+
     const filters = document.createElement('div')
     filters.className = 'report-filter-row'
     const definitions: Array<[typeof this.filter, string]> = [
@@ -363,7 +408,7 @@ export class ReportWorkspaceModal {
       this.renderList()
     })
     this.listViewport = viewport
-    panel.append(searchRow, filters, viewport)
+    panel.append(searchRow, sequenceRow, filters, viewport)
     queueMicrotask(() => {
       viewport.scrollTop = this.listScrollTop
       this.renderList()
@@ -416,9 +461,9 @@ export class ReportWorkspaceModal {
         ? '已排除'
         : hasIssue
           ? '问题'
-        : context.slot.replacement
-          ? '已替换'
-          : '正常'
+          : context.slot.replacement
+            ? '已替换'
+            : '正常'
       row.append(number, identity, status)
       row.addEventListener('click', () => {
         this.selectedSlotId = context.slot.id
@@ -440,29 +485,33 @@ export class ReportWorkspaceModal {
     tabs.className = 'report-pdf-tabs'
     tabs.setAttribute('role', 'tablist')
     tabs.setAttribute('aria-label', 'PDF 报告设置')
-    ;([
-      ['page', '页面设置'],
-      ['export', '导出设置'],
-      ['generated', `生成记录 ${this.generatedReports.length}`]
-    ] as const).forEach(([value, label]) => {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.setAttribute('role', 'tab')
-      button.setAttribute('aria-selected', String(this.activePdfPanel === value))
-      button.textContent = label
-      button.addEventListener('click', () => {
-        this.activePdfPanel = value
-        this.render()
+      ; ([
+        ['page', '页面设置'],
+        ['export', '导出设置'],
+        ['generated', `生成记录 ${this.generatedReports.length}`]
+      ] as const).forEach(([value, label]) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.setAttribute('role', 'tab')
+        button.setAttribute('aria-selected', String(this.activePdfPanel === value))
+        button.textContent = label
+        button.addEventListener('click', () => {
+          this.activePdfPanel = value
+          this.render()
+        })
+        tabs.append(button)
       })
-      tabs.append(button)
-    })
     const content = document.createElement('div')
     content.className = 'report-pdf-panel-content'
     content.setAttribute('role', 'tabpanel')
     if (this.activePdfPanel === 'page') {
       content.append(this.createInspector(contexts, issues))
     } else if (this.activePdfPanel === 'export') {
-      if (issues.length > 0) content.append(this.createIssueList(issues, contexts))
+      const sequenceIds = new Set(this.getExportSequenceIds())
+      const scopedIssues = issues.filter(issue => sequenceIds.has(issue.sequenceId))
+      if (scopedIssues.length > 0) {
+        content.append(this.createIssueList(scopedIssues, contexts))
+      }
       content.append(this.createExportControls(issues))
     } else {
       content.append(this.createGeneratedReports())
@@ -712,12 +761,84 @@ export class ReportWorkspaceModal {
     section.className = 'report-export-controls'
     const title = document.createElement('h3')
     title.textContent = '生成 PDF 报告'
-    const errorCount = issues.filter(issue => issue.severity === 'error').length
-    const warningCount = issues.filter(issue => issue.severity === 'warning').length
-    const includedPages = this.manifest.pages.filter(page => !page.excluded)
+    const sequenceIds = this.getExportSequenceIds()
+    const sequenceIdSet = new Set(sequenceIds)
+    const scopedIssues = issues.filter(issue => sequenceIdSet.has(issue.sequenceId))
+    const errorCount = scopedIssues.filter(issue => issue.severity === 'error').length
+    const warningCount = scopedIssues.filter(issue => issue.severity === 'warning').length
+    const scopedPages = this.manifest.pages.filter(page =>
+      sequenceIdSet.has(page.sequenceId)
+    )
+    const includedPages = scopedPages.filter(page => !page.excluded)
     const sequenceCount = new Set(includedPages.map(page => page.sequenceId)).size
-    const excludedCount = this.manifest.pages.length - includedPages.length
-    const replacedCount = this.manifest.pages.filter(page => page.replacement).length
+    const excludedCount = scopedPages.length - includedPages.length
+    const replacedCount = scopedPages.filter(page => page.replacement).length
+
+    const fileNameLabel = document.createElement('label')
+    fileNameLabel.className = 'report-export-field'
+    fileNameLabel.textContent = '文件名'
+    const fileName = document.createElement('input')
+    fileName.type = 'text'
+    fileName.value = this.exportFileName
+    fileName.placeholder = '输入 PDF 文件名'
+    fileName.setAttribute('aria-label', '自定义 PDF 文件名')
+    fileName.disabled = Boolean(this.exportController)
+    fileName.addEventListener('input', () => {
+      this.exportFileName = fileName.value
+    })
+    fileNameLabel.append(fileName)
+
+    const scope = document.createElement('fieldset')
+    scope.className = 'report-export-scope'
+    const scopeTitle = document.createElement('legend')
+    scopeTitle.textContent = '导出范围'
+    scope.append(scopeTitle)
+    ;([
+      ['all', '全部序列'],
+      ['current', '当前序列'],
+      ['selected', '选中序列']
+    ] as const).forEach(([value, label]) => {
+      const option = document.createElement('label')
+      const radio = document.createElement('input')
+      radio.type = 'radio'
+      radio.name = 'pdfExportScope'
+      radio.value = value
+      radio.checked = this.exportScope === value
+      radio.disabled = Boolean(this.exportController)
+      radio.addEventListener('change', () => {
+        this.exportScope = value
+        this.pendingWarningOptions = undefined
+        this.render()
+      })
+      option.append(radio, document.createTextNode(label))
+      scope.append(option)
+    })
+    if (this.exportScope === 'selected') {
+      const selected = document.createElement('div')
+      selected.className = 'report-export-sequences'
+      this.getActiveProcess()?.sequences.forEach(sequence => {
+        const option = document.createElement('label')
+        const checkbox = document.createElement('input')
+        checkbox.type = 'checkbox'
+        checkbox.checked = this.exportSequenceIds.has(sequence.id)
+        checkbox.disabled = Boolean(this.exportController)
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) this.exportSequenceIds.add(sequence.id)
+          else this.exportSequenceIds.delete(sequence.id)
+          this.pendingWarningOptions = undefined
+          this.render()
+        })
+        option.append(
+          checkbox,
+          document.createTextNode(
+            `序列 ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`
+          )
+        )
+        selected.append(option)
+      })
+      scope.append(selected)
+    }
+
     const estimates = document.createElement('dl')
     estimates.className = 'report-export-estimates'
     estimates.innerHTML = `
@@ -731,26 +852,28 @@ export class ReportWorkspaceModal {
     status.textContent = this.exportProgress
       ? this.getProgressText(this.exportProgress)
       : this.exportMessage ||
-        (errorCount > 0
-          ? `预检发现 ${errorCount} 个严重问题`
-          : warningCount > 0
-            ? `预检发现 ${warningCount} 个警告`
-            : '报告已通过预检')
+      (errorCount > 0
+        ? `预检发现 ${errorCount} 个严重问题`
+        : warningCount > 0
+          ? `预检发现 ${warningCount} 个警告`
+          : '报告已通过预检')
     const merged = document.createElement('button')
     merged.type = 'button'
     merged.className = 'report-primary-button'
     merged.textContent = '合并为一个 PDF'
-    merged.disabled = Boolean(this.exportController) || errorCount > 0
+    merged.disabled =
+      Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
     merged.addEventListener('click', () => this.requestExport('merged', warningCount))
     const split = document.createElement('button')
     split.type = 'button'
     split.textContent = '每个序列一个 PDF（ZIP）'
-    split.disabled = Boolean(this.exportController) || errorCount > 0
+    split.disabled =
+      Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
     split.addEventListener('click', () =>
       this.requestExport('per-sequence', warningCount)
     )
-    section.append(title, estimates, status, merged, split)
-    if (this.pendingWarningMode && !this.exportController) {
+    section.append(title, fileNameLabel, scope, estimates, status, merged, split)
+    if (this.pendingWarningOptions && !this.exportController) {
       const confirmation = document.createElement('div')
       confirmation.className = 'report-warning-confirmation'
       const message = document.createElement('p')
@@ -760,15 +883,15 @@ export class ReportWorkspaceModal {
       proceed.className = 'report-primary-button'
       proceed.textContent = '忽略警告并继续'
       proceed.addEventListener('click', () => {
-        const mode = this.pendingWarningMode
-        this.pendingWarningMode = undefined
-        if (mode) void this.startExport(mode)
+        const options = this.pendingWarningOptions
+        this.pendingWarningOptions = undefined
+        if (options) void this.startExport(options)
       })
       const cancel = document.createElement('button')
       cancel.type = 'button'
       cancel.textContent = '返回检查'
       cancel.addEventListener('click', () => {
-        this.pendingWarningMode = undefined
+        this.pendingWarningOptions = undefined
         this.render()
       })
       confirmation.append(message, proceed, cancel)
@@ -826,9 +949,9 @@ export class ReportWorkspaceModal {
     formatLabel.textContent = '文件格式'
     const format = document.createElement('select')
     format.setAttribute('aria-label', 'Matrix 文件格式')
-    ;(['XLSX', 'CSV'] as MatrixFormat[]).forEach(value =>
-      format.add(new Option(value, value))
-    )
+      ; (['XLSX', 'CSV'] as MatrixFormat[]).forEach(value =>
+        format.add(new Option(value, value))
+      )
     format.value = this.matrixFormat
     format.disabled = Boolean(this.exportController)
     format.addEventListener('change', () => {
@@ -983,15 +1106,16 @@ export class ReportWorkspaceModal {
   }
 
   private requestExport(mode: PhaseReportOutputMode, warningCount: number) {
+    const options = this.getExportOptions(mode)
     if (warningCount > 0) {
-      this.pendingWarningMode = mode
+      this.pendingWarningOptions = options
       this.render()
       return
     }
-    void this.startExport(mode)
+    void this.startExport(options)
   }
 
-  private async startExport(mode: PhaseReportOutputMode) {
+  private async startExport(options: PhaseReportExportOptions) {
     if (this.exportController) return
     const controller = new AbortController()
     this.exportController = controller
@@ -1002,13 +1126,19 @@ export class ReportWorkspaceModal {
     document.body.classList.add('report-pdf-exporting')
     this.render()
     try {
-      const result = await this.actions.export(mode, controller.signal, progress => {
+      const result = await this.actions.export(options, controller.signal, progress => {
         if (controller.signal.aborted) return
         this.exportProgress = progress
         this.render()
       })
       if (!controller.signal.aborted && result.status === 'completed') {
-        await this.addGeneratedReport(result, mode)
+        await this.addGeneratedReport(
+          result,
+          options.mode,
+          this.manifest.pages.filter(
+            page => options.sequenceIds.includes(page.sequenceId) && !page.excluded
+          ).length
+        )
         this.activePdfPanel = 'generated'
       }
       this.exportMessage = controller.signal.aborted
@@ -1018,7 +1148,7 @@ export class ReportWorkspaceModal {
           : result.status === 'canceled'
             ? '报告生成已取消'
             : `报告生成失败：${result.failures.length} 页`
-          this.failedExport = result.status === 'failed' ? result : undefined
+      this.failedExport = result.status === 'failed' ? result : undefined
     } catch {
       this.exportMessage = '报告生成失败'
     } finally {
@@ -1031,7 +1161,8 @@ export class ReportWorkspaceModal {
 
   private async addGeneratedReport(
     result: Extract<PhaseReportExportResult, { status: 'completed' }>,
-    mode: PhaseReportOutputMode
+    mode: PhaseReportOutputMode,
+    pageCount: number
   ) {
     const pdfFiles: GeneratedPdfFile[] = []
     if (mode === 'per-sequence') {
@@ -1049,7 +1180,7 @@ export class ReportWorkspaceModal {
       fileName: result.fileName,
       createdAt: new Date(),
       mode,
-      pageCount: this.manifest.pages.filter(page => !page.excluded).length,
+      pageCount,
       bytes: result.bytes,
       pdfFiles
     })
@@ -1060,62 +1191,62 @@ export class ReportWorkspaceModal {
     const document = await PDFDocument.create()
     const regular = await document.embedFont(StandardFonts.Helvetica)
     const bold = await document.embedFont(StandardFonts.HelveticaBold)
-    ;['Preparation', 'WFI Pre-rinse'].forEach((phase, index) => {
-      const page = document.addPage([842, 595])
-      page.drawText('CIP PHASE REPORT', {
-        x: 42,
-        y: 548,
-        size: 20,
-        font: bold,
-        color: rgb(0.03, 0.42, 0.31)
-      })
-      page.drawText(`Sequence 01 / Phase ${String(index + 1).padStart(2, '0')} / ${phase}`, {
-        x: 42,
-        y: 522,
-        size: 11,
-        font: regular,
-        color: rgb(0.25, 0.34, 0.36)
-      })
-      page.drawRectangle({
-        x: 42,
-        y: 72,
-        width: 758,
-        height: 420,
-        borderWidth: 1,
-        borderColor: rgb(0.72, 0.79, 0.8),
-        color: rgb(0.98, 0.99, 0.99)
-      })
-      page.drawLine({
-        start: { x: 130, y: 282 },
-        end: { x: 710, y: 282 },
-        thickness: 5,
-        color: rgb(0.03, 0.52, 0.38)
-      })
-      ;[190, 370, 550].forEach((x, equipmentIndex) => {
-        page.drawCircle({
-          x,
-          y: 282,
-          size: 31,
-          borderWidth: 3,
-          borderColor: rgb(0.08, 0.18, 0.21),
-          color: rgb(1, 1, 1)
-        })
-        page.drawText(`V-${equipmentIndex + 1}`, {
-          x: x - 13,
-          y: 278,
-          size: 10,
+      ;['Preparation', 'WFI Pre-rinse'].forEach((phase, index) => {
+        const page = document.addPage([842, 595])
+        page.drawText('CIP PHASE REPORT', {
+          x: 42,
+          y: 548,
+          size: 20,
           font: bold,
-          color: rgb(0.08, 0.18, 0.21)
+          color: rgb(0.03, 0.42, 0.31)
+        })
+        page.drawText(`Sequence 01 / Phase ${String(index + 1).padStart(2, '0')} / ${phase}`, {
+          x: 42,
+          y: 522,
+          size: 11,
+          font: regular,
+          color: rgb(0.25, 0.34, 0.36)
+        })
+        page.drawRectangle({
+          x: 42,
+          y: 72,
+          width: 758,
+          height: 420,
+          borderWidth: 1,
+          borderColor: rgb(0.72, 0.79, 0.8),
+          color: rgb(0.98, 0.99, 0.99)
+        })
+        page.drawLine({
+          start: { x: 130, y: 282 },
+          end: { x: 710, y: 282 },
+          thickness: 5,
+          color: rgb(0.03, 0.52, 0.38)
+        })
+          ;[190, 370, 550].forEach((x, equipmentIndex) => {
+            page.drawCircle({
+              x,
+              y: 282,
+              size: 31,
+              borderWidth: 3,
+              borderColor: rgb(0.08, 0.18, 0.21),
+              color: rgb(1, 1, 1)
+            })
+            page.drawText(`V-${equipmentIndex + 1}`, {
+              x: x - 13,
+              y: 278,
+              size: 10,
+              font: bold,
+              color: rgb(0.08, 0.18, 0.21)
+            })
+          })
+        page.drawText(`Demo report page ${index + 1} of 2`, {
+          x: 42,
+          y: 42,
+          size: 9,
+          font: regular,
+          color: rgb(0.38, 0.46, 0.48)
         })
       })
-      page.drawText(`Demo report page ${index + 1} of 2`, {
-        x: 42,
-        y: 42,
-        size: 9,
-        font: regular,
-        color: rgb(0.38, 0.46, 0.48)
-      })
-    })
     const bytes = await document.save()
     this.generatedReports.unshift({
       id: `generated-report-${++this.generatedReportSequence}`,
@@ -1181,7 +1312,7 @@ export class ReportWorkspaceModal {
 
   private commitAndRender() {
     if (this.exportController) return
-    this.pendingWarningMode = undefined
+    this.pendingWarningOptions = undefined
     this.failedExport = undefined
     this.store.persist()
     this.manifest = this.store.snapshot()
@@ -1194,6 +1325,10 @@ export class ReportWorkspaceModal {
     )
     const query = this.query.trim().toLocaleLowerCase()
     return contexts.filter(context => {
+      if (
+        this.sequenceFilterId !== 'all' &&
+        context.slot.sequenceId !== this.sequenceFilterId
+      ) return false
       if (this.filter === 'excluded' && !context.slot.excluded) return false
       if (this.filter === 'replaced' && !context.slot.replacement) return false
       if (this.filter === 'issues' && !issuePhaseIds.has(context.slot.phaseId)) return false
@@ -1205,6 +1340,65 @@ export class ReportWorkspaceModal {
         context.phase?.name
       ].some(value => value?.toLocaleLowerCase().includes(query))
     })
+  }
+
+  private setFilteredPagesExcluded(excluded: boolean) {
+    if (this.exportController) return
+    const contexts = this.getFilteredContexts(
+      this.getPageContexts(this.getWorkspace())
+    )
+    contexts.forEach(context => this.store.setExcluded(context.slot.id, excluded))
+    this.commitAndRender()
+  }
+
+  private getActiveProcess() {
+    const workspace = this.getWorkspace()
+    return workspace.processes.find(item => item.id === workspace.activeProcessId)
+      ?? workspace.processes[0]
+  }
+
+  private initializePdfExportSelection(workspace: PhaseWorkspaceState) {
+    const process = workspace.processes.find(item => item.id === workspace.activeProcessId)
+      ?? workspace.processes[0]
+    const validIds = new Set(process?.sequences.map(item => item.id))
+    this.exportSequenceIds = new Set(
+      [...this.exportSequenceIds].filter(id => validIds.has(id))
+    )
+    if (this.exportSequenceIds.size === 0) {
+      this.exportSequenceIds = new Set(validIds)
+    }
+    if (!this.exportFileName) {
+      this.exportFileName = `${process?.name ?? 'process'}-report`
+    }
+  }
+
+  private getExportSequenceIds() {
+    const process = this.getActiveProcess()
+    if (!process) return []
+    if (this.exportScope === 'current') {
+      const current = process.sequences.find(
+        item => item.id === process.activeSequenceId
+      ) ?? process.sequences[0]
+      return current ? [current.id] : []
+    }
+    if (this.exportScope === 'selected') {
+      return process.sequences
+        .filter(item => this.exportSequenceIds.has(item.id))
+        .map(item => item.id)
+    }
+    return process.sequences.map(item => item.id)
+  }
+
+  private getExportOptions(mode: PhaseReportOutputMode): PhaseReportExportOptions {
+    const baseName = this.exportFileName
+      .trim()
+      .replace(/[<>:"/\\|?*]/g, '-')
+      .replace(/\.(pdf|zip)$/i, '') || 'process-report'
+    return {
+      mode,
+      fileName: `${baseName}.${mode === 'merged' ? 'pdf' : 'zip'}`,
+      sequenceIds: this.getExportSequenceIds()
+    }
   }
 
   private getPageContexts(workspace: PhaseWorkspaceState): PageContext[] {
