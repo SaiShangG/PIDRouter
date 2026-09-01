@@ -167,6 +167,34 @@ export function injectUiReferenceThemeStyles() {
 
     .phase-context-spacer { flex: 1; }
 
+    .phase-context-import {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid #87b7a7;
+      border-radius: 4px;
+      color: #176a50;
+      background: var(--reference-white);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .phase-context-import:hover,
+    .phase-context-import:focus-visible,
+    .phase-context-import.is-dragging {
+      border-color: var(--reference-green);
+      color: #0d5a42;
+      background: #dff3eb;
+      outline: 2px solid rgba(8, 123, 88, .18);
+      outline-offset: 1px;
+    }
+    .phase-context-import svg { width: 14px; height: 14px; }
+
     .phase-context-save {
       display: inline-flex;
       align-items: center;
@@ -520,8 +548,9 @@ export function injectUiReferenceThemeStyles() {
       .phase-context-field select { flex: 1; width: auto; min-width: 0; }
       .phase-context-summary { order: 3; }
       .phase-context-spacer { display: none; }
-      .phase-context-status { order: 4; margin-left: auto; }
-      .phase-context-save { order: 5; }
+      .phase-context-import { order: 4; margin-left: auto; }
+      .phase-context-status { order: 5; }
+      .phase-context-save { order: 6; }
 
       .file-sidebar,
       .file-sidebar-toggle,

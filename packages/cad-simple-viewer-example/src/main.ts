@@ -28,7 +28,7 @@ import {
   AcGePoint2d,
   log
 } from '@mlightcad/data-model'
-import { Brush, Eraser, Languages, Palette, PanelLeft, Save } from 'lucide'
+import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
@@ -94,6 +94,11 @@ import {
   translate
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
+import {
+  PhaseConfigImportModal,
+  type PhaseConfigImportLabels
+} from './phase/PhaseConfigImportModal'
+import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import {
   resolveDeviceStateDefinition
@@ -404,6 +409,7 @@ class CadViewerApp {
   private demoDockTabCount = 0
   private viewerToolbarMenuOpen = false
   private appLocale: AppLocale = loadAppLocale()
+  private phaseConfigFiles: File[] = []
   private readonly toast = new Toast(() =>
     translateUiText(this.appLocale, 'Close')
   )
@@ -459,6 +465,7 @@ class CadViewerApp {
   )
   private readonly drawingLibraryRepository =
     new ProcessAssistantDrawingRepository(this.processAssistantFileApi)
+  private readonly phaseConfigImportModal = new PhaseConfigImportModal()
   private phasePanel?: PhaseWorkspacePanel
   private drawingLibrary?: DrawingLibraryModal
   private projectManagement?: ProjectManagementModal
@@ -614,6 +621,14 @@ class CadViewerApp {
     setLabel('#phaseContextProcess', 'selectProcess')
     setLabel('#phaseContextSequence', 'selectSequence')
     setLabel('#phaseContextPhase', 'selectPhase')
+    setText('#phaseConfigImport span', 'importConfig')
+    setLabel('#phaseConfigImport', 'importConfigHint')
+    const importButton = document.getElementById('phaseConfigImport')
+    importButton?.setAttribute(
+      'title',
+      translate(this.appLocale, 'importConfigHint')
+    )
+    this.syncPhaseConfigImportLabel()
     setText('#phaseContextSave span', 'savePhase')
     setLabel('#phaseContextSave', 'savePhase')
     const button = document.getElementById('languageToggleButton')
@@ -2154,9 +2169,34 @@ class CadViewerApp {
     const saveButton = document.getElementById(
       'phaseContextSave'
     ) as HTMLButtonElement | null
-    if (!processSelect || !sequenceSelect || !phaseSelect || !saveButton) {
+    const importButton = document.getElementById(
+      'phaseConfigImport'
+    ) as HTMLButtonElement | null
+    if (
+      !processSelect ||
+      !sequenceSelect ||
+      !phaseSelect ||
+      !saveButton ||
+      !importButton
+    ) {
       throw new Error('Phase context controls were not found')
     }
+    importButton.prepend(createPhaseIcon(FileUp))
+    importButton.addEventListener('click', async () => {
+      const files = await this.phaseConfigImportModal.open(
+        this.getPhaseConfigImportLabels()
+      )
+      if (!files) return
+      this.phaseConfigFiles = files
+      this.syncPhaseConfigImportLabel()
+      this.showMessage(
+        translate(this.appLocale, 'importConfigUploaded').replace(
+          '{count}',
+          String(files.length)
+        ),
+        'success'
+      )
+    })
     saveButton.prepend(createPhaseIcon(Save))
     saveButton.addEventListener('click', async () => {
       const loadedPhase = this.loadedPhase
@@ -2208,6 +2248,34 @@ class CadViewerApp {
         )
       }
     })
+  }
+
+  private getPhaseConfigImportLabels(): PhaseConfigImportLabels {
+    return {
+      title: translate(this.appLocale, 'importConfigTitle'),
+      close: translate(this.appLocale, 'importConfigClose'),
+      dropTitle: translate(this.appLocale, 'importConfigDropTitle'),
+      dropHint: translate(this.appLocale, 'importConfigDropHint'),
+      browse: translate(this.appLocale, 'importConfigBrowse'),
+      fileCount: translate(this.appLocale, 'configFilesSelected'),
+      excelOnly: translate(this.appLocale, 'excelFilesOnly'),
+      cancel: translate(this.appLocale, 'importConfigCancel'),
+      confirm: translate(this.appLocale, 'importConfigConfirm'),
+      uploading: translate(this.appLocale, 'importConfigUploading'),
+      complete: translate(this.appLocale, 'importConfigComplete')
+    }
+  }
+
+  private syncPhaseConfigImportLabel() {
+    const button = document.getElementById(
+      'phaseConfigImport'
+    ) as HTMLButtonElement | null
+    const label = button?.querySelector('span')
+    if (!button || !label) return
+    const baseLabel = translate(this.appLocale, 'importConfig')
+    label.textContent = this.phaseConfigFiles.length
+      ? `${baseLabel} (${this.phaseConfigFiles.length})`
+      : baseLabel
   }
 
   private syncPhaseContextBar() {
@@ -4504,6 +4572,7 @@ async function bootstrap(): Promise<void> {
   injectToastStyles()
   injectParsingDetailsStyles()
   injectUiReferenceThemeStyles()
+  injectPhaseConfigImportModalStyles()
   injectPhaseWorkspaceStyles()
   new CadViewerApp()
 }

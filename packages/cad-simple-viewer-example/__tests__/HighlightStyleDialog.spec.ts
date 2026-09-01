@@ -14,7 +14,7 @@ describe('HighlightStyleDialog', () => {
     document.body.classList.remove('highlight-style-open')
   })
 
-  it('opens independently, closes with Escape, and restores focus', () => {
+  it('ignores implicit close interactions and closes from the close button', () => {
     const trigger = document.createElement('button')
     document.body.append(trigger)
     trigger.focus()
@@ -24,9 +24,22 @@ describe('HighlightStyleDialog', () => {
     dialog.open()
     expect(dialog.element.parentElement).toBe(document.body)
     expect(dialog.element.hidden).toBe(false)
+    ;[...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('新增设备'))!
+      .click()
+    const input = dialog.element.querySelector<HTMLInputElement>('input')!
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    dialog.element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    dialog.element.click()
     dialog.element.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
     )
+
+    expect(dialog.element.isConnected).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
+    dialog.element.querySelector<HTMLButtonElement>(
+      'button[aria-label="关闭对话框"]'
+    )!.click()
 
     expect(dialog.element.isConnected).toBe(false)
     expect(document.activeElement).toBe(trigger)

@@ -47,15 +47,6 @@ export class HighlightStyleDialog {
     this.element.setAttribute('role', 'dialog')
     this.element.setAttribute('aria-modal', 'true')
     this.element.setAttribute('aria-labelledby', 'highlightStyleDialogTitle')
-    this.element.addEventListener('click', event => {
-      if (event.target === this.element) this.close()
-    })
-    this.element.addEventListener('keydown', event => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        this.close()
-      }
-    })
     document.body.append(this.element)
     this.render()
   }
