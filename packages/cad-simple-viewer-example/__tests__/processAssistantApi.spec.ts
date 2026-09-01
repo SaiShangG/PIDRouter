@@ -1,5 +1,6 @@
 import { ProcessAssistantClient } from '../src/api/processAssistantClient'
 import {
+  ProcessAssistantFlowPathApi,
   ProcessAssistantMatrixApi,
   ProcessAssistantReportApi
 } from '../src/api/processAssistantExportApi'
@@ -117,15 +118,17 @@ describe('ProcessAssistantClient', () => {
 })
 
 describe('ProcessAssistant endpoint services', () => {
-  it('uses the report task endpoint and direct valve matrix export endpoint', async () => {
+  it('uses the report task and direct skill export endpoints', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 7, status: 'QUEUED' }), {
         headers: { 'Content-Type': 'application/json' }
       }))
-      .mockResolvedValueOnce(new Response('matrix-content')) as jest.MockedFunction<typeof fetch>
+      .mockResolvedValueOnce(new Response('matrix-content'))
+      .mockResolvedValueOnce(new Response('pdf-content')) as jest.MockedFunction<typeof fetch>
     const client = createClient(fetchMock)
     const reports = new ProcessAssistantReportApi(client)
     const matrices = new ProcessAssistantMatrixApi(client)
+    const flowPaths = new ProcessAssistantFlowPathApi(client)
 
     await reports.create({
       processId: 1,
@@ -145,10 +148,21 @@ describe('ProcessAssistant endpoint services', () => {
         }
       }
     })
+    await flowPaths.create({
+      projectId: 10,
+      selection: {
+        1: {
+          2: [11, 12],
+          3: [13]
+        }
+      },
+      name: 'CIP-flow-path.pdf'
+    })
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'http://api.example.test/api/v1/reports',
-      'http://api.example.test/api/v1/Skill/valve-matrix'
+      'http://api.example.test/api/v1/Skill/valve-matrix',
+      'http://api.example.test/api/v1/Skill/flow-path'
     ])
     expect(fetchMock.mock.calls[1][1]?.body).toBe(
       JSON.stringify({
@@ -159,6 +173,18 @@ describe('ProcessAssistant endpoint services', () => {
             3: [4, 5]
           }
         }
+      })
+    )
+    expect(fetchMock.mock.calls[2][1]?.body).toBe(
+      JSON.stringify({
+        projectId: 10,
+        selection: {
+          1: {
+            2: [11, 12],
+            3: [13]
+          }
+        },
+        name: 'CIP-flow-path.pdf'
       })
     )
   })

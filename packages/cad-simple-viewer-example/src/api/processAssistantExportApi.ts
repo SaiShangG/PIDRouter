@@ -41,6 +41,12 @@ export interface CreateValveMatrixRequest {
   selection: Record<string, Record<string, number[]>>
 }
 
+export interface CreateFlowPathPdfRequest {
+  projectId: number
+  selection: Record<string, Record<string, number[]>>
+  name: string
+}
+
 export class ProcessAssistantReportApi {
   constructor(private readonly client: ProcessAssistantClient) {}
 
@@ -75,6 +81,18 @@ export class ProcessAssistantMatrixApi {
     return this.client.requestFile(
       'POST',
       '/api/v1/Skill/valve-matrix',
+      { body: request, signal }
+    )
+  }
+}
+
+export class ProcessAssistantFlowPathApi {
+  constructor(private readonly client: ProcessAssistantClient) {}
+
+  create(request: CreateFlowPathPdfRequest, signal?: AbortSignal) {
+    return this.client.requestFile(
+      'POST',
+      '/api/v1/Skill/flow-path',
       { body: request, signal }
     )
   }

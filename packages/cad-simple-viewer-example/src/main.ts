@@ -44,6 +44,7 @@ import {
 } from './api/processAssistantConfig'
 import {
   type ExportTaskDto,
+  ProcessAssistantFlowPathApi,
   ProcessAssistantMatrixApi,
   ProcessAssistantReportApi
 } from './api/processAssistantExportApi'
@@ -460,6 +461,9 @@ class CadViewerApp {
   private readonly processAssistantReportApi = new ProcessAssistantReportApi(
     this.processAssistantClient
   )
+  private readonly processAssistantFlowPathApi = new ProcessAssistantFlowPathApi(
+    this.processAssistantClient
+  )
   private readonly processAssistantMatrixApi = new ProcessAssistantMatrixApi(
     this.processAssistantClient
   )
@@ -740,9 +744,48 @@ class CadViewerApp {
       item => item.id === workspace.activeProcessId
     ) ?? workspace.processes[0]
     if (!process) throw new Error('Process is required to export a report')
+    if (options.mode === 'merged') {
+      if (this.activeProjectId === undefined) {
+        throw new Error('PDF export requires an active Project')
+      }
+      const selectedSequenceIds = new Set(options.sequenceIds)
+      const sequences = Object.fromEntries(
+        process.sequences
+          .filter(sequence => selectedSequenceIds.has(sequence.id))
+          .map(sequence => [
+            String(this.requireExportBackendId(sequence.id, 'Sequence')),
+            sequence.phases.map(phase =>
+              this.requireExportBackendId(phase.id, 'Phase')
+            )
+          ])
+      )
+      const total = Object.values(sequences).reduce(
+        (sum, phaseIds) => sum + phaseIds.length,
+        0
+      )
+      const file = await this.processAssistantFlowPathApi.create({
+        projectId: this.activeProjectId,
+        selection: {
+          [this.requireExportBackendId(process.id, 'Process')]: sequences
+        },
+        name: options.fileName
+      }, signal)
+      onProgress({
+        completed: total,
+        total,
+        pageNumber: total,
+        sequenceId: '',
+        phaseId: ''
+      })
+      return {
+        status: 'completed',
+        fileName: options.fileName,
+        bytes: new Uint8Array(await file.blob.arrayBuffer())
+      } as const
+    }
     const task = await this.processAssistantReportApi.create({
       processId: this.requireExportBackendId(process.id, 'Process'),
-      mode: options.mode === 'merged' ? 'COMBINED' : 'PER_SEQUENCE',
+      mode: 'PER_SEQUENCE',
       sequenceIds: options.sequenceIds.map(sequenceId =>
         this.requireExportBackendId(sequenceId, 'Sequence')
       ),
