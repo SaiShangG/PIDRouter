@@ -28,6 +28,7 @@ import {
   AcGePoint2d,
   log
 } from '@mlightcad/data-model'
+import JSZip from 'jszip'
 import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
@@ -743,46 +744,85 @@ class CadViewerApp {
       throw new Error('PDF export requires an active Project')
     }
     const selectedSequenceIds = new Set(options.sequenceIds)
+    const selectedSequences = process.sequences.filter(sequence =>
+      selectedSequenceIds.has(sequence.id)
+    )
+    const processId = this.requireExportBackendId(process.id, 'Process')
     const sequences = Object.fromEntries(
-      process.sequences
-        .filter(sequence => selectedSequenceIds.has(sequence.id))
-        .map(sequence => [
+      selectedSequences.map(sequence => [
           String(this.requireExportBackendId(sequence.id, 'Sequence')),
           sequence.phases.map(phase =>
             this.requireExportBackendId(phase.id, 'Phase')
           )
-        ])
+        ]
+      )
     )
     const total = Object.values(sequences).reduce(
       (sum, phaseIds) => sum + phaseIds.length,
       0
     )
+    if (options.mode === 'per-sequence') {
+      const archive = new JSZip()
+      let completed = 0
+      for (const sequence of selectedSequences) {
+        if (signal.aborted) return { status: 'canceled' } as const
+        const sequenceId = String(
+          this.requireExportBackendId(sequence.id, 'Sequence')
+        )
+        const safeName = sequence.name.replace(/[<>:"/\\|?*]/g, '-')
+        const pdfName = `${String(sequence.number).padStart(2, '0')}-${safeName}.pdf`
+        const bytes = await this.createFlowPathPdf(
+          processId,
+          { [sequenceId]: sequences[sequenceId] },
+          pdfName,
+          signal
+        )
+        archive.file(pdfName, bytes)
+        completed += sequence.phases.length
+        onProgress({
+          completed,
+          total,
+          pageNumber: completed,
+          sequenceId: sequence.id,
+          phaseId: ''
+        })
+      }
+      return {
+        status: 'completed',
+        fileName: options.fileName,
+        bytes: await archive.generateAsync({ type: 'uint8array' })
+      } as const
+    }
+    const bytes = await this.createFlowPathPdf(
+      processId,
+      sequences,
+      options.fileName,
+      signal
+    )
+    onProgress({ completed: total, total, pageNumber: total, sequenceId: '', phaseId: '' })
+    return {
+      status: 'completed',
+      fileName: options.fileName,
+      bytes
+    } as const
+  }
+
+  private async createFlowPathPdf(
+    processId: number,
+    sequences: Record<string, number[]>,
+    fileName: string,
+    signal: AbortSignal
+  ) {
     const response = await this.processAssistantFlowPathApi.create({
-      projectId: this.activeProjectId,
-      selection: {
-        [this.requireExportBackendId(process.id, 'Process')]: sequences
-      },
-      name: options.fileName
+      projectId: this.activeProjectId!,
+      selection: { [processId]: sequences },
+      name: fileName
     }, signal)
     if (!response.success || !response.result) {
       throw new Error(response.message ?? 'Flow path PDF export failed')
     }
-    const blob = await this.processAssistantFileApi.download(
-      response.result,
-      signal
-    )
-    onProgress({
-      completed: total,
-      total,
-      pageNumber: total,
-      sequenceId: '',
-      phaseId: ''
-    })
-    return {
-      status: 'completed',
-      fileName: options.fileName,
-      bytes: new Uint8Array(await blob.arrayBuffer())
-    } as const
+    const blob = await this.processAssistantFileApi.download(response.result, signal)
+    return new Uint8Array(await blob.arrayBuffer())
   }
 
   private async exportMatrix(

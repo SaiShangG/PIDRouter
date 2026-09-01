@@ -1,4 +1,5 @@
-import { Download, Eye, FileText, RotateCcw, Trash2, X } from 'lucide'
+import JSZip from 'jszip'
+import { Download, Eye, FileArchive, FileText, RotateCcw, Trash2, X } from 'lucide'
 
 import type {
   MatrixDeviceType,
@@ -611,22 +612,24 @@ export class ReportWorkspaceModal {
     this.generatedReports.forEach(report => {
       const article = document.createElement('article')
       article.className = 'report-generated-item'
-      const icon = createPhaseIcon(FileText)
+      const icon = createPhaseIcon(report.mode === 'merged' ? FileText : FileArchive)
       const identity = document.createElement('div')
       identity.className = 'report-generated-identity'
       const name = document.createElement('strong')
       name.textContent = report.fileName
       const metadata = document.createElement('span')
-      metadata.textContent = `${this.formatDate(report.createdAt)} · 合并 PDF · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
+      metadata.textContent = `${this.formatDate(report.createdAt)} · ${report.mode === 'merged' ? '合并 PDF' : '分序列 ZIP'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
       identity.append(name, metadata)
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
-      actions.append(this.createFileAction(Eye, '预览 PDF', () => {
-        void this.pdfPreview.open(report.fileName, report.bytes)
-      }))
+      if (report.mode === 'merged') {
+        actions.append(this.createFileAction(Eye, '预览 PDF', () => {
+          void this.pdfPreview.open(report.fileName, report.bytes)
+        }))
+      }
       actions.append(
-        this.createFileAction(Download, '下载 PDF', () => {
-          this.downloadFile(report.fileName, report.bytes, 'application/pdf')
+        this.createFileAction(Download, report.mode === 'merged' ? '下载 PDF' : '下载 ZIP', () => {
+          this.downloadFile(report.fileName, report.bytes, report.mode === 'merged' ? 'application/pdf' : 'application/zip')
         }),
         this.createFileAction(Trash2, '删除生成记录', () => {
           this.generatedReports = this.generatedReports.filter(item => item.id !== report.id)
@@ -764,6 +767,7 @@ export class ReportWorkspaceModal {
       sequenceIdSet.has(page.sequenceId)
     )
     const includedPages = scopedPages.filter(page => !page.excluded)
+    const sequenceCount = new Set(includedPages.map(page => page.sequenceId)).size
     const excludedCount = scopedPages.length - includedPages.length
     const replacedCount = scopedPages.filter(page => page.replacement).length
 
@@ -839,6 +843,7 @@ export class ReportWorkspaceModal {
       <dt>排除页面</dt><dd>${excludedCount}</dd>
       <dt>替换页面</dt><dd>${replacedCount}</dd>
       <dt>合并输出</dt><dd>${includedPages.length > 0 ? 1 : 0} 个 PDF</dd>
+      <dt>分序列输出</dt><dd>${sequenceCount} 个 PDF（ZIP）</dd>
     `
     const status = document.createElement('p')
     status.textContent = this.exportProgress
@@ -856,7 +861,15 @@ export class ReportWorkspaceModal {
     merged.disabled =
       Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
     merged.addEventListener('click', () => this.requestExport('merged', warningCount))
-    section.append(title, fileNameLabel, scope, estimates, status, merged)
+    const split = document.createElement('button')
+    split.type = 'button'
+    split.textContent = '每个序列一个 PDF（ZIP）'
+    split.disabled =
+      Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
+    split.addEventListener('click', () =>
+      this.requestExport('per-sequence', warningCount)
+    )
+    section.append(title, fileNameLabel, scope, estimates, status, merged, split)
     if (this.pendingWarningOptions && !this.exportController) {
       const confirmation = document.createElement('div')
       confirmation.className = 'report-warning-confirmation'
@@ -1269,6 +1282,17 @@ export class ReportWorkspaceModal {
     mode: PhaseReportOutputMode,
     pageCount: number
   ) {
+    const pdfFiles: GeneratedPdfFile[] = []
+    if (mode === 'per-sequence') {
+      const archive = await JSZip.loadAsync(result.bytes)
+      for (const entry of Object.values(archive.files)) {
+        if (entry.dir || !entry.name.toLocaleLowerCase().endsWith('.pdf')) continue
+        pdfFiles.push({
+          fileName: entry.name.split('/').pop() ?? entry.name,
+          bytes: await entry.async('uint8array')
+        })
+      }
+    }
     this.generatedReports.unshift({
       id: `generated-report-${++this.generatedReportSequence}`,
       fileName: result.fileName,
@@ -1276,7 +1300,7 @@ export class ReportWorkspaceModal {
       mode,
       pageCount,
       bytes: result.bytes,
-      pdfFiles: []
+      pdfFiles
     })
   }
 

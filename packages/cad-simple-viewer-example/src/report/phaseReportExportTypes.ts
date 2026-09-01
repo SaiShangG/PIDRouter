@@ -1,4 +1,4 @@
-export type PhaseReportOutputMode = 'merged'
+export type PhaseReportOutputMode = 'merged' | 'per-sequence'
 
 export interface PhaseReportProgress {
   completed: number
@@ -22,7 +22,7 @@ export type PhaseReportExportResult =
   | { status: 'completed'; fileName: string; bytes: Uint8Array }
   | { status: 'canceled' }
   | {
-      status: 'failed'
-      failures: PhaseReportFailure[]
-      retry(options?: PhaseReportRetryOptions): Promise<PhaseReportExportResult>
-    }
+    status: 'failed'
+    failures: PhaseReportFailure[]
+    retry(options?: PhaseReportRetryOptions): Promise<PhaseReportExportResult>
+  }

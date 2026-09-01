@@ -292,6 +292,8 @@ describe('ReportWorkspaceModal', () => {
     expect(pdfTab.getAttribute('aria-selected')).toBe('true')
     expect(document.querySelector('#pdfExportPanel')).not.toBeNull()
     expect(document.querySelector('.report-matrix-controls')).toBeNull()
+    buttonByText('导出设置')?.click()
+    expect(buttonByText('每个序列一个 PDF（ZIP）')).not.toBeUndefined()
 
     matrixTab.click()
     expect(document.querySelector('#matrixExportTab')?.getAttribute('aria-selected')).toBe('true')
@@ -302,6 +304,7 @@ describe('ReportWorkspaceModal', () => {
     expect(document.querySelector('#pdfExportTab')?.getAttribute('aria-selected')).toBe('true')
     expect(document.querySelector('#pdfExportPanel')).not.toBeNull()
     expect(document.querySelector('.report-matrix-controls')).toBeNull()
+    expect(buttonByText('每个序列一个 PDF（ZIP）')).not.toBeUndefined()
   })
 
   it('exports a matrix for selected Sequences, Phases, and device types', async () => {

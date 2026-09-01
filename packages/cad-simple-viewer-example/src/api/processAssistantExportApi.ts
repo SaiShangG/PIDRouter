@@ -21,7 +21,7 @@ export interface CreateFlowPathPdfResponse {
 }
 
 export class ProcessAssistantMatrixApi {
-  constructor(private readonly client: ProcessAssistantClient) {}
+  constructor(private readonly client: ProcessAssistantClient) { }
 
   create(request: CreateValveMatrixRequest, signal?: AbortSignal) {
     return this.client.requestFile(
@@ -33,7 +33,7 @@ export class ProcessAssistantMatrixApi {
 }
 
 export class ProcessAssistantFlowPathApi {
-  constructor(private readonly client: ProcessAssistantClient) {}
+  constructor(private readonly client: ProcessAssistantClient) { }
 
   create(request: CreateFlowPathPdfRequest, signal?: AbortSignal) {
     return this.client.request<CreateFlowPathPdfResponse>(
