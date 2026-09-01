@@ -43,10 +43,8 @@ import {
   PROCESS_ASSISTANT_API_URL
 } from './api/processAssistantConfig'
 import {
-  type ExportTaskDto,
   ProcessAssistantFlowPathApi,
-  ProcessAssistantMatrixApi,
-  ProcessAssistantReportApi
+  ProcessAssistantMatrixApi
 } from './api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from './api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi'
@@ -166,7 +164,7 @@ import { ProjectManagementModal } from './project/ProjectManagementModal'
 import { injectProjectManagementStyles } from './project/projectManagementStyles'
 import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
-import type { PhaseReportProgress } from './report/PhaseReportExporter'
+import type { PhaseReportProgress } from './report/phaseReportExportTypes'
 import { ReportManifestStore } from './report/reportManifest'
 import {
   type MatrixExportSelection,
@@ -458,9 +456,6 @@ class CadViewerApp {
   private readonly processAssistantPhaseApi = new ProcessAssistantPhaseApi(
     this.processAssistantClient
   )
-  private readonly processAssistantReportApi = new ProcessAssistantReportApi(
-    this.processAssistantClient
-  )
   private readonly processAssistantFlowPathApi = new ProcessAssistantFlowPathApi(
     this.processAssistantClient
   )
@@ -744,83 +739,49 @@ class CadViewerApp {
       item => item.id === workspace.activeProcessId
     ) ?? workspace.processes[0]
     if (!process) throw new Error('Process is required to export a report')
-    if (options.mode === 'merged') {
-      if (this.activeProjectId === undefined) {
-        throw new Error('PDF export requires an active Project')
-      }
-      const selectedSequenceIds = new Set(options.sequenceIds)
-      const sequences = Object.fromEntries(
-        process.sequences
-          .filter(sequence => selectedSequenceIds.has(sequence.id))
-          .map(sequence => [
-            String(this.requireExportBackendId(sequence.id, 'Sequence')),
-            sequence.phases.map(phase =>
-              this.requireExportBackendId(phase.id, 'Phase')
-            )
-          ])
-      )
-      const total = Object.values(sequences).reduce(
-        (sum, phaseIds) => sum + phaseIds.length,
-        0
-      )
-      const file = await this.processAssistantFlowPathApi.create({
-        projectId: this.activeProjectId,
-        selection: {
-          [this.requireExportBackendId(process.id, 'Process')]: sequences
-        },
-        name: options.fileName
-      }, signal)
-      onProgress({
-        completed: total,
-        total,
-        pageNumber: total,
-        sequenceId: '',
-        phaseId: ''
-      })
-      return {
-        status: 'completed',
-        fileName: options.fileName,
-        bytes: new Uint8Array(await file.blob.arrayBuffer())
-      } as const
+    if (this.activeProjectId === undefined) {
+      throw new Error('PDF export requires an active Project')
     }
-    const task = await this.processAssistantReportApi.create({
-      processId: this.requireExportBackendId(process.id, 'Process'),
-      mode: 'PER_SEQUENCE',
-      sequenceIds: options.sequenceIds.map(sequenceId =>
-        this.requireExportBackendId(sequenceId, 'Sequence')
-      ),
-      includeCover: true,
-      includeValveMatrix: false,
-      pageSize: 'A3',
-      orientation: 'LANDSCAPE'
-    }, signal)
-    const reportId = this.requireExportTaskId(task, 'report')
-    const completed = await this.waitForExportTask(
-      current => this.processAssistantReportApi.get(reportId, current),
-      signal,
-      status => {
-        const selectedSequenceIds = new Set(options.sequenceIds)
-        const total = status.totalPhases ?? process.sequences
-          .filter(sequence => selectedSequenceIds.has(sequence.id))
-          .reduce((sum, sequence) => sum + sequence.phases.length, 0)
-        const completedCount = status.processedPhases ?? Math.round(
-          Math.max(0, Math.min(100, status.progress ?? 0)) / 100 * total
-        )
-        onProgress({
-          completed: completedCount,
-          total,
-          pageNumber: completedCount,
-          sequenceId: '',
-          phaseId: ''
-        })
-      }
+    const selectedSequenceIds = new Set(options.sequenceIds)
+    const sequences = Object.fromEntries(
+      process.sequences
+        .filter(sequence => selectedSequenceIds.has(sequence.id))
+        .map(sequence => [
+          String(this.requireExportBackendId(sequence.id, 'Sequence')),
+          sequence.phases.map(phase =>
+            this.requireExportBackendId(phase.id, 'Phase')
+          )
+        ])
     )
-    if (!completed) return { status: 'canceled' } as const
-    const file = await this.processAssistantReportApi.download(reportId, signal)
+    const total = Object.values(sequences).reduce(
+      (sum, phaseIds) => sum + phaseIds.length,
+      0
+    )
+    const response = await this.processAssistantFlowPathApi.create({
+      projectId: this.activeProjectId,
+      selection: {
+        [this.requireExportBackendId(process.id, 'Process')]: sequences
+      },
+      name: options.fileName
+    }, signal)
+    if (!response.success || !response.result) {
+      throw new Error(response.message ?? 'Flow path PDF export failed')
+    }
+    const blob = await this.processAssistantFileApi.download(
+      response.result,
+      signal
+    )
+    onProgress({
+      completed: total,
+      total,
+      pageNumber: total,
+      sequenceId: '',
+      phaseId: ''
+    })
     return {
       status: 'completed',
       fileName: options.fileName,
-      bytes: new Uint8Array(await file.blob.arrayBuffer())
+      bytes: new Uint8Array(await blob.arrayBuffer())
     } as const
   }
 
@@ -857,42 +818,6 @@ class CadViewerApp {
       selection.fileName || file.fileName || `device-matrix.${selection.format.toLowerCase()}`,
       file.blob
     )
-  }
-
-  private async waitForExportTask(
-    getTask: (signal: AbortSignal) => Promise<ExportTaskDto>,
-    signal: AbortSignal,
-    onProgress?: (task: ExportTaskDto) => void
-  ): Promise<ExportTaskDto | undefined> {
-    while (!signal.aborted) {
-      const task = await getTask(signal)
-      onProgress?.(task)
-      if (task.status === 'COMPLETED' || task.status === 'SUCCEEDED') return task
-      if (task.status === 'CANCELLED' || task.status === 'CANCELED') return undefined
-      if (task.status === 'FAILED') {
-        throw new Error(task.error ?? task.message ?? 'Backend export failed')
-      }
-      await new Promise<void>((resolve, reject) => {
-        const handleAbort = () => {
-          window.clearTimeout(timeout)
-          reject(new DOMException('Export canceled', 'AbortError'))
-        }
-        const timeout = window.setTimeout(() => {
-          signal.removeEventListener('abort', handleAbort)
-          resolve()
-        }, 1000)
-        signal.addEventListener('abort', handleAbort, { once: true })
-      })
-    }
-    return undefined
-  }
-
-  private requireExportTaskId(task: ExportTaskDto, kind: 'report' | 'matrix') {
-    const id = task.id ?? (kind === 'report' ? task.reportId : task.matrixId)
-    if (id === undefined || id === null || id === '') {
-      throw new Error(`Backend ${kind} export did not return a task ID`)
-    }
-    return id
   }
 
   private requireExportBackendId(value: string, label: string) {

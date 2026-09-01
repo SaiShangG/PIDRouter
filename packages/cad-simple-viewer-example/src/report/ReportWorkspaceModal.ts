@@ -1,5 +1,4 @@
-import JSZip from 'jszip'
-import { Download, Eye, FileArchive, FileText, RotateCcw, Trash2, X } from 'lucide'
+import { Download, Eye, FileText, RotateCcw, Trash2, X } from 'lucide'
 
 import type {
   MatrixDeviceType,
@@ -20,7 +19,7 @@ import type {
   PhaseReportExportResult,
   PhaseReportOutputMode,
   PhaseReportProgress
-} from './PhaseReportExporter'
+} from './phaseReportExportTypes'
 import {
   type ReportManifest,
   ReportManifestStore,
@@ -165,12 +164,6 @@ export class ReportWorkspaceModal {
     this.focusController.activate(
       this.element.querySelector<HTMLButtonElement>('.report-icon-button')
     )
-    if (
-      this.generatedReports.length === 0 &&
-      new URLSearchParams(window.location.search).get('demoPdf') === '1'
-    ) {
-      void this.addDemoGeneratedReport()
-    }
   }
 
   close() {
@@ -618,24 +611,22 @@ export class ReportWorkspaceModal {
     this.generatedReports.forEach(report => {
       const article = document.createElement('article')
       article.className = 'report-generated-item'
-      const icon = createPhaseIcon(report.mode === 'merged' ? FileText : FileArchive)
+      const icon = createPhaseIcon(FileText)
       const identity = document.createElement('div')
       identity.className = 'report-generated-identity'
       const name = document.createElement('strong')
       name.textContent = report.fileName
       const metadata = document.createElement('span')
-      metadata.textContent = `${this.formatDate(report.createdAt)} · ${report.mode === 'merged' ? '合并 PDF' : '分序列 ZIP'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
+      metadata.textContent = `${this.formatDate(report.createdAt)} · 合并 PDF · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
       identity.append(name, metadata)
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
-      if (report.mode === 'merged') {
-        actions.append(this.createFileAction(Eye, '预览 PDF', () => {
-          void this.pdfPreview.open(report.fileName, report.bytes)
-        }))
-      }
+      actions.append(this.createFileAction(Eye, '预览 PDF', () => {
+        void this.pdfPreview.open(report.fileName, report.bytes)
+      }))
       actions.append(
-        this.createFileAction(Download, report.mode === 'merged' ? '下载 PDF' : '下载 ZIP', () => {
-          this.downloadFile(report.fileName, report.bytes, report.mode === 'merged' ? 'application/pdf' : 'application/zip')
+        this.createFileAction(Download, '下载 PDF', () => {
+          this.downloadFile(report.fileName, report.bytes, 'application/pdf')
         }),
         this.createFileAction(Trash2, '删除生成记录', () => {
           this.generatedReports = this.generatedReports.filter(item => item.id !== report.id)
@@ -773,7 +764,6 @@ export class ReportWorkspaceModal {
       sequenceIdSet.has(page.sequenceId)
     )
     const includedPages = scopedPages.filter(page => !page.excluded)
-    const sequenceCount = new Set(includedPages.map(page => page.sequenceId)).size
     const excludedCount = scopedPages.length - includedPages.length
     const replacedCount = scopedPages.filter(page => page.replacement).length
 
@@ -849,7 +839,6 @@ export class ReportWorkspaceModal {
       <dt>排除页面</dt><dd>${excludedCount}</dd>
       <dt>替换页面</dt><dd>${replacedCount}</dd>
       <dt>合并输出</dt><dd>${includedPages.length > 0 ? 1 : 0} 个 PDF</dd>
-      <dt>分序列输出</dt><dd>${sequenceCount} 个 PDF（ZIP）</dd>
     `
     const status = document.createElement('p')
     status.textContent = this.exportProgress
@@ -867,15 +856,7 @@ export class ReportWorkspaceModal {
     merged.disabled =
       Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
     merged.addEventListener('click', () => this.requestExport('merged', warningCount))
-    const split = document.createElement('button')
-    split.type = 'button'
-    split.textContent = '每个序列一个 PDF（ZIP）'
-    split.disabled =
-      Boolean(this.exportController) || errorCount > 0 || includedPages.length === 0
-    split.addEventListener('click', () =>
-      this.requestExport('per-sequence', warningCount)
-    )
-    section.append(title, fileNameLabel, scope, estimates, status, merged, split)
+    section.append(title, fileNameLabel, scope, estimates, status, merged)
     if (this.pendingWarningOptions && !this.exportController) {
       const confirmation = document.createElement('div')
       confirmation.className = 'report-warning-confirmation'
@@ -1288,17 +1269,6 @@ export class ReportWorkspaceModal {
     mode: PhaseReportOutputMode,
     pageCount: number
   ) {
-    const pdfFiles: GeneratedPdfFile[] = []
-    if (mode === 'per-sequence') {
-      const archive = await JSZip.loadAsync(result.bytes)
-      for (const entry of Object.values(archive.files)) {
-        if (entry.dir || !entry.name.toLocaleLowerCase().endsWith('.pdf')) continue
-        pdfFiles.push({
-          fileName: entry.name.split('/').pop() ?? entry.name,
-          bytes: await entry.async('uint8array')
-        })
-      }
-    }
     this.generatedReports.unshift({
       id: `generated-report-${++this.generatedReportSequence}`,
       fileName: result.fileName,
@@ -1306,83 +1276,8 @@ export class ReportWorkspaceModal {
       mode,
       pageCount,
       bytes: result.bytes,
-      pdfFiles
-    })
-  }
-
-  private async addDemoGeneratedReport() {
-    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
-    const document = await PDFDocument.create()
-    const regular = await document.embedFont(StandardFonts.Helvetica)
-    const bold = await document.embedFont(StandardFonts.HelveticaBold)
-      ;['Preparation', 'WFI Pre-rinse'].forEach((phase, index) => {
-        const page = document.addPage([842, 595])
-        page.drawText('CIP PHASE REPORT', {
-          x: 42,
-          y: 548,
-          size: 20,
-          font: bold,
-          color: rgb(0.03, 0.42, 0.31)
-        })
-        page.drawText(`Sequence 01 / Phase ${String(index + 1).padStart(2, '0')} / ${phase}`, {
-          x: 42,
-          y: 522,
-          size: 11,
-          font: regular,
-          color: rgb(0.25, 0.34, 0.36)
-        })
-        page.drawRectangle({
-          x: 42,
-          y: 72,
-          width: 758,
-          height: 420,
-          borderWidth: 1,
-          borderColor: rgb(0.72, 0.79, 0.8),
-          color: rgb(0.98, 0.99, 0.99)
-        })
-        page.drawLine({
-          start: { x: 130, y: 282 },
-          end: { x: 710, y: 282 },
-          thickness: 5,
-          color: rgb(0.03, 0.52, 0.38)
-        })
-          ;[190, 370, 550].forEach((x, equipmentIndex) => {
-            page.drawCircle({
-              x,
-              y: 282,
-              size: 31,
-              borderWidth: 3,
-              borderColor: rgb(0.08, 0.18, 0.21),
-              color: rgb(1, 1, 1)
-            })
-            page.drawText(`V-${equipmentIndex + 1}`, {
-              x: x - 13,
-              y: 278,
-              size: 10,
-              font: bold,
-              color: rgb(0.08, 0.18, 0.21)
-            })
-          })
-        page.drawText(`Demo report page ${index + 1} of 2`, {
-          x: 42,
-          y: 42,
-          size: 9,
-          font: regular,
-          color: rgb(0.38, 0.46, 0.48)
-        })
-      })
-    const bytes = await document.save()
-    this.generatedReports.unshift({
-      id: `generated-report-${++this.generatedReportSequence}`,
-      fileName: 'CIP-Phase-Report-Demo.pdf',
-      createdAt: new Date(),
-      mode: 'merged',
-      pageCount: 2,
-      bytes,
       pdfFiles: []
     })
-    this.activePdfPanel = 'generated'
-    if (!this.element.hidden) this.render()
   }
 
   private async retryFailedPages() {

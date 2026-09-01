@@ -1,13 +1,11 @@
 /** @jest-environment jsdom */
 
-import JSZip from 'jszip'
-
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type { PhaseWorkspaceState } from '../src/phase/types'
 import type {
   PhaseReportExportResult,
   PhaseReportProgress
-} from '../src/report/PhaseReportExporter'
+} from '../src/report/phaseReportExportTypes'
 import { ReportManifestStore } from '../src/report/reportManifest'
 import {
   type PhaseReportExportOptions,
@@ -286,27 +284,6 @@ describe('ReportWorkspaceModal', () => {
     expect(document.querySelector('.report-generated-empty')).not.toBeNull()
   })
 
-  it('lists PDFs contained in a generated per-sequence ZIP', async () => {
-    const archive = new JSZip()
-    archive.file('01-Tank-cleaning.pdf', new Uint8Array([1, 2, 3]))
-    const bytes = await archive.generateAsync({ type: 'uint8array' })
-    createHarness('zh', workspace, jest.fn(async () => ({
-      status: 'completed' as const,
-      fileName: 'reports.zip',
-      bytes
-    })))
-
-    openExportSettings()
-    buttonByText('每个序列一个 PDF（ZIP）')?.click()
-    await new Promise(resolve => window.setTimeout(resolve, 0))
-    await new Promise(resolve => window.setTimeout(resolve, 0))
-
-    expect(document.querySelector('.report-generated-files')?.textContent).toContain(
-      '01-Tank-cleaning.pdf'
-    )
-    expect(document.querySelectorAll('[aria-label="预览 PDF"]')).toHaveLength(1)
-  })
-
   it('switches between separate PDF and Matrix export tabs', () => {
     createHarness()
     const pdfTab = document.querySelector<HTMLButtonElement>('#pdfExportTab')!
@@ -433,7 +410,6 @@ describe('ReportWorkspaceModal', () => {
       'Issues'
     )
     expect(buttonByText('Merge into one PDF')?.disabled).toBe(true)
-    expect(buttonByText('One PDF per sequence (ZIP)')?.disabled).toBe(true)
   })
 
   it('shows output estimates and requires confirmation for warnings', async () => {

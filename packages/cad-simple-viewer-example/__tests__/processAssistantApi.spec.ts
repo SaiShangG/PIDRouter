@@ -1,8 +1,7 @@
 import { ProcessAssistantClient } from '../src/api/processAssistantClient'
 import {
   ProcessAssistantFlowPathApi,
-  ProcessAssistantMatrixApi,
-  ProcessAssistantReportApi
+  ProcessAssistantMatrixApi
 } from '../src/api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from '../src/api/processAssistantFileApi'
 import { ProcessAssistantOperationApi } from '../src/api/processAssistantOperationApi'
@@ -118,27 +117,20 @@ describe('ProcessAssistantClient', () => {
 })
 
 describe('ProcessAssistant endpoint services', () => {
-  it('uses the report task and direct skill export endpoints', async () => {
+  it('uses the direct skill export endpoints', async () => {
     const fetchMock = jest.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 7, status: 'QUEUED' }), {
-        headers: { 'Content-Type': 'application/json' }
-      }))
       .mockResolvedValueOnce(new Response('matrix-content'))
-      .mockResolvedValueOnce(new Response('pdf-content')) as jest.MockedFunction<typeof fetch>
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        message: null,
+        result: 'generated-pdf-id'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })) as jest.MockedFunction<typeof fetch>
     const client = createClient(fetchMock)
-    const reports = new ProcessAssistantReportApi(client)
     const matrices = new ProcessAssistantMatrixApi(client)
     const flowPaths = new ProcessAssistantFlowPathApi(client)
 
-    await reports.create({
-      processId: 1,
-      mode: 'COMBINED',
-      sequenceIds: [2],
-      includeCover: true,
-      includeValveMatrix: false,
-      pageSize: 'A3',
-      orientation: 'LANDSCAPE'
-    })
     await matrices.create({
       projectId: 10,
       selection: {
@@ -148,7 +140,7 @@ describe('ProcessAssistant endpoint services', () => {
         }
       }
     })
-    await flowPaths.create({
+    await expect(flowPaths.create({
       projectId: 10,
       selection: {
         1: {
@@ -157,14 +149,17 @@ describe('ProcessAssistant endpoint services', () => {
         }
       },
       name: 'CIP-flow-path.pdf'
+    })).resolves.toEqual({
+      success: true,
+      message: null,
+      result: 'generated-pdf-id'
     })
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      'http://api.example.test/api/v1/reports',
       'http://api.example.test/api/v1/Skill/valve-matrix',
       'http://api.example.test/api/v1/Skill/flow-path'
     ])
-    expect(fetchMock.mock.calls[1][1]?.body).toBe(
+    expect(fetchMock.mock.calls[0][1]?.body).toBe(
       JSON.stringify({
         projectId: 10,
         selection: {
@@ -175,7 +170,7 @@ describe('ProcessAssistant endpoint services', () => {
         }
       })
     )
-    expect(fetchMock.mock.calls[2][1]?.body).toBe(
+    expect(fetchMock.mock.calls[1][1]?.body).toBe(
       JSON.stringify({
         projectId: 10,
         selection: {
