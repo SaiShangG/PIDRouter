@@ -810,9 +810,8 @@ class CadViewerApp {
       projectId: this.activeProjectId,
       selection: { [processId]: sequences }
     }, signal)
-    const extension = selection.format.toLowerCase()
     this.downloadExportFile(
-      file.fileName ?? `device-matrix.${extension}`,
+      selection.fileName || file.fileName || `device-matrix.${selection.format.toLowerCase()}`,
       file.blob
     )
   }

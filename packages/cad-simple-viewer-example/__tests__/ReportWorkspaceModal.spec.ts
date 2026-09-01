@@ -327,7 +327,7 @@ describe('ReportWorkspaceModal', () => {
     expect(document.querySelector('.report-matrix-controls')).toBeNull()
   })
 
-  it('exports a matrix for selected operations, phases, and device types', async () => {
+  it('exports a matrix for selected Sequences, Phases, and device types', async () => {
     const { exportMatrix } = createHarness()
 
     document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
@@ -340,11 +340,81 @@ describe('ReportWorkspaceModal', () => {
       processId: 'process',
       sequenceIds: ['sequence'],
       phaseIds: ['phase-1', 'phase-2'],
+      fileName: 'CIP-matrix.xlsx',
       format: 'XLSX',
       deviceTypes: ['VALVE', 'PUMP_MOTOR', 'SENSOR'],
       includeInactiveDevices: true,
       includeTransitions: true
     }, expect.any(AbortSignal))
+  })
+
+  it('supports Matrix Sequence shortcuts and partial selection', () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes[0].activeSequenceId = 'sequence-2'
+    state.processes[0].sequences.push({
+      ...state.processes[0].sequences[0],
+      id: 'sequence-2',
+      number: 2,
+      name: 'Second tank',
+      phases: state.processes[0].sequences[0].phases.map(phase => ({
+        ...phase,
+        id: `${phase.id}-second`
+      }))
+    })
+    createHarness('zh', state)
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+
+    buttonByText('全部清除')?.click()
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 0 个 Sequence，0 个 Phase'
+    )
+    buttonByText('当前 Sequence')?.click()
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 1 个 Sequence，2 个 Phase'
+    )
+
+    const selectedSequence = document.querySelectorAll<HTMLElement>(
+      '.report-matrix-sequence'
+    )[1]
+    const selectedPhase = selectedSequence.querySelectorAll<HTMLInputElement>(
+      'input[type="checkbox"]'
+    )[1]
+    selectedPhase.checked = false
+    selectedPhase.dispatchEvent(new Event('change'))
+    expect(document.querySelectorAll<HTMLElement>('.report-matrix-sequence')[1]
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')?.indeterminate
+    ).toBe(true)
+  })
+
+  it('normalizes a custom Matrix filename and shows export failure details', async () => {
+    const exportMatrix = jest.fn(async () => {
+      throw new Error('service unavailable')
+    })
+    createHarness('en', workspace, undefined, exportMatrix)
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+    const fileName = document.querySelector<HTMLInputElement>(
+      '[aria-label="Custom Matrix filename"]'
+    )!
+    fileName.value = 'Batch:42.csv'
+    fileName.dispatchEvent(new Event('input'))
+    const format = document.querySelector<HTMLSelectElement>(
+      '[aria-label="Matrix file format"]'
+    )!
+    format.value = 'CSV'
+    format.dispatchEvent(new Event('change'))
+    document.querySelector<HTMLButtonElement>(
+      '#matrixExportPanel .report-primary-button'
+    )?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(exportMatrix).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'Batch-42.csv', format: 'CSV' }),
+      expect.any(AbortSignal)
+    )
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      'Matrix export failed：service unavailable'
+    )
   })
 
   it('lists the exact localized issue and disables export', async () => {

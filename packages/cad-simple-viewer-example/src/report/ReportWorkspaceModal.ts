@@ -32,6 +32,7 @@ export interface MatrixExportSelection {
   processId: string
   sequenceIds: string[]
   phaseIds: string[]
+  fileName: string
   format: MatrixFormat
   deviceTypes: MatrixDeviceType[]
   includeInactiveDevices: boolean
@@ -113,6 +114,8 @@ export class ReportWorkspaceModal {
   ])
   private matrixIncludeInactiveDevices = true
   private matrixIncludeTransitions = true
+  private matrixFileName = ''
+  private matrixQuery = ''
   private matrixMessage = ''
   private activeTab: 'pdf' | 'matrix' = 'pdf'
   private activePdfPanel: 'page' | 'export' | 'generated' = 'page'
@@ -204,7 +207,7 @@ export class ReportWorkspaceModal {
     summary.className = 'report-workspace-summary'
     summary.textContent = this.activeTab === 'pdf'
       ? `${includedCount} / ${this.manifest.pages.length} 页`
-      : `已选择 ${this.matrixSequenceIds.size} 个 Operation，${this.matrixPhaseIds.size} 个 Phase`
+      : `已选择 ${this.matrixSequenceIds.size} 个 Sequence，${this.matrixPhaseIds.size} 个 Phase`
     heading.append(eyebrow, title)
     const tabs = this.createExportTabs()
     const close = document.createElement('button')
@@ -927,48 +930,67 @@ export class ReportWorkspaceModal {
     const process = workspace.processes.find(item => item.id === this.matrixProcessId)
     const section = document.createElement('section')
     section.className = 'report-matrix-controls'
-    const title = document.createElement('h3')
-    title.textContent = '配置并导出设备 Matrix'
 
-    const processLabel = document.createElement('label')
-    processLabel.textContent = 'Process'
-    const processSelect = document.createElement('select')
-    processSelect.setAttribute('aria-label', 'Matrix Process')
-    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
-    processSelect.value = this.matrixProcessId
-    processSelect.disabled = Boolean(this.exportController)
-    processSelect.addEventListener('change', () => {
-      this.matrixProcessId = processSelect.value
-      this.selectAllMatrixScope()
-      this.matrixMessage = ''
+    const scopePanel = document.createElement('section')
+    scopePanel.className = 'report-matrix-scope-panel'
+    const scopeTitle = document.createElement('h3')
+    scopeTitle.textContent = 'Sequence / Phase 范围'
+
+    const search = document.createElement('input')
+    search.type = 'search'
+    search.value = this.matrixQuery
+    search.placeholder = '搜索 Sequence 或 Phase'
+    search.setAttribute('aria-label', '搜索 Matrix 范围')
+    search.disabled = Boolean(this.exportController)
+    search.addEventListener('input', () => {
+      this.matrixQuery = search.value
       this.render()
     })
-    processLabel.append(processSelect)
 
-    const formatLabel = document.createElement('label')
-    formatLabel.textContent = '文件格式'
-    const format = document.createElement('select')
-    format.setAttribute('aria-label', 'Matrix 文件格式')
-      ; (['XLSX', 'CSV'] as MatrixFormat[]).forEach(value =>
-        format.add(new Option(value, value))
-      )
-    format.value = this.matrixFormat
-    format.disabled = Boolean(this.exportController)
-    format.addEventListener('change', () => {
-      this.matrixFormat = format.value as MatrixFormat
-    })
-    formatLabel.append(format)
+    const scopeActions = document.createElement('div')
+    scopeActions.className = 'report-matrix-scope-actions'
+      ; ([
+        ['全部选择', () => this.selectAllMatrixScope()],
+        ['全部清除', () => this.clearMatrixScope()],
+        ['当前 Sequence', () => this.selectCurrentMatrixSequence()]
+      ] as const).forEach(([label, action]) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.textContent = label
+        button.disabled = Boolean(this.exportController) || !process
+        button.addEventListener('click', () => {
+          action()
+          this.matrixMessage = ''
+          this.render()
+        })
+        scopeActions.append(button)
+      })
 
-    const scope = document.createElement('fieldset')
-    const scopeLegend = document.createElement('legend')
-    scopeLegend.textContent = 'Operation / Phase 范围'
-    scope.append(scopeLegend)
+    const scope = document.createElement('div')
+    scope.className = 'report-matrix-tree'
+    scope.setAttribute('role', 'group')
+    scope.setAttribute('aria-label', 'Sequence / Phase 范围')
+    const query = this.matrixQuery.trim().toLocaleLowerCase()
     process?.sequences.forEach(sequence => {
+      const visiblePhases = query
+        ? sequence.phases.filter(phase =>
+          phase.name.toLocaleLowerCase().includes(query) ||
+          String(phase.number).includes(query)
+        )
+        : sequence.phases
+      const sequenceMatches = !query ||
+        sequence.name.toLocaleLowerCase().includes(query) ||
+        String(sequence.number).includes(query)
+      if (!sequenceMatches && visiblePhases.length === 0) return
+
       const group = document.createElement('div')
       group.className = 'report-matrix-sequence'
+      const selectedPhaseCount = sequence.phases.filter(phase =>
+        this.matrixPhaseIds.has(phase.id)
+      ).length
       group.append(this.createMatrixCheckbox(
-        `序列 ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
-        this.matrixSequenceIds.has(sequence.id),
+        `Sequence ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
+        sequence.phases.length > 0 && selectedPhaseCount === sequence.phases.length,
         checked => {
           if (checked) {
             this.matrixSequenceIds.add(sequence.id)
@@ -978,9 +1000,11 @@ export class ReportWorkspaceModal {
             sequence.phases.forEach(phase => this.matrixPhaseIds.delete(phase.id))
           }
           this.render()
-        }
+        },
+        selectedPhaseCount > 0 && selectedPhaseCount < sequence.phases.length
       ))
-      sequence.phases.forEach(phase => {
+      const phases = sequenceMatches ? sequence.phases : visiblePhases
+      phases.forEach(phase => {
         const option = this.createMatrixCheckbox(
           `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`,
           this.matrixPhaseIds.has(phase.id),
@@ -1002,6 +1026,61 @@ export class ReportWorkspaceModal {
       })
       scope.append(group)
     })
+    if (!scope.childElementCount) {
+      const empty = document.createElement('p')
+      empty.className = 'report-matrix-empty'
+      empty.textContent = '未找到匹配的 Sequence 或 Phase'
+      scope.append(empty)
+    }
+    scopePanel.append(scopeTitle, search, scopeActions, scope)
+
+    const settingsPanel = document.createElement('section')
+    settingsPanel.className = 'report-matrix-settings-panel'
+    const title = document.createElement('h3')
+    title.textContent = 'Matrix 导出设置'
+
+    const processLabel = document.createElement('label')
+    processLabel.textContent = 'Process'
+    const processSelect = document.createElement('select')
+    processSelect.setAttribute('aria-label', 'Matrix Process')
+    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
+    processSelect.value = this.matrixProcessId
+    processSelect.disabled = Boolean(this.exportController)
+    processSelect.addEventListener('change', () => {
+      this.matrixProcessId = processSelect.value
+      this.selectAllMatrixScope()
+      this.initializeMatrixFileName()
+      this.matrixMessage = ''
+      this.render()
+    })
+    processLabel.append(processSelect)
+
+    const fileNameLabel = document.createElement('label')
+    fileNameLabel.textContent = '文件名'
+    const fileName = document.createElement('input')
+    fileName.type = 'text'
+    fileName.value = this.matrixFileName
+    fileName.placeholder = '输入 Matrix 文件名'
+    fileName.setAttribute('aria-label', '自定义 Matrix 文件名')
+    fileName.disabled = Boolean(this.exportController)
+    fileName.addEventListener('input', () => {
+      this.matrixFileName = fileName.value
+    })
+    fileNameLabel.append(fileName)
+
+    const formatLabel = document.createElement('label')
+    formatLabel.textContent = '文件格式'
+    const format = document.createElement('select')
+    format.setAttribute('aria-label', 'Matrix 文件格式')
+      ; (['XLSX', 'CSV'] as MatrixFormat[]).forEach(value =>
+        format.add(new Option(value, value))
+      )
+    format.value = this.matrixFormat
+    format.disabled = Boolean(this.exportController)
+    format.addEventListener('change', () => {
+      this.matrixFormat = format.value as MatrixFormat
+    })
+    formatLabel.append(format)
 
     const devices = document.createElement('fieldset')
     const devicesLegend = document.createElement('legend')
@@ -1020,8 +1099,9 @@ export class ReportWorkspaceModal {
     )
 
     const summary = document.createElement('p')
+    summary.className = 'report-matrix-summary'
     summary.textContent = this.matrixMessage ||
-      `已选择 ${this.matrixSequenceIds.size} 个 Operation，${this.matrixPhaseIds.size} 个 Phase`
+      `已选择 ${this.matrixSequenceIds.size} 个 Sequence，${this.matrixPhaseIds.size} 个 Phase，${this.matrixDeviceTypes.size} 类设备`
     const exportButton = document.createElement('button')
     exportButton.type = 'button'
     exportButton.className = 'report-primary-button'
@@ -1031,7 +1111,16 @@ export class ReportWorkspaceModal {
       this.matrixDeviceTypes.size === 0
     exportButton.addEventListener('click', () => void this.startMatrixExport())
 
-    section.append(title, processLabel, formatLabel, scope, devices, summary, exportButton)
+    settingsPanel.append(
+      title,
+      processLabel,
+      fileNameLabel,
+      formatLabel,
+      devices,
+      summary,
+      exportButton
+    )
+    section.append(scopePanel, settingsPanel)
     return section
   }
 
@@ -1046,12 +1135,14 @@ export class ReportWorkspaceModal {
   private createMatrixCheckbox(
     text: string,
     checked: boolean,
-    onChange: (checked: boolean) => void
+    onChange: (checked: boolean) => void,
+    indeterminate = false
   ) {
     const label = document.createElement('label')
     const input = document.createElement('input')
     input.type = 'checkbox'
     input.checked = checked
+    input.indeterminate = indeterminate
     input.disabled = Boolean(this.exportController)
     input.addEventListener('change', () => onChange(input.checked))
     label.append(input, document.createTextNode(text))
@@ -1063,6 +1154,15 @@ export class ReportWorkspaceModal {
       this.matrixProcessId = workspace.activeProcessId ?? workspace.processes[0]?.id ?? ''
       this.selectAllMatrixScope()
     }
+    this.initializeMatrixFileName()
+  }
+
+  private initializeMatrixFileName() {
+    if (this.matrixFileName) return
+    const process = this.getWorkspace().processes.find(
+      item => item.id === this.matrixProcessId
+    )
+    this.matrixFileName = `${process?.name ?? 'process'}-matrix`
   }
 
   private selectAllMatrixScope() {
@@ -1075,6 +1175,24 @@ export class ReportWorkspaceModal {
     )
   }
 
+  private clearMatrixScope() {
+    this.matrixSequenceIds.clear()
+    this.matrixPhaseIds.clear()
+  }
+
+  private selectCurrentMatrixSequence() {
+    const process = this.getWorkspace().processes.find(
+      item => item.id === this.matrixProcessId
+    )
+    const sequence = process?.sequences.find(
+      item => item.id === process.activeSequenceId
+    ) ?? process?.sequences[0]
+    this.clearMatrixScope()
+    if (!sequence) return
+    this.matrixSequenceIds.add(sequence.id)
+    sequence.phases.forEach(phase => this.matrixPhaseIds.add(phase.id))
+  }
+
   private async startMatrixExport() {
     if (this.exportController || !this.actions.exportMatrix) return
     const controller = new AbortController()
@@ -1083,10 +1201,16 @@ export class ReportWorkspaceModal {
     this.matrixMessage = ''
     this.render()
     try {
+      const extension = this.matrixFormat.toLowerCase()
+      const baseName = this.matrixFileName
+        .trim()
+        .replace(/[<>:"/\\|?*]/g, '-')
+        .replace(/\.(xlsx|csv)$/i, '') || 'device-matrix'
       await this.actions.exportMatrix({
         processId: this.matrixProcessId,
         sequenceIds: [...this.matrixSequenceIds],
         phaseIds: [...this.matrixPhaseIds],
+        fileName: `${baseName}.${extension}`,
         format: this.matrixFormat,
         deviceTypes: [...this.matrixDeviceTypes],
         includeInactiveDevices: this.matrixIncludeInactiveDevices,
@@ -1095,10 +1219,10 @@ export class ReportWorkspaceModal {
       this.matrixMessage = controller.signal.aborted
         ? 'Matrix 导出已取消'
         : 'Matrix 导出完成'
-    } catch {
+    } catch (error) {
       this.matrixMessage = controller.signal.aborted
         ? 'Matrix 导出已取消'
-        : 'Matrix 导出失败'
+        : `${this.getLocale() === 'zh' ? 'Matrix 导出失败' : 'Matrix export failed'}：${this.errorMessage(error)}`
     } finally {
       this.exportController = undefined
       this.render()
