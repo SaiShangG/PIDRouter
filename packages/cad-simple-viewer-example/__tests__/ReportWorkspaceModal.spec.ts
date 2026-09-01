@@ -1,5 +1,7 @@
 /** @jest-environment jsdom */
 
+import JSZip from 'jszip'
+
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type { PhaseWorkspaceState } from '../src/phase/types'
 import type {
@@ -18,6 +20,7 @@ type ExportReport = (
 
 const workspace: PhaseWorkspaceState = {
   version: 4,
+  presentationProfile: createDefaultPresentationProfile(),
   drawingAssets: {
     drawing: { id: 'drawing', kind: 'blank', sourceName: 'Blank.dwg' }
   },
@@ -25,7 +28,6 @@ const workspace: PhaseWorkspaceState = {
     {
       id: 'process',
       name: 'CIP',
-      presentationProfile: createDefaultPresentationProfile(),
       createdAt: 'now',
       updatedAt: 'now',
       sequences: [
@@ -70,18 +72,16 @@ const createHarness = (
     () => `id-${++id}`,
     () => 'now'
   )
-  const preview = jest.fn(async () => undefined)
   const modal = new ReportWorkspaceModal(
     () => JSON.parse(JSON.stringify(state)) as PhaseWorkspaceState,
     store,
-    { preview, export: exportReport, exportMatrix },
+    { export: exportReport, exportMatrix },
     () => locale
   )
   modal.open()
   return {
     modal,
     store,
-    preview,
     exportReport: exportReport as jest.MockedFunction<ExportReport>,
     exportMatrix
   }
@@ -91,6 +91,9 @@ const buttonByText = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(button =>
     button.textContent?.includes(text)
   )
+
+const openExportSettings = (locale: 'en' | 'zh' = 'zh') =>
+  buttonByText(locale === 'zh' ? '导出设置' : 'Export settings')?.click()
 
 describe('ReportWorkspaceModal', () => {
   afterEach(() => {
@@ -108,6 +111,8 @@ describe('ReportWorkspaceModal', () => {
     expect(
       document.querySelector<HTMLInputElement>('[type="search"]')?.placeholder
     ).toBe('Search page, sequence, or Phase')
+    expect(document.querySelector('.report-page-preview')).toBeNull()
+    expect(buttonByText('Preview page')).toBeUndefined()
   })
 
   it('excludes and restores a slot without deleting it', () => {
@@ -146,6 +151,7 @@ describe('ReportWorkspaceModal', () => {
   it('starts merged report export from the independent workspace', async () => {
     const { exportReport } = createHarness()
 
+    openExportSettings()
     buttonByText('合并为一个 PDF')?.click()
     await Promise.resolve()
 
@@ -154,6 +160,45 @@ describe('ReportWorkspaceModal', () => {
       expect.any(AbortSignal),
       expect.any(Function)
     )
+  })
+
+  it('keeps a completed PDF in generated files until the user downloads or deletes it', async () => {
+    createHarness()
+
+    openExportSettings()
+    buttonByText('合并为一个 PDF')?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(document.querySelector('.report-generated-files')?.textContent).toContain(
+      'report.pdf'
+    )
+    expect(document.querySelector('[aria-label="预览 PDF"]')).not.toBeNull()
+    expect(document.querySelector('[aria-label="下载 PDF"]')).not.toBeNull()
+    buttonByText('生成记录')?.click()
+    document.querySelector<HTMLButtonElement>('[aria-label="删除生成记录"]')?.click()
+    expect(document.querySelector('.report-generated-empty')).not.toBeNull()
+  })
+
+  it('lists PDFs contained in a generated per-sequence ZIP', async () => {
+    const archive = new JSZip()
+    archive.file('01-Tank-cleaning.pdf', new Uint8Array([1, 2, 3]))
+    const bytes = await archive.generateAsync({ type: 'uint8array' })
+    createHarness('zh', workspace, jest.fn(async () => ({
+      status: 'completed' as const,
+      fileName: 'reports.zip',
+      bytes
+    })))
+
+    openExportSettings()
+    buttonByText('每个序列一个 PDF（ZIP）')?.click()
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+
+    expect(document.querySelector('.report-generated-files')?.textContent).toContain(
+      '01-Tank-cleaning.pdf'
+    )
+    expect(document.querySelectorAll('[aria-label="预览 PDF"]')).toHaveLength(1)
   })
 
   it('switches between separate PDF and Matrix export tabs', () => {
@@ -201,6 +246,8 @@ describe('ReportWorkspaceModal', () => {
     state.processes[0].sequences[0].phases[0].drawing = { kind: 'unassigned' }
     createHarness('en', state)
     await Promise.resolve()
+    openExportSettings('en')
+    await Promise.resolve()
 
     const details = document.querySelector('.report-issue-details')?.textContent
     expect(details).toContain('Issue details')
@@ -225,6 +272,7 @@ describe('ReportWorkspaceModal', () => {
     })
     const { exportReport } = createHarness('zh', state)
 
+    openExportSettings()
     expect(document.querySelector('.report-export-estimates')?.textContent).toContain(
       '预计页数2'
     )
@@ -256,6 +304,7 @@ describe('ReportWorkspaceModal', () => {
     )
     const { modal } = createHarness('zh', workspace, exportReport)
 
+    openExportSettings()
     buttonByText('合并为一个 PDF')?.click()
     const overlay = document.querySelector('.report-export-overlay')
     expect(overlay?.parentElement).toBe(
@@ -268,7 +317,7 @@ describe('ReportWorkspaceModal', () => {
     expect(
       document.querySelector<HTMLButtonElement>('.report-icon-button')?.disabled
     ).toBe(true)
-    expect(buttonByText('预览此页')?.disabled).toBe(true)
+    buttonByText('页面设置')?.click()
     expect(buttonByText('从报告排除')?.disabled).toBe(true)
     modal.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(modal.element.hidden).toBe(false)
@@ -302,6 +351,7 @@ describe('ReportWorkspaceModal', () => {
     )
     createHarness('en', workspace, exportReport)
 
+    openExportSettings('en')
     buttonByText('Merge into one PDF')?.click()
     expect(document.querySelector('.report-export-overlay')?.textContent).toContain(
       'Generating PDF. Please do not operate the Viewer.'
@@ -344,6 +394,7 @@ describe('ReportWorkspaceModal', () => {
     }))
     createHarness('en', workspace, exportReport)
 
+    openExportSettings('en')
     buttonByText('Merge into one PDF')?.click()
     await Promise.resolve()
     await Promise.resolve()

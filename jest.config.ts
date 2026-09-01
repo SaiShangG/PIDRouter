@@ -28,6 +28,7 @@ const config: Config = {
     '/__tests__/helpers/'
   ],
   moduleNameMapper: {
+    '\\?url$': '<rootDir>/test/mocks/assetUrl.cjs',
     '^lodash-es$': 'lodash',
     '^three/examples/jsm/lines/LineMaterial\\.js$':
       '<rootDir>/test/mocks/three/LineMaterial.js',

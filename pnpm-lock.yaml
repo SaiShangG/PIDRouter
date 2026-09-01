@@ -325,6 +325,12 @@ importers:
       lucide:
         specifier: ^0.468.0
         version: 0.468.0
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
+      pdfjs-dist:
+        specifier: ^5.7.284
+        version: 5.7.284
       three:
         specifier: ^0.172.0
         version: 0.172.0

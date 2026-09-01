@@ -1,4 +1,5 @@
-import { Eye, RotateCcw, X } from 'lucide'
+import JSZip from 'jszip'
+import { Download, Eye, FileArchive, FileText, RotateCcw, Trash2, X } from 'lucide'
 
 import type {
   MatrixDeviceType,
@@ -14,6 +15,7 @@ import type {
 } from '../phase/types'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
+import { PdfPreviewModal } from './PdfPreviewModal'
 import type {
   PhaseReportExportResult,
   PhaseReportOutputMode,
@@ -37,7 +39,6 @@ export interface MatrixExportSelection {
 }
 
 interface ReportWorkspaceActions {
-  preview(processId: string, sequenceId: string, phaseId: string): Promise<void>
   export(
     mode: PhaseReportOutputMode,
     signal: AbortSignal,
@@ -58,6 +59,21 @@ interface PageContext {
   sourceProcess?: ProcessDefinition
   sourceSequence?: SequenceDefinition
   sourcePhase?: PhaseSnapshot
+}
+
+interface GeneratedPdfFile {
+  fileName: string
+  bytes: Uint8Array
+}
+
+interface GeneratedReport {
+  id: string
+  fileName: string
+  createdAt: Date
+  mode: PhaseReportOutputMode
+  pageCount: number
+  bytes: Uint8Array
+  pdfFiles: GeneratedPdfFile[]
 }
 
 const ROW_HEIGHT = 66
@@ -89,7 +105,11 @@ export class ReportWorkspaceModal {
   private matrixIncludeTransitions = true
   private matrixMessage = ''
   private activeTab: 'pdf' | 'matrix' = 'pdf'
+  private activePdfPanel: 'page' | 'export' | 'generated' = 'page'
   private activeExportKind: 'pdf' | 'matrix' = 'pdf'
+  private generatedReports: GeneratedReport[] = []
+  private generatedReportSequence = 0
+  private readonly pdfPreview: PdfPreviewModal
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(
@@ -99,6 +119,7 @@ export class ReportWorkspaceModal {
     private readonly getLocale: () => AppLocale = () => 'zh'
   ) {
     this.manifest = store.snapshot()
+    this.pdfPreview = new PdfPreviewModal(getLocale)
     this.element.className = 'report-workspace-modal'
     this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
@@ -130,6 +151,12 @@ export class ReportWorkspaceModal {
     this.focusController.activate(
       this.element.querySelector<HTMLButtonElement>('.report-icon-button')
     )
+    if (
+      this.generatedReports.length === 0 &&
+      new URLSearchParams(window.location.search).get('demoPdf') === '1'
+    ) {
+      void this.addDemoGeneratedReport()
+    }
   }
 
   close() {
@@ -187,8 +214,7 @@ export class ReportWorkspaceModal {
       body.className = 'report-workspace-body'
       body.append(
         this.createPageBrowser(contexts, issues.length, excludedCount, replacedCount),
-        this.createPreview(contexts),
-        this.createInspector(contexts, issues)
+        this.createPdfPanel(contexts, issues)
       )
     } else {
       body.className = 'report-matrix-workspace'
@@ -404,60 +430,45 @@ export class ReportWorkspaceModal {
     localizeDom(viewport, this.getLocale())
   }
 
-  private createPreview(contexts: PageContext[]) {
-    const context = contexts.find(item => item.slot.id === this.selectedSlotId)
-    const panel = document.createElement('section')
-    panel.className = 'report-page-preview'
-    if (!context) {
-      const empty = document.createElement('p')
-      empty.textContent = '尚无报告页面'
-      panel.append(empty)
-      return panel
-    }
-    const page = document.createElement('span')
-    page.className = 'report-preview-page-number'
-    page.textContent = `报告页 ${context.pageNumber}`
-    const title = document.createElement('h3')
-    title.textContent = context.sourcePhase?.name ?? '来源缺失'
-    const path = document.createElement('p')
-    path.textContent = `${context.sourceProcess?.name ?? '—'} / 序列 ${String(context.sourceSequence?.number ?? 0).padStart(2, '0')} ${context.sourceSequence?.name ?? ''} / Phase ${String(context.sourcePhase?.number ?? 0).padStart(2, '0')}`
-    const previewSurface = document.createElement('div')
-    previewSurface.className = 'report-preview-surface'
-    const drawing = document.createElement('strong')
-    drawing.textContent =
-      context.sourcePhase?.drawing.kind === 'assigned'
-        ? context.sourcePhase.drawing.displayName
-        : '未关联图纸'
-    const hint = document.createElement('span')
-    hint.textContent = '在 CAD Viewer 中打开此页面以查看完整 P&ID、高亮和设备状态。'
-    const preview = document.createElement('button')
-    preview.type = 'button'
-    preview.className = 'report-primary-button'
-    preview.append(createPhaseIcon(Eye), document.createTextNode('预览此页'))
-    preview.disabled = !context.sourcePhase
-      || Boolean(this.exportController)
-    preview.addEventListener('click', async () => {
-      if (!context.sourceProcess || !context.sourceSequence || !context.sourcePhase) return
-      const assetId =
-        context.sourcePhase.drawing.kind === 'assigned'
-          ? context.sourcePhase.drawing.assetId
-          : undefined
-      try {
-        await this.actions.preview(
-          context.sourceProcess.id,
-          context.sourceSequence.id,
-          context.sourcePhase.id
-        )
-        if (assetId) this.store.setDrawingLoadFailed(assetId, false)
-        this.close()
-      } catch {
-        if (assetId) this.store.setDrawingLoadFailed(assetId, true)
+  private createPdfPanel(
+    contexts: PageContext[],
+    issues: ReturnType<ReportManifestStore['preflight']>
+  ) {
+    const section = document.createElement('section')
+    section.className = 'report-pdf-panel'
+    const tabs = document.createElement('div')
+    tabs.className = 'report-pdf-tabs'
+    tabs.setAttribute('role', 'tablist')
+    tabs.setAttribute('aria-label', 'PDF 报告设置')
+    ;([
+      ['page', '页面设置'],
+      ['export', '导出设置'],
+      ['generated', `生成记录 ${this.generatedReports.length}`]
+    ] as const).forEach(([value, label]) => {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.setAttribute('role', 'tab')
+      button.setAttribute('aria-selected', String(this.activePdfPanel === value))
+      button.textContent = label
+      button.addEventListener('click', () => {
+        this.activePdfPanel = value
         this.render()
-      }
+      })
+      tabs.append(button)
     })
-    previewSurface.append(drawing, hint, preview)
-    panel.append(page, title, path, previewSurface)
-    return panel
+    const content = document.createElement('div')
+    content.className = 'report-pdf-panel-content'
+    content.setAttribute('role', 'tabpanel')
+    if (this.activePdfPanel === 'page') {
+      content.append(this.createInspector(contexts, issues))
+    } else if (this.activePdfPanel === 'export') {
+      if (issues.length > 0) content.append(this.createIssueList(issues, contexts))
+      content.append(this.createExportControls(issues))
+    } else {
+      content.append(this.createGeneratedReports())
+    }
+    section.append(tabs, content)
+    return section
   }
 
   private createInspector(contexts: PageContext[], issues: ReturnType<ReportManifestStore['preflight']>) {
@@ -469,7 +480,6 @@ export class ReportWorkspaceModal {
     panel.append(title)
     if (!context) {
       if (issues.length > 0) panel.append(this.createIssueList(issues, contexts))
-      panel.append(this.createExportControls(issues))
       return panel
     }
 
@@ -537,8 +547,109 @@ export class ReportWorkspaceModal {
       })
       panel.append(restore)
     }
-    panel.append(this.createExportControls(issues))
     return panel
+  }
+
+  private createGeneratedReports() {
+    const section = document.createElement('section')
+    section.className = 'report-generated-files'
+    const title = document.createElement('h3')
+    title.textContent = '已生成 PDF'
+    section.append(title)
+    if (this.generatedReports.length === 0) {
+      const empty = document.createElement('p')
+      empty.className = 'report-generated-empty'
+      empty.textContent = '尚无生成记录。生成报告后可在此预览和下载。'
+      section.append(empty)
+      return section
+    }
+    this.generatedReports.forEach(report => {
+      const article = document.createElement('article')
+      article.className = 'report-generated-item'
+      const icon = createPhaseIcon(report.mode === 'merged' ? FileText : FileArchive)
+      const identity = document.createElement('div')
+      identity.className = 'report-generated-identity'
+      const name = document.createElement('strong')
+      name.textContent = report.fileName
+      const metadata = document.createElement('span')
+      metadata.textContent = `${this.formatDate(report.createdAt)} · ${report.mode === 'merged' ? '合并 PDF' : '分序列 ZIP'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
+      identity.append(name, metadata)
+      const actions = document.createElement('div')
+      actions.className = 'report-generated-actions'
+      if (report.mode === 'merged') {
+        actions.append(this.createFileAction(Eye, '预览 PDF', () => {
+          void this.pdfPreview.open(report.fileName, report.bytes)
+        }))
+      }
+      actions.append(
+        this.createFileAction(Download, report.mode === 'merged' ? '下载 PDF' : '下载 ZIP', () => {
+          this.downloadFile(report.fileName, report.bytes, report.mode === 'merged' ? 'application/pdf' : 'application/zip')
+        }),
+        this.createFileAction(Trash2, '删除生成记录', () => {
+          this.generatedReports = this.generatedReports.filter(item => item.id !== report.id)
+          this.render()
+        })
+      )
+      const header = document.createElement('div')
+      header.className = 'report-generated-header'
+      header.append(icon, identity, actions)
+      article.append(header)
+      if (report.pdfFiles.length > 0) {
+        const files = document.createElement('ul')
+        files.className = 'report-generated-children'
+        report.pdfFiles.forEach(file => {
+          const item = document.createElement('li')
+          const fileName = document.createElement('span')
+          fileName.textContent = file.fileName
+          const fileActions = document.createElement('div')
+          fileActions.append(
+            this.createFileAction(Eye, '预览 PDF', () => {
+              void this.pdfPreview.open(file.fileName, file.bytes)
+            }),
+            this.createFileAction(Download, '下载 PDF', () => {
+              this.downloadFile(file.fileName, file.bytes, 'application/pdf')
+            })
+          )
+          item.append(fileName, fileActions)
+          files.append(item)
+        })
+        article.append(files)
+      }
+      section.append(article)
+    })
+    return section
+  }
+
+  private createFileAction(icon: typeof Eye, label: string, action: () => void) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.title = label
+    button.setAttribute('aria-label', label)
+    button.append(createPhaseIcon(icon))
+    button.addEventListener('click', action)
+    return button
+  }
+
+  private formatDate(value: Date) {
+    return new Intl.DateTimeFormat(this.getLocale() === 'zh' ? 'zh-CN' : 'en-US', {
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(value)
+  }
+
+  private formatBytes(value: number) {
+    if (value < 1024) return `${value} B`
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+    return `${(value / 1024 / 1024).toFixed(1)} MB`
+  }
+
+  private downloadFile(fileName: string, bytes: Uint8Array, type: string) {
+    const url = URL.createObjectURL(new Blob([bytes.slice().buffer as ArrayBuffer], { type }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    anchor.click()
+    queueMicrotask(() => URL.revokeObjectURL(url))
   }
 
   private createIssueList(issues: ReportPreflightIssue[], contexts: PageContext[]) {
@@ -896,6 +1007,10 @@ export class ReportWorkspaceModal {
         this.exportProgress = progress
         this.render()
       })
+      if (!controller.signal.aborted && result.status === 'completed') {
+        await this.addGeneratedReport(result, mode)
+        this.activePdfPanel = 'generated'
+      }
       this.exportMessage = controller.signal.aborted
         ? '报告生成已取消'
         : result.status === 'completed'
@@ -912,6 +1027,107 @@ export class ReportWorkspaceModal {
       this.exportProgress = undefined
       this.render()
     }
+  }
+
+  private async addGeneratedReport(
+    result: Extract<PhaseReportExportResult, { status: 'completed' }>,
+    mode: PhaseReportOutputMode
+  ) {
+    const pdfFiles: GeneratedPdfFile[] = []
+    if (mode === 'per-sequence') {
+      const archive = await JSZip.loadAsync(result.bytes)
+      for (const entry of Object.values(archive.files)) {
+        if (entry.dir || !entry.name.toLocaleLowerCase().endsWith('.pdf')) continue
+        pdfFiles.push({
+          fileName: entry.name.split('/').pop() ?? entry.name,
+          bytes: await entry.async('uint8array')
+        })
+      }
+    }
+    this.generatedReports.unshift({
+      id: `generated-report-${++this.generatedReportSequence}`,
+      fileName: result.fileName,
+      createdAt: new Date(),
+      mode,
+      pageCount: this.manifest.pages.filter(page => !page.excluded).length,
+      bytes: result.bytes,
+      pdfFiles
+    })
+  }
+
+  private async addDemoGeneratedReport() {
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+    const document = await PDFDocument.create()
+    const regular = await document.embedFont(StandardFonts.Helvetica)
+    const bold = await document.embedFont(StandardFonts.HelveticaBold)
+    ;['Preparation', 'WFI Pre-rinse'].forEach((phase, index) => {
+      const page = document.addPage([842, 595])
+      page.drawText('CIP PHASE REPORT', {
+        x: 42,
+        y: 548,
+        size: 20,
+        font: bold,
+        color: rgb(0.03, 0.42, 0.31)
+      })
+      page.drawText(`Sequence 01 / Phase ${String(index + 1).padStart(2, '0')} / ${phase}`, {
+        x: 42,
+        y: 522,
+        size: 11,
+        font: regular,
+        color: rgb(0.25, 0.34, 0.36)
+      })
+      page.drawRectangle({
+        x: 42,
+        y: 72,
+        width: 758,
+        height: 420,
+        borderWidth: 1,
+        borderColor: rgb(0.72, 0.79, 0.8),
+        color: rgb(0.98, 0.99, 0.99)
+      })
+      page.drawLine({
+        start: { x: 130, y: 282 },
+        end: { x: 710, y: 282 },
+        thickness: 5,
+        color: rgb(0.03, 0.52, 0.38)
+      })
+      ;[190, 370, 550].forEach((x, equipmentIndex) => {
+        page.drawCircle({
+          x,
+          y: 282,
+          size: 31,
+          borderWidth: 3,
+          borderColor: rgb(0.08, 0.18, 0.21),
+          color: rgb(1, 1, 1)
+        })
+        page.drawText(`V-${equipmentIndex + 1}`, {
+          x: x - 13,
+          y: 278,
+          size: 10,
+          font: bold,
+          color: rgb(0.08, 0.18, 0.21)
+        })
+      })
+      page.drawText(`Demo report page ${index + 1} of 2`, {
+        x: 42,
+        y: 42,
+        size: 9,
+        font: regular,
+        color: rgb(0.38, 0.46, 0.48)
+      })
+    })
+    const bytes = await document.save()
+    this.generatedReports.unshift({
+      id: `generated-report-${++this.generatedReportSequence}`,
+      fileName: 'CIP-Phase-Report-Demo.pdf',
+      createdAt: new Date(),
+      mode: 'merged',
+      pageCount: 2,
+      bytes,
+      pdfFiles: []
+    })
+    this.activePdfPanel = 'generated'
+    if (!this.element.hidden) this.render()
   }
 
   private async retryFailedPages() {

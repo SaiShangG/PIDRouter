@@ -95,12 +95,11 @@ import {
   translate
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
-import {
-  PhaseConfigImportModal,
-  type PhaseConfigImportLabels
-} from './phase/PhaseConfigImportModal'
-import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
+import {
+  type PhaseConfigImportLabels,
+  PhaseConfigImportModal} from './phase/PhaseConfigImportModal'
+import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import {
   resolveDeviceStateDefinition
 } from './phase/phaseDeviceStateRuntime'
@@ -124,15 +123,15 @@ import {
   toPersistedPresentationProfile
 } from './phase/phaseWorkspaceRepository'
 import {
-  createDefaultPresentationProfile,
   clonePresentationProfile,
+  createDefaultPresentationProfile,
   PhaseWorkspaceStore
 } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
 import type {
   DeviceState,
-  DeviceStyleDefinition,
   DeviceStateStyleDefinition,
+  DeviceStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
   FlowStateSnapshot,
@@ -656,10 +655,6 @@ class CadViewerApp {
       () => this.phaseStore.snapshot(),
       this.reportStore,
       {
-        preview: async (processId, sequenceId, phaseId) => {
-          await this.initialize()
-          await this.activateWorkspacePhase(processId, sequenceId, phaseId)
-        },
         export: (mode, signal, onProgress) =>
           this.exportPhaseReport(mode, signal, onProgress),
         exportMatrix: (selection, signal) =>
@@ -781,11 +776,10 @@ class CadViewerApp {
       ? 'process-report.pdf'
       : 'process-reports.zip'
     const fileName = file.fileName ?? task.fileName ?? fallback
-    this.downloadExportFile(fileName, file.blob)
     return {
       status: 'completed',
       fileName,
-      bytes: new Uint8Array()
+      bytes: new Uint8Array(await file.blob.arrayBuffer())
     } as const
   }
 
