@@ -133,7 +133,15 @@ describe('ProcessAssistant endpoint services', () => {
         result: 'generated-zip-id'
       }), {
         headers: { 'Content-Type': 'application/json' }
-      })) as jest.MockedFunction<typeof fetch>
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        fileSystemPath: 'D:\\Uploads\\generated.pdf',
+        url: '/Uploads/generated.pdf',
+        name: 'CIP-flow-path.pdf'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      }))
+      .mockResolvedValueOnce(new Response('pdf-content')) as jest.MockedFunction<typeof fetch>
     const client = createClient(fetchMock)
     const matrices = new ProcessAssistantMatrixApi(client)
     const flowPaths = new ProcessAssistantFlowPathApi(client)
@@ -177,11 +185,22 @@ describe('ProcessAssistant endpoint services', () => {
       message: null,
       result: 'generated-zip-id'
     })
+    const result = await flowPaths.result('generated/pdf id')
+    expect(result).toEqual({
+      fileSystemPath: 'D:\\Uploads\\generated.pdf',
+      url: '/Uploads/generated.pdf',
+      name: 'CIP-flow-path.pdf'
+    })
+    if (!result) throw new Error('Expected flow path result metadata')
+    const file = await flowPaths.download(result.url)
+    await expect(file.blob.text()).resolves.toBe('pdf-content')
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'http://api.example.test/api/v1/Skill/valve-matrix',
       'http://api.example.test/api/v1/Skill/flow-path',
-      'http://api.example.test/api/v1/Skill/flow-path'
+      'http://api.example.test/api/v1/Skill/flow-path',
+      'http://api.example.test/api/v1/Skill/flow-path/result?id=generated%2Fpdf%20id',
+      'http://api.example.test/Uploads/generated.pdf'
     ])
     expect(fetchMock.mock.calls[0][1]?.body).toBe(
       JSON.stringify({

@@ -600,7 +600,7 @@ export class ReportWorkspaceModal {
     const section = document.createElement('section')
     section.className = 'report-generated-files'
     const title = document.createElement('h3')
-    title.textContent = '已生成 PDF'
+    title.textContent = '已生成文件'
     section.append(title)
     if (this.generatedReports.length === 0) {
       const empty = document.createElement('p')
@@ -610,26 +610,27 @@ export class ReportWorkspaceModal {
       return section
     }
     this.generatedReports.forEach(report => {
+      const isZip = report.fileName.toLocaleLowerCase().endsWith('.zip')
       const article = document.createElement('article')
       article.className = 'report-generated-item'
-      const icon = createPhaseIcon(report.mode === 'merged' ? FileText : FileArchive)
+      const icon = createPhaseIcon(isZip ? FileArchive : FileText)
       const identity = document.createElement('div')
       identity.className = 'report-generated-identity'
       const name = document.createElement('strong')
       name.textContent = report.fileName
       const metadata = document.createElement('span')
-      metadata.textContent = `${this.formatDate(report.createdAt)} · ${report.mode === 'merged' ? '合并 PDF' : '分序列 ZIP'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
+      metadata.textContent = `${this.formatDate(report.createdAt)} · ${isZip ? 'ZIP' : 'PDF'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
       identity.append(name, metadata)
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
-      if (report.mode === 'merged') {
+      if (!isZip) {
         actions.append(this.createFileAction(Eye, '预览 PDF', () => {
           void this.pdfPreview.open(report.fileName, report.bytes)
         }))
       }
       actions.append(
-        this.createFileAction(Download, report.mode === 'merged' ? '下载 PDF' : '下载 ZIP', () => {
-          this.downloadFile(report.fileName, report.bytes, report.mode === 'merged' ? 'application/pdf' : 'application/zip')
+        this.createFileAction(Download, isZip ? '下载 ZIP' : '下载 PDF', () => {
+          this.downloadFile(report.fileName, report.bytes, isZip ? 'application/zip' : 'application/pdf')
         }),
         this.createFileAction(Trash2, '删除生成记录', () => {
           this.generatedReports = this.generatedReports.filter(item => item.id !== report.id)
@@ -1267,8 +1268,8 @@ export class ReportWorkspaceModal {
             ? '报告生成已取消'
             : `报告生成失败：${result.failures.length} 页`
       this.failedExport = result.status === 'failed' ? result : undefined
-    } catch {
-      this.exportMessage = '报告生成失败'
+    } catch (error) {
+      this.exportMessage = `${this.getLocale() === 'zh' ? '报告生成失败' : 'Report generation failed'}：${this.errorMessage(error)}`
     } finally {
       document.body.classList.remove('report-pdf-exporting')
       this.exportController = undefined
@@ -1283,7 +1284,7 @@ export class ReportWorkspaceModal {
     pageCount: number
   ) {
     const pdfFiles: GeneratedPdfFile[] = []
-    if (mode === 'per-sequence') {
+    if (result.fileName.toLocaleLowerCase().endsWith('.zip')) {
       const archive = await JSZip.loadAsync(result.bytes)
       for (const entry of Object.values(archive.files)) {
         if (entry.dir || !entry.name.toLocaleLowerCase().endsWith('.pdf')) continue
@@ -1293,7 +1294,7 @@ export class ReportWorkspaceModal {
         })
       }
     }
-    this.generatedReports.unshift({
+    this.generatedReports = [{
       id: `generated-report-${++this.generatedReportSequence}`,
       fileName: result.fileName,
       createdAt: new Date(),
@@ -1301,7 +1302,7 @@ export class ReportWorkspaceModal {
       pageCount,
       bytes: result.bytes,
       pdfFiles
-    })
+    }]
   }
 
   private async retryFailedPages() {

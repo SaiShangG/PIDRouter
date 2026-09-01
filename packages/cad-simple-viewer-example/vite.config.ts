@@ -34,6 +34,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: processAssistantTarget,
           changeOrigin: true
+        },
+        '/Uploads': {
+          target: processAssistantTarget,
+          changeOrigin: true
         }
       }
     },

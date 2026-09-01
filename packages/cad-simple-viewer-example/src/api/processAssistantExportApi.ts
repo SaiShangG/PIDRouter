@@ -21,6 +21,12 @@ export interface CreateFlowPathPdfResponse {
   result: string | null
 }
 
+export interface FlowPathResultDto {
+  fileSystemPath: string
+  url: string
+  name: string
+}
+
 export class ProcessAssistantMatrixApi {
   constructor(private readonly client: ProcessAssistantClient) { }
 
@@ -42,5 +48,17 @@ export class ProcessAssistantFlowPathApi {
       '/api/v1/Skill/flow-path',
       { body: request, signal }
     )
+  }
+
+  result(id: string, signal?: AbortSignal): Promise<FlowPathResultDto | undefined> {
+    return this.client.request<FlowPathResultDto | undefined>(
+      'GET',
+      `/api/v1/Skill/flow-path/result?id=${encodeURIComponent(id)}`,
+      { signal }
+    )
+  }
+
+  download(url: string, signal?: AbortSignal) {
+    return this.client.requestFile('GET', url, { signal })
   }
 }

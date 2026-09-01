@@ -42,7 +42,7 @@ const pairs: TranslationPair[] = [
   ['恢复原始页面', 'Restore original page'], ['预览此页', 'Preview page'],
   ['PDF 报告设置', 'PDF report settings'], ['页面设置', 'Page settings'],
   ['导出设置', 'Export settings'], ['生成记录', 'Generated files'],
-  ['已生成 PDF', 'Generated PDFs'],
+  ['已生成文件', 'Generated files'],
   ['尚无生成记录。生成报告后可在此预览和下载。', 'No generated files yet. Generate a report to preview or download it here.'],
   ['合并 PDF', 'Merged PDF'], ['分序列 ZIP', 'Per-sequence ZIP'], ['已完成', 'Completed'],
   ['预览 PDF', 'Preview PDF'], ['下载 PDF', 'Download PDF'], ['下载 ZIP', 'Download ZIP'],
