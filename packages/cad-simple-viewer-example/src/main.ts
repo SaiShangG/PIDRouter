@@ -1333,7 +1333,7 @@ class CadViewerApp {
         container: this.container,
         busyIndicatorHost: this.container,
         autoResize: true,
-        baseUrl: 'https://cdn.jsdelivr.net/gh/mlightcad/cad-data@main/',
+        baseUrl: './',
         commandAliases: EXAMPLE_COMMAND_ALIASES,
         openDocumentDefaults: {
           minimumChunkSize: 1000,

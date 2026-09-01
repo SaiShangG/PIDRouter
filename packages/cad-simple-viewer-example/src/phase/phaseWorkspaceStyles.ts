@@ -86,6 +86,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-create-section .phase-workspace-primary { width: 100%; }
     .phase-workspace-modal { position: fixed; z-index: 950; inset: 0; display: grid; place-items: center; padding: 20px; background: var(--app-overlay-scrim, rgba(15, 32, 38, .48)); }
     .phase-workspace-modal[hidden] { display: none; }
+    .phase-workspace-modal [hidden] { display: none; }
     .phase-workspace-modal-dialog { width: min(520px, 100%); max-height: min(720px, calc(100vh - 40px)); overflow: auto; border: 1px solid var(--app-border-strong, #b9c7ca); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface-elevated, #ffffff); box-shadow: var(--app-shadow-modal, 0 18px 48px rgba(15, 32, 38, .28)); }
     .phase-workspace-modal-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 10px 16px; border-bottom: 1px solid var(--reference-line, #d4dde0); }
     .phase-workspace-modal-dialog h2 { margin: 0; font-size: 16px; }

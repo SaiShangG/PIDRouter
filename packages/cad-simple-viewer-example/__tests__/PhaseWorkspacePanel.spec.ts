@@ -583,7 +583,18 @@ describe('PhaseWorkspacePanel', () => {
     const projectDrawing = modal.querySelector<HTMLSelectElement>(
       '[aria-label="Project PID"]'
     )!
+    const markedPhase = modal.querySelector<HTMLSelectElement>(
+      '[aria-label="已标记 Phase"]'
+    )!
     const submit = modal.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    expect(projectDrawing.parentElement!.hidden).toBe(false)
+    expect(getComputedStyle(markedPhase.parentElement!).display).toBe('none')
+    source.value = 'marked'
+    source.dispatchEvent(new Event('change'))
+    expect(getComputedStyle(projectDrawing.parentElement!).display).toBe('none')
+    expect(markedPhase.parentElement!.hidden).toBe(false)
+    source.value = 'project'
+    source.dispatchEvent(new Event('change'))
     expect(submit.disabled).toBe(true)
     projectDrawing.value = '5'
     projectDrawing.dispatchEvent(new Event('change'))
