@@ -793,26 +793,26 @@ export class ReportWorkspaceModal {
     const scopeTitle = document.createElement('legend')
     scopeTitle.textContent = '导出范围'
     scope.append(scopeTitle)
-    ;([
-      ['all', '全部序列'],
-      ['current', '当前序列'],
-      ['selected', '选中序列']
-    ] as const).forEach(([value, label]) => {
-      const option = document.createElement('label')
-      const radio = document.createElement('input')
-      radio.type = 'radio'
-      radio.name = 'pdfExportScope'
-      radio.value = value
-      radio.checked = this.exportScope === value
-      radio.disabled = Boolean(this.exportController)
-      radio.addEventListener('change', () => {
-        this.exportScope = value
-        this.pendingWarningOptions = undefined
-        this.render()
+      ; ([
+        ['all', '全部序列'],
+        ['current', '当前序列'],
+        ['selected', '选中序列']
+      ] as const).forEach(([value, label]) => {
+        const option = document.createElement('label')
+        const radio = document.createElement('input')
+        radio.type = 'radio'
+        radio.name = 'pdfExportScope'
+        radio.value = value
+        radio.checked = this.exportScope === value
+        radio.disabled = Boolean(this.exportController)
+        radio.addEventListener('change', () => {
+          this.exportScope = value
+          this.pendingWarningOptions = undefined
+          this.render()
+        })
+        option.append(radio, document.createTextNode(label))
+        scope.append(option)
       })
-      option.append(radio, document.createTextNode(label))
-      scope.append(option)
-    })
     if (this.exportScope === 'selected') {
       const selected = document.createElement('div')
       selected.className = 'report-export-sequences'
