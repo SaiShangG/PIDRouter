@@ -6,6 +6,13 @@ export type MatrixDeviceType = 'VALVE' | 'PUMP_MOTOR' | 'SENSOR'
 export interface CreateValveMatrixRequest {
   projectId: number
   selection: Record<string, Record<string, number[]>>
+  name: string
+}
+
+export interface CreateValveMatrixResponse {
+  success: boolean
+  message: string | null
+  result: string | null
 }
 
 export interface CreateFlowPathPdfRequest {
@@ -31,11 +38,23 @@ export class ProcessAssistantMatrixApi {
   constructor(private readonly client: ProcessAssistantClient) { }
 
   create(request: CreateValveMatrixRequest, signal?: AbortSignal) {
-    return this.client.requestFile(
+    return this.client.request<CreateValveMatrixResponse>(
       'POST',
       '/api/v1/Skill/valve-matrix',
       { body: request, signal }
     )
+  }
+
+  result(id: string, signal?: AbortSignal): Promise<FlowPathResultDto | undefined> {
+    return this.client.request<FlowPathResultDto | undefined>(
+      'GET',
+      `/api/v1/Skill/valve-matrix/result?id=${encodeURIComponent(id)}`,
+      { signal }
+    )
+  }
+
+  download(url: string, signal?: AbortSignal) {
+    return this.client.requestFile('GET', url, { signal })
   }
 }
 

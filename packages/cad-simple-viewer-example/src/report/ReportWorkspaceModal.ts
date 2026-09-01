@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { Download, Eye, FileArchive, FileText, RotateCcw, Trash2, X } from 'lucide'
+import { Download, Eye, FileArchive, FileSpreadsheet, FileText, RotateCcw, Trash2, X } from 'lucide'
 
 import type {
   MatrixDeviceType,
@@ -39,6 +39,11 @@ export interface MatrixExportSelection {
   includeTransitions: boolean
 }
 
+export interface MatrixExportResult {
+  fileName: string
+  bytes: Uint8Array
+}
+
 interface ReportWorkspaceActions {
   export(
     options: PhaseReportExportOptions,
@@ -48,7 +53,7 @@ interface ReportWorkspaceActions {
   exportMatrix?(
     selection: MatrixExportSelection,
     signal: AbortSignal
-  ): Promise<void>
+  ): Promise<MatrixExportResult | void>
 }
 
 export interface PhaseReportExportOptions {
@@ -81,6 +86,13 @@ interface GeneratedReport {
   pageCount: number
   bytes: Uint8Array
   pdfFiles: GeneratedPdfFile[]
+}
+
+interface GeneratedMatrix {
+  id: string
+  fileName: string
+  createdAt: Date
+  bytes: Uint8Array
 }
 
 const ROW_HEIGHT = 66
@@ -119,8 +131,10 @@ export class ReportWorkspaceModal {
   private matrixMessage = ''
   private activeTab: 'pdf' | 'matrix' = 'pdf'
   private activePdfPanel: 'page' | 'export' | 'generated' = 'page'
+  private activeMatrixPanel: 'export' | 'generated' = 'export'
   private activeExportKind: 'pdf' | 'matrix' = 'pdf'
   private generatedReports: GeneratedReport[] = []
+  private generatedMatrices: GeneratedMatrix[] = []
   private generatedReportSequence = 0
   private readonly pdfPreview: PdfPreviewModal
   private readonly focusController = createModalFocusController(this.element)
@@ -226,7 +240,7 @@ export class ReportWorkspaceModal {
       )
     } else {
       body.className = 'report-matrix-workspace'
-      body.append(this.createMatrixExportControls())
+      body.append(this.createMatrixPanel())
     }
     shell.append(header, body)
     if (this.exportController && !this.exportController.signal.aborted) {
@@ -920,6 +934,94 @@ export class ReportWorkspaceModal {
     return section
   }
 
+  private createMatrixPanel() {
+    const controls = this.createMatrixExportControls()
+    const scopePanel = controls.firstElementChild
+    const settingsPanel = controls.lastElementChild
+    const detailPanel = document.createElement('section')
+    detailPanel.className = 'report-pdf-panel report-matrix-detail-panel'
+    const tabs = document.createElement('div')
+    tabs.className = 'report-pdf-tabs'
+    tabs.setAttribute('role', 'tablist')
+    tabs.setAttribute('aria-label', 'Matrix 导出设置')
+      ; ([
+        ['export', '导出设置'],
+        ['generated', `生成记录 ${this.generatedMatrices.length}`]
+      ] as const).forEach(([value, label]) => {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.setAttribute('role', 'tab')
+        button.setAttribute('aria-selected', String(this.activeMatrixPanel === value))
+        button.textContent = label
+        button.addEventListener('click', () => {
+          this.activeMatrixPanel = value
+          this.render()
+        })
+        tabs.append(button)
+      })
+    const content = document.createElement('div')
+    content.className = 'report-pdf-panel-content report-matrix-panel-content'
+    content.setAttribute('role', 'tabpanel')
+    if (this.activeMatrixPanel === 'export' && settingsPanel) {
+      content.append(settingsPanel)
+    } else {
+      content.append(this.createGeneratedMatrices())
+    }
+    detailPanel.append(tabs, content)
+    controls.replaceChildren(...scopePanel ? [scopePanel, detailPanel] : [detailPanel])
+    return controls
+  }
+
+  private createGeneratedMatrices() {
+    const section = document.createElement('section')
+    section.className = 'report-generated-files'
+    const title = document.createElement('h3')
+    title.textContent = '已生成 Matrix'
+    section.append(title)
+    if (this.generatedMatrices.length === 0) {
+      const empty = document.createElement('p')
+      empty.className = 'report-generated-empty'
+      empty.textContent = '尚无 Matrix 生成记录。导出后可在此重新下载。'
+      section.append(empty)
+      return section
+    }
+    this.generatedMatrices.forEach(matrix => {
+      const extension = matrix.fileName.split('.').pop()?.toLocaleUpperCase() ?? 'Matrix'
+      const article = document.createElement('article')
+      article.className = 'report-generated-item'
+      const identity = document.createElement('div')
+      identity.className = 'report-generated-identity'
+      const name = document.createElement('strong')
+      name.textContent = matrix.fileName
+      const metadata = document.createElement('span')
+      metadata.textContent = `${this.formatDate(matrix.createdAt)} · ${extension} · ${this.formatBytes(matrix.bytes.byteLength)} · 已完成`
+      identity.append(name, metadata)
+      const actions = document.createElement('div')
+      actions.className = 'report-generated-actions'
+      actions.append(
+        this.createFileAction(Download, '下载 Matrix', () => {
+          this.downloadFile(matrix.fileName, matrix.bytes, this.matrixMimeType(matrix.fileName))
+        }),
+        this.createFileAction(Trash2, '删除生成记录', () => {
+          this.generatedMatrices = this.generatedMatrices.filter(item => item.id !== matrix.id)
+          this.render()
+        })
+      )
+      const header = document.createElement('div')
+      header.className = 'report-generated-header'
+      header.append(createPhaseIcon(FileSpreadsheet), identity, actions)
+      article.append(header)
+      section.append(article)
+    })
+    return section
+  }
+
+  private matrixMimeType(fileName: string) {
+    return fileName.toLocaleLowerCase().endsWith('.csv')
+      ? 'text/csv'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+
   private createMatrixExportControls() {
     const workspace = this.getWorkspace()
     const process = workspace.processes.find(item => item.id === this.matrixProcessId)
@@ -1201,7 +1303,7 @@ export class ReportWorkspaceModal {
         .trim()
         .replace(/[<>:"/\\|?*]/g, '-')
         .replace(/\.(xlsx|csv)$/i, '') || 'device-matrix'
-      await this.actions.exportMatrix({
+      const result = await this.actions.exportMatrix({
         processId: this.matrixProcessId,
         sequenceIds: [...this.matrixSequenceIds],
         phaseIds: [...this.matrixPhaseIds],
@@ -1211,6 +1313,15 @@ export class ReportWorkspaceModal {
         includeInactiveDevices: this.matrixIncludeInactiveDevices,
         includeTransitions: this.matrixIncludeTransitions
       }, controller.signal)
+      if (!controller.signal.aborted && result) {
+        this.generatedMatrices = [{
+          id: `generated-matrix-${++this.generatedReportSequence}`,
+          fileName: result.fileName,
+          createdAt: new Date(),
+          bytes: result.bytes
+        }]
+        this.activeMatrixPanel = 'generated'
+      }
       this.matrixMessage = controller.signal.aborted
         ? 'Matrix 导出已取消'
         : 'Matrix 导出完成'

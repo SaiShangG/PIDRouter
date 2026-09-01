@@ -849,14 +849,44 @@ class CadViewerApp {
         ])
         .filter(([, phaseIds]) => phaseIds.length > 0)
     )
-    const file = await this.processAssistantMatrixApi.create({
+    const response = await this.processAssistantMatrixApi.create({
       projectId: this.activeProjectId,
-      selection: { [processId]: sequences }
+      selection: { [processId]: sequences },
+      name: selection.fileName
     }, signal)
-    this.downloadExportFile(
-      selection.fileName || file.fileName || `device-matrix.${selection.format.toLowerCase()}`,
-      file.blob
-    )
+    if (!response.success || !response.result) {
+      throw new Error(response.message ?? 'Matrix export failed')
+    }
+    const result = await this.waitForMatrixResult(response.result, signal)
+    const file = await this.processAssistantMatrixApi.download(result.url, signal)
+    const urlFileName = result.url.split(/[?#]/, 1)[0].split('/').pop()
+    return {
+      fileName: urlFileName
+        ? decodeURIComponent(urlFileName)
+        : result.name || selection.fileName || `device-matrix.${selection.format.toLowerCase()}`,
+      bytes: new Uint8Array(await file.blob.arrayBuffer())
+    }
+  }
+
+  private async waitForMatrixResult(id: string, signal: AbortSignal) {
+    const deadline = Date.now() + 120_000
+    while (!signal.aborted && Date.now() < deadline) {
+      const result = await this.processAssistantMatrixApi.result(id, signal)
+      if (result?.url) return result
+      await new Promise<void>((resolve, reject) => {
+        const handleAbort = () => {
+          window.clearTimeout(timeout)
+          reject(new DOMException('Export canceled', 'AbortError'))
+        }
+        const timeout = window.setTimeout(() => {
+          signal.removeEventListener('abort', handleAbort)
+          resolve()
+        }, 1000)
+        signal.addEventListener('abort', handleAbort, { once: true })
+      })
+    }
+    if (signal.aborted) throw new DOMException('Export canceled', 'AbortError')
+    throw new Error('Timed out waiting for the Matrix export result')
   }
 
   private requireExportBackendId(value: string, label: string) {
@@ -865,15 +895,6 @@ class CadViewerApp {
       throw new Error(`${label} ID must be a positive backend integer`)
     }
     return id
-  }
-
-  private downloadExportFile(fileName: string, blob: Blob) {
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = fileName
-    anchor.click()
-    queueMicrotask(() => URL.revokeObjectURL(url))
   }
 
   private setDrawingBackground(enabled: boolean) {

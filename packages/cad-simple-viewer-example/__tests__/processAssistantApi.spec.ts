@@ -119,6 +119,20 @@ describe('ProcessAssistantClient', () => {
 describe('ProcessAssistant endpoint services', () => {
   it('uses the direct skill export endpoints', async () => {
     const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        message: null,
+        result: 'generated-matrix-id'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        fileSystemPath: 'D:\\Uploads\\generated.xlsx',
+        url: '/Uploads/generated.xlsx',
+        name: 'CIP-valve-matrix.xlsx'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      }))
       .mockResolvedValueOnce(new Response('matrix-content'))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
@@ -146,15 +160,29 @@ describe('ProcessAssistant endpoint services', () => {
     const matrices = new ProcessAssistantMatrixApi(client)
     const flowPaths = new ProcessAssistantFlowPathApi(client)
 
-    await matrices.create({
+    await expect(matrices.create({
       projectId: 10,
       selection: {
         1: {
           2: [1, 2, 3],
           3: [4, 5]
         }
-      }
+      },
+      name: 'CIP-valve-matrix.xlsx'
+    })).resolves.toEqual({
+      success: true,
+      message: null,
+      result: 'generated-matrix-id'
     })
+    const matrixResult = await matrices.result('generated/matrix id')
+    expect(matrixResult).toEqual({
+      fileSystemPath: 'D:\\Uploads\\generated.xlsx',
+      url: '/Uploads/generated.xlsx',
+      name: 'CIP-valve-matrix.xlsx'
+    })
+    if (!matrixResult) throw new Error('Expected matrix result metadata')
+    const matrixFile = await matrices.download(matrixResult.url)
+    await expect(matrixFile.blob.text()).resolves.toBe('matrix-content')
     await expect(flowPaths.create({
       projectId: 10,
       selection: {
@@ -197,6 +225,8 @@ describe('ProcessAssistant endpoint services', () => {
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'http://api.example.test/api/v1/Skill/valve-matrix',
+      'http://api.example.test/api/v1/Skill/valve-matrix/result?id=generated%2Fmatrix%20id',
+      'http://api.example.test/Uploads/generated.xlsx',
       'http://api.example.test/api/v1/Skill/flow-path',
       'http://api.example.test/api/v1/Skill/flow-path',
       'http://api.example.test/api/v1/Skill/flow-path/result?id=generated%2Fpdf%20id',
@@ -210,10 +240,11 @@ describe('ProcessAssistant endpoint services', () => {
             2: [1, 2, 3],
             3: [4, 5]
           }
-        }
+        },
+        name: 'CIP-valve-matrix.xlsx'
       })
     )
-    expect(fetchMock.mock.calls[1][1]?.body).toBe(
+    expect(fetchMock.mock.calls[3][1]?.body).toBe(
       JSON.stringify({
         projectId: 10,
         selection: {
@@ -226,7 +257,7 @@ describe('ProcessAssistant endpoint services', () => {
         isPdfMerge: true
       })
     )
-    expect(fetchMock.mock.calls[2][1]?.body).toBe(
+    expect(fetchMock.mock.calls[4][1]?.body).toBe(
       JSON.stringify({
         projectId: 10,
         selection: {

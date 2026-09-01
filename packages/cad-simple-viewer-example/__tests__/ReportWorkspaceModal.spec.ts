@@ -64,7 +64,10 @@ const createHarness = (
     fileName: 'report.pdf',
     bytes: new Uint8Array([1])
   })),
-  exportMatrix = jest.fn(async () => undefined)
+  exportMatrix: jest.Mock = jest.fn(async selection => ({
+    fileName: selection.fileName,
+    bytes: new Uint8Array([1, 2, 3])
+  }))
 ) => {
   let id = 0
   const store = new ReportManifestStore(
@@ -299,6 +302,15 @@ describe('ReportWorkspaceModal', () => {
     expect(document.querySelector('#matrixExportTab')?.getAttribute('aria-selected')).toBe('true')
     expect(document.querySelector('#matrixExportPanel')).not.toBeNull()
     expect(buttonByText('合并为一个 PDF')).toBeUndefined()
+    const matrixDetailPanel = document.querySelector('.report-matrix-detail-panel')
+    expect(matrixDetailPanel?.querySelector('.report-pdf-tabs')?.textContent).toContain(
+      '导出设置生成记录 0'
+    )
+    buttonByText('生成记录')?.click()
+    expect(document.querySelector('.report-matrix-scope-panel')).not.toBeNull()
+    expect(document.querySelector(
+      '.report-matrix-detail-panel .report-matrix-settings-panel'
+    )).toBeNull()
 
     document.querySelector<HTMLButtonElement>('#pdfExportTab')?.click()
     expect(document.querySelector('#pdfExportTab')?.getAttribute('aria-selected')).toBe('true')
@@ -326,6 +338,10 @@ describe('ReportWorkspaceModal', () => {
       includeInactiveDevices: true,
       includeTransitions: true
     }, expect.any(AbortSignal))
+    expect(document.querySelector('.report-generated-files')?.textContent).toContain(
+      'CIP-matrix.xlsx'
+    )
+    expect(document.querySelector('[aria-label="下载 Matrix"]')).not.toBeNull()
   })
 
   it('supports Matrix Sequence shortcuts and partial selection', () => {

@@ -79,10 +79,11 @@ export function injectReportWorkspaceStyles() {
     .report-export-scope input { width: 15px; min-height: 15px; margin: 0; padding: 0; accent-color: #087b58; }
     .report-export-sequences { display: grid; flex: 1 0 100%; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px 12px; padding-top: 8px; border-top: 1px solid #e1e7e8; }
     .report-matrix-workspace { min-height: 0; overflow: hidden; background: #e7eeee; }
+    .report-matrix-panel-content { min-height: 0; overflow: auto; }
     .report-matrix-controls { display: grid; grid-template-columns: minmax(290px, 35%) minmax(0, 65%); width: 100%; height: 100%; min-height: 0; background: #f8fafa; }
     .report-matrix-scope-panel, .report-matrix-settings-panel { display: grid; align-content: start; min-width: 0; min-height: 0; padding: 14px; }
     .report-matrix-scope-panel { grid-template-rows: auto auto auto minmax(0, 1fr); gap: 9px; border-right: 1px solid #c9d3d5; }
-    .report-matrix-settings-panel { grid-template-columns: minmax(120px, .7fr) minmax(220px, 1.3fr); gap: 12px 18px; overflow: auto; }
+    .report-matrix-settings-panel { grid-template-columns: minmax(120px, .7fr) minmax(220px, 1.3fr); gap: 12px 18px; min-height: 100%; overflow: visible; }
     .report-matrix-controls h3 { margin: 0; font-size: 14px; }
     .report-matrix-settings-panel > h3, .report-matrix-settings-panel > fieldset, .report-matrix-settings-panel > p, .report-matrix-settings-panel > button { grid-column: 1 / -1; }
     .report-matrix-settings-panel > label { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 7px; color: #52676d; font-size: 11px; font-weight: 650; }
