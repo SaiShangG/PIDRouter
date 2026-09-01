@@ -28,7 +28,6 @@ import {
   AcGePoint2d,
   log
 } from '@mlightcad/data-model'
-import JSZip from 'jszip'
 import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
@@ -750,53 +749,22 @@ class CadViewerApp {
     const processId = this.requireExportBackendId(process.id, 'Process')
     const sequences = Object.fromEntries(
       selectedSequences.map(sequence => [
-          String(this.requireExportBackendId(sequence.id, 'Sequence')),
-          sequence.phases.map(phase =>
-            this.requireExportBackendId(phase.id, 'Phase')
-          )
-        ]
+        String(this.requireExportBackendId(sequence.id, 'Sequence')),
+        sequence.phases.map(phase =>
+          this.requireExportBackendId(phase.id, 'Phase')
+        )
+      ]
       )
     )
     const total = Object.values(sequences).reduce(
       (sum, phaseIds) => sum + phaseIds.length,
       0
     )
-    if (options.mode === 'per-sequence') {
-      const archive = new JSZip()
-      let completed = 0
-      for (const sequence of selectedSequences) {
-        if (signal.aborted) return { status: 'canceled' } as const
-        const sequenceId = String(
-          this.requireExportBackendId(sequence.id, 'Sequence')
-        )
-        const safeName = sequence.name.replace(/[<>:"/\\|?*]/g, '-')
-        const pdfName = `${String(sequence.number).padStart(2, '0')}-${safeName}.pdf`
-        const bytes = await this.createFlowPathPdf(
-          processId,
-          { [sequenceId]: sequences[sequenceId] },
-          pdfName,
-          signal
-        )
-        archive.file(pdfName, bytes)
-        completed += sequence.phases.length
-        onProgress({
-          completed,
-          total,
-          pageNumber: completed,
-          sequenceId: sequence.id,
-          phaseId: ''
-        })
-      }
-      return {
-        status: 'completed',
-        fileName: options.fileName,
-        bytes: await archive.generateAsync({ type: 'uint8array' })
-      } as const
-    }
-    const bytes = await this.createFlowPathPdf(
+    const bytes = await this.createFlowPathExport(
       processId,
       sequences,
       options.fileName,
+      options.mode === 'merged',
       signal
     )
     onProgress({ completed: total, total, pageNumber: total, sequenceId: '', phaseId: '' })
@@ -807,16 +775,18 @@ class CadViewerApp {
     } as const
   }
 
-  private async createFlowPathPdf(
+  private async createFlowPathExport(
     processId: number,
     sequences: Record<string, number[]>,
     fileName: string,
+    isPdfMerge: boolean,
     signal: AbortSignal
   ) {
     const response = await this.processAssistantFlowPathApi.create({
       projectId: this.activeProjectId!,
       selection: { [processId]: sequences },
-      name: fileName
+      name: fileName,
+      isPdfMerge
     }, signal)
     if (!response.success || !response.result) {
       throw new Error(response.message ?? 'Flow path PDF export failed')

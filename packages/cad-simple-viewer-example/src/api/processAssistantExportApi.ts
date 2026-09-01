@@ -12,6 +12,7 @@ export interface CreateFlowPathPdfRequest {
   projectId: number
   selection: Record<string, Record<string, number[]>>
   name: string
+  isPdfMerge: boolean
 }
 
 export interface CreateFlowPathPdfResponse {

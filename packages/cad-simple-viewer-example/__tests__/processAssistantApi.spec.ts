@@ -126,6 +126,13 @@ describe('ProcessAssistant endpoint services', () => {
         result: 'generated-pdf-id'
       }), {
         headers: { 'Content-Type': 'application/json' }
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        message: null,
+        result: 'generated-zip-id'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
       })) as jest.MockedFunction<typeof fetch>
     const client = createClient(fetchMock)
     const matrices = new ProcessAssistantMatrixApi(client)
@@ -148,15 +155,32 @@ describe('ProcessAssistant endpoint services', () => {
           3: [13]
         }
       },
-      name: 'CIP-flow-path.pdf'
+      name: 'CIP-flow-path.pdf',
+      isPdfMerge: true
     })).resolves.toEqual({
       success: true,
       message: null,
       result: 'generated-pdf-id'
     })
+    await expect(flowPaths.create({
+      projectId: 10,
+      selection: {
+        1: {
+          2: [11, 12],
+          3: [13]
+        }
+      },
+      name: 'CIP-flow-path.zip',
+      isPdfMerge: false
+    })).resolves.toEqual({
+      success: true,
+      message: null,
+      result: 'generated-zip-id'
+    })
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       'http://api.example.test/api/v1/Skill/valve-matrix',
+      'http://api.example.test/api/v1/Skill/flow-path',
       'http://api.example.test/api/v1/Skill/flow-path'
     ])
     expect(fetchMock.mock.calls[0][1]?.body).toBe(
@@ -179,7 +203,21 @@ describe('ProcessAssistant endpoint services', () => {
             3: [13]
           }
         },
-        name: 'CIP-flow-path.pdf'
+        name: 'CIP-flow-path.pdf',
+        isPdfMerge: true
+      })
+    )
+    expect(fetchMock.mock.calls[2][1]?.body).toBe(
+      JSON.stringify({
+        projectId: 10,
+        selection: {
+          1: {
+            2: [11, 12],
+            3: [13]
+          }
+        },
+        name: 'CIP-flow-path.zip',
+        isPdfMerge: false
       })
     )
   })
