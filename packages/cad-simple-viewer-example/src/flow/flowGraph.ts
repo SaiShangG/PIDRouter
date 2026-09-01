@@ -29,6 +29,17 @@ export const normalizeFlowHandle = (
 const moduleInfo = (module: DocumentControlModuleInput, name: string) =>
   module.Infos?.find(info => info.Name?.trim().toUpperCase() === name)?.Value?.trim()
 
+export const controlModuleMatchesDeviceName = (
+  module: DocumentControlModuleInput,
+  deviceName: string
+) => {
+  const expected = deviceName.trim().toLocaleLowerCase()
+  if (!expected) return false
+  return [module.Name, moduleInfo(module, 'YQJ_CODE')].some(
+    value => value?.trim().toLocaleLowerCase() === expected
+  )
+}
+
 const classifyControlModule = (
   module: DocumentControlModuleInput
 ): DocumentControlModule['deviceType'] => {

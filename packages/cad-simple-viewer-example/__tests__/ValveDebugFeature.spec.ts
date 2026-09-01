@@ -234,6 +234,61 @@ describe('ValveDebugFeature', () => {
     feature.dispose()
   })
 
+  it('opens configured states for a dynamically resolved PP device', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const configuredState = {
+      id: 'state-running',
+      key: 'running',
+      displayName: 'Running',
+      color: 0x00ff00,
+      lineWidthPx: 3,
+      opacity: 1,
+      enabled: true,
+      autoHighlightFlow: false,
+      flowBehavior: 'neutral' as const,
+      order: 0
+    }
+    const feature = new ValveDebugFeature({
+      panelHost: host,
+      graphDocument: {
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 2, Id: 'PP-1', Name: 'PP' }]
+        }],
+        Map: { Graph: { Vertices: [2], Edges: [] } }
+      },
+      getView: () => ({
+        canvas,
+        width: 100,
+        height: 100,
+        viewportToCanvas: point => point,
+        pick: () => [{ id: 'PP1' }],
+        screenToWorld: point => point,
+        zoomTo: () => undefined,
+        isDirty: false
+      }),
+      resolveObjectId: key => key,
+      resolveHandleKeys: () => ['2'],
+      createOverlay: () => null,
+      getLabels: locale => defaultValveDebugLabels(locale),
+      getLocale: () => 'en',
+      resolveConfiguredDeviceKey: () => '2',
+      getConfiguredStates: () => [configuredState]
+    })
+
+    feature.attach()
+    canvas.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
+    )
+
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')?.hidden).toBe(false)
+    expect(document.body.textContent).toContain('Device state')
+    expect(document.body.textContent).toContain('Running')
+    feature.dispose()
+  })
+
   it('allows applying a configured state when no Utility is available', () => {
     const host = document.createElement('div')
     document.body.append(host)

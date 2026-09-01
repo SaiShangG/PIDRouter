@@ -24,9 +24,9 @@ describe('HighlightStyleDialog', () => {
     dialog.open()
     expect(dialog.element.parentElement).toBe(document.body)
     expect(dialog.element.hidden).toBe(false)
-    ;[...dialog.element.querySelectorAll('button')]
-      .find(button => button.textContent?.includes('新增设备'))!
-      .click()
+      ;[...dialog.element.querySelectorAll('button')]
+        .find(button => button.textContent?.includes('新增设备'))!
+        .click()
     const input = dialog.element.querySelector<HTMLInputElement>('input')!
     input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
     dialog.element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))

@@ -42,6 +42,7 @@ export interface ValveDebugFeatureOptions {
     state: ValveRuntimeState
   ): boolean | Promise<boolean>
   onStateChanged?(handleKey: string, state: ValveRuntimeState): void
+  resolveConfiguredDeviceKey?(handleKey: string): string | undefined
   getConfiguredStates?(handleKey: string): readonly DeviceStateStyleDefinition[]
   getConfiguredStateKey?(handleKey: string): string | undefined
   getUtilities?(): readonly UtilityStyleDefinition[]
@@ -544,7 +545,7 @@ export class ValveDebugFeature {
       .map(key => this.resolveValveKey(key))
       .find((key): key is string => key != null)
     if (!hit) {
-      console.warn('[ValveDebugFeature] Right-click did not resolve to a valve', {
+      console.warn('[ValveDebugFeature] Right-click did not resolve to a configured device', {
         canvasPoint,
         worldPoint,
         pickedIds: pickedItems.map(item => String(item.id)),
@@ -557,7 +558,7 @@ export class ValveDebugFeature {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    console.log('[ValveDebugFeature] Right-click selected valve', {
+    console.log('[ValveDebugFeature] Right-click selected configured device', {
       key: hit,
       label: this.graph.nodes.get(hit)?.label ?? hit,
       clientX: event.clientX,
@@ -667,7 +668,7 @@ export class ValveDebugFeature {
     if (!hasConfiguredStates) return
 
     const locale = this.options.getLocale()
-    this.stateTitle.children[1].textContent = locale === 'zh' ? '阀门状态' : 'Valve state'
+    this.stateTitle.children[1].textContent = locale === 'zh' ? '设备状态' : 'Device state'
     this.utilityLabel.children[1].textContent = locale === 'zh' ? '联通流路样式' : 'Connected flow style'
     this.applyMenuAction.textContent = locale === 'zh' ? '应用' : 'Apply'
     this.utilityEmpty.textContent = locale === 'zh'
@@ -857,6 +858,9 @@ export class ValveDebugFeature {
   private resolveValveKey(handleKey: string) {
     const normalized = normalizeFlowHandle(handleKey)
     if (!normalized) return undefined
+    if (this.options.resolveConfiguredDeviceKey) {
+      return this.options.resolveConfiguredDeviceKey(normalized)
+    }
     const primaryKey = this.graph.primaryHandleByCadHandle.get(normalized) ?? normalized
     return this.graph.valveKeys.has(primaryKey) ? primaryKey : undefined
   }

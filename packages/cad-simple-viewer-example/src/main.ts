@@ -74,6 +74,7 @@ import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import {
   buildFlowGraphIndex,
+  controlModuleMatchesDeviceName,
   normalizeFlowHandle
 } from './flow/flowGraph'
 import type {
@@ -130,6 +131,7 @@ import {
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
 import type {
   DeviceState,
+  DeviceStyleDefinition,
   DeviceStateStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
@@ -1759,7 +1761,10 @@ class CadViewerApp {
       zoomToObject: objectId => this.zoomToValveDebugObject(objectId),
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => this.appLocale as ValveDebugLocale,
-      getConfiguredStates: () => this.getConfiguredValveStates(),
+      resolveConfiguredDeviceKey: handleKey =>
+        this.getConfiguredDeviceMatch(handleKey)?.handleKey,
+      getConfiguredStates: handleKey =>
+        this.getConfiguredDeviceMatch(handleKey)?.device.states ?? [],
       getConfiguredStateKey: handleKey => {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
         return ownerId ? this.valveDeviceStates.get(ownerId)?.stateKey : undefined
@@ -3528,17 +3533,19 @@ class CadViewerApp {
     return state.presentationProfile ?? createDefaultPresentationProfile()
   }
 
-  private getConfiguredValveStates() {
-    return this.getConfiguredValveDefinition()?.states ?? []
-  }
-
-  private getConfiguredValveDefinition() {
-    const devices = this.getActivePresentationProfile().devices
-    return devices.find(device => {
-      const id = device.id.trim().toLocaleLowerCase()
-      const name = device.name.trim().toLocaleLowerCase()
-      return id === 'valve' || name === 'valve' || name === '阀门'
-    }) ?? devices.find(device => device.states.some(state => state.enabled))
+  private getConfiguredDeviceMatch(handleKey: string): {
+    handleKey: string
+    device: DeviceStyleDefinition
+  } | undefined {
+    const normalized = normalizeFlowHandle(handleKey)
+    if (!normalized) return undefined
+    const primaryHandle = flowGraphIndex.primaryHandleByCadHandle.get(normalized) ?? normalized
+    const module = flowGraphIndex.controlModuleByPrimaryHandle.get(primaryHandle)
+    if (!module) return undefined
+    const device = this.getActivePresentationProfile().devices.find(candidate =>
+      controlModuleMatchesDeviceName(module, candidate.name)
+    )
+    return device ? { handleKey: primaryHandle, device } : undefined
   }
 
   private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
@@ -3554,6 +3561,8 @@ class CadViewerApp {
   ) {
     const ownerId = this.resolveObjectIdByHandleKey(handleKey)
     if (!ownerId) return false
+    const device = this.getConfiguredDeviceMatch(handleKey)?.device
+    if (!device) return false
     const utility = this.getActivePresentationProfile().utilities.find(
       candidate => candidate.id === utilityId && candidate.enabled
     )
@@ -3561,7 +3570,7 @@ class CadViewerApp {
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
       stateKey: state.key,
-      deviceType: this.getConfiguredValveDefinition()?.name ?? 'VALVE',
+      deviceType: device.name,
       highlightStyleRefId: state.id
     })
     this.openHighlightGroups.delete(ownerId)
@@ -3589,8 +3598,8 @@ class CadViewerApp {
     ) {
       this.showMessage(
         this.appLocale === 'zh'
-          ? '没有已启用的 Utility，已应用阀门状态但未创建流路高亮'
-          : 'No enabled Utility. The valve state was applied without a flow highlight.',
+          ? '没有已启用的 Utility，已应用设备状态但未创建流路高亮'
+          : 'No enabled Utility. The device state was applied without a flow highlight.',
         'error'
       )
     }

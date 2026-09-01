@@ -1,5 +1,6 @@
 import {
   buildFlowGraphIndex,
+  controlModuleMatchesDeviceName,
   normalizeFlowHandle
 } from '../src/flow/flowGraph'
 import type { FlowConnectionDocumentInput } from '../src/flow/types'
@@ -12,6 +13,15 @@ describe('flowGraph', () => {
     expect(normalizeFlowHandle(26)).toBe('1A')
     expect(normalizeFlowHandle('0x001a')).toBe('1A')
     expect(normalizeFlowHandle(-1)).toBeUndefined()
+  })
+
+  it('matches configured device names against Name and YQJ_CODE', () => {
+    expect(controlModuleMatchesDeviceName({ Name: ' Valve ' }, 'valve')).toBe(true)
+    expect(controlModuleMatchesDeviceName({
+      Name: '',
+      Infos: [{ Name: 'YQJ_CODE', Value: 'PP' }]
+    }, ' pp ')).toBe(true)
+    expect(controlModuleMatchesDeviceName({ Name: 'PP' }, 'Pump')).toBe(false)
   })
 
   it('indexes ControlModules and infers only unique contained-handle owners', () => {
