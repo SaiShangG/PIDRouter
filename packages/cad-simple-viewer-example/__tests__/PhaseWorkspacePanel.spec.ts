@@ -126,15 +126,15 @@ describe('PhaseWorkspacePanel', () => {
     expect(modal.textContent).toContain('SIP')
     expect(modal.textContent).toContain('1 个序列和 0 个 Phase')
     expect(confirm).not.toHaveBeenCalled()
-    ;[...modal.querySelectorAll('button')]
-      .find(button => button.textContent === '取消')!
-      .click()
+      ;[...modal.querySelectorAll('button')]
+        .find(button => button.textContent === '取消')!
+        .click()
     expect(actions.deleteProcess).not.toHaveBeenCalled()
 
     deleteButton.click()
-    ;[...panel.element.querySelectorAll<HTMLButtonElement>('.phase-operation-modal button')]
-      .find(button => button.textContent === '确认删除')!
-      .click()
+      ;[...panel.element.querySelectorAll<HTMLButtonElement>('.phase-operation-modal button')]
+        .find(button => button.textContent === '确认删除')!
+        .click()
     await Promise.resolve()
 
     expect(actions.deleteProcess).toHaveBeenCalledWith(process.id)
@@ -201,9 +201,9 @@ describe('PhaseWorkspacePanel', () => {
       }
     })
     panel.render()
-    ;[...panel.element.querySelectorAll('button')]
-      .find(item => item.textContent === '创建 Phase')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(item => item.textContent === '创建 Phase')!
+        .click()
     const nextSource = panel.element.querySelector<HTMLSelectElement>(
       '[aria-label="阶段创建方式"]'
     )!
@@ -236,9 +236,9 @@ describe('PhaseWorkspacePanel', () => {
       }
     })
     panel.render()
-    ;[...panel.element.querySelectorAll('button')]
-      .find(item => item.textContent === '创建 Phase')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(item => item.textContent === '创建 Phase')!
+        .click()
 
     const form = panel.element.querySelector<HTMLFormElement>('.phase-create-form')!
     const source = form.querySelector<HTMLSelectElement>(
@@ -406,9 +406,9 @@ describe('PhaseWorkspacePanel', () => {
     )!
     expect(deleteModal.textContent).toContain('删除序列？')
     expect(deleteModal.textContent).toContain('01 · 默认序列重命名')
-    ;[...deleteModal.querySelectorAll('button')]
-      .find(button => button.textContent === '确认删除')!
-      .click()
+      ;[...deleteModal.querySelectorAll('button')]
+        .find(button => button.textContent === '确认删除')!
+        .click()
     await Promise.resolve()
     expect(actions.deleteSequence).toHaveBeenCalledWith(process.id, sequence.id)
     expect(prompt).not.toHaveBeenCalled()
@@ -433,9 +433,9 @@ describe('PhaseWorkspacePanel', () => {
       }
     })
     panel.render()
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '创建 Phase')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '创建 Phase')!
+        .click()
 
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="阶段编号"]')!.value)
       .toBe('5')
@@ -519,9 +519,9 @@ describe('PhaseWorkspacePanel', () => {
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
     panel.render()
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '创建 Phase')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '创建 Phase')!
+        .click()
     panel.element.querySelector<HTMLInputElement>('[aria-label="阶段名称"]')!.value =
       '待关联阶段'
     const createSource = panel.element.querySelector<HTMLSelectElement>(
@@ -643,9 +643,9 @@ describe('PhaseWorkspacePanel', () => {
     })
     panel.render()
 
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '关联图纸')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '关联图纸')!
+        .click()
     const modal = document.body.querySelector<HTMLElement>(
       '.phase-drawing-association-modal'
     )!
@@ -708,9 +708,9 @@ describe('PhaseWorkspacePanel', () => {
     store.activate(process.id, sequence.id, target.id)
     panel.render()
 
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '关联图纸')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '关联图纸')!
+        .click()
     const source = document.body.querySelector<HTMLSelectElement>(
       '.phase-drawing-association-modal [aria-label="图纸关联方式"]'
     )!
@@ -781,9 +781,9 @@ describe('PhaseWorkspacePanel', () => {
       '[aria-label="阶段名称"]'
     )!
     input.value = '预冲洗'
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '保存')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '保存')!
+        .click()
 
     expect(actions.renamePhase).toHaveBeenCalledWith(
       process.id,
@@ -794,9 +794,9 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.textContent).not.toContain('清洗准备')
     expect(panel.element.textContent).toContain('预冲洗')
 
-    ;[...panel.element.querySelectorAll('button')]
-      .find(button => button.textContent === '创建 Phase')!
-      .click()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === '创建 Phase')!
+        .click()
     const historyOptions = panel.element.querySelector<HTMLSelectElement>(
       '[aria-label="历史阶段"]'
     )!
@@ -833,16 +833,16 @@ describe('PhaseWorkspacePanel', () => {
     deleteButton.click()
     expect(modal.hidden).toBe(false)
     expect(modal.textContent).toContain('Phase 01 · 清洗准备')
-    ;[...modal.querySelectorAll('button')]
-      .find(button => button.textContent === '取消')!
-      .click()
+      ;[...modal.querySelectorAll('button')]
+        .find(button => button.textContent === '取消')!
+        .click()
     expect(actions.deletePhase).not.toHaveBeenCalled()
     expect(modal.hidden).toBe(true)
 
     deleteButton.click()
-    ;[...modal.querySelectorAll('button')]
-      .find(button => button.textContent === '确认删除')!
-      .click()
+      ;[...modal.querySelectorAll('button')]
+        .find(button => button.textContent === '确认删除')!
+        .click()
     await Promise.resolve()
 
     expect(actions.deletePhase).toHaveBeenCalledWith(
