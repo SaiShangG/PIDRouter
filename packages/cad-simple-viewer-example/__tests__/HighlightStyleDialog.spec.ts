@@ -169,6 +169,41 @@ describe('HighlightStyleDialog', () => {
     expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(2)
   })
 
+  it('copies devices and states with independent IDs and valid state keys', () => {
+    let id = 0
+    const onApply = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: value(),
+      createId: () => `copied-${++id}`,
+      onApply,
+      onClose: jest.fn()
+    })
+    dialog.open()
+    ;[...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('新增设备'))!
+      .click()
+
+    dialog.element.querySelector<HTMLButtonElement>('[aria-label="复制设备"]')!
+      .click()
+    expect(dialog.element.querySelectorAll('.highlight-device-card')).toHaveLength(2)
+    expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="设备名称"]')]
+      .map(input => input.value)).toEqual(['设备 1', '设备 1 副本'])
+
+    dialog.element.querySelector<HTMLButtonElement>('[aria-label="复制设备状态"]')!
+      .click()
+    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(5)
+    expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="状态 key"]')]
+      .map(input => input.value)).toEqual(['OPEN', 'OPEN_COPY', 'CLOSE', 'OPEN', 'CLOSE'])
+
+    ;[...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent === '应用')!
+      .click()
+    const devices = onApply.mock.calls[0][0].presentationProfile.devices
+    expect(new Set(devices.map((device: { id: string }) => device.id)).size).toBe(2)
+    expect(new Set(devices.flatMap((device: { states: Array<{ id: string }> }) =>
+      device.states.map(state => state.id))).size).toBe(5)
+  })
+
   it('downloads and imports highlight styles as JSON', async () => {
     const createObjectURL = jest.fn(() => 'blob:highlight-styles')
     const revokeObjectURL = jest.fn()

@@ -1,4 +1,4 @@
-import { Download, Plus, Trash2, Upload, X } from 'lucide'
+import { Copy, Download, Plus, Trash2, Upload, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
@@ -182,6 +182,11 @@ export class HighlightStyleDialog {
         device.name = name.value
         this.emitPreview()
       })
+      const actions = document.createElement('div')
+      actions.className = 'highlight-item-actions'
+      const copy = this.iconButton('复制设备', Copy, () => {
+        this.copyDevice(device)
+      })
       const remove = this.iconButton('删除设备', Trash2, () => {
         const locale = this.options.getLocale?.() ?? 'zh'
         void this.confirmationModal.confirm({
@@ -199,7 +204,8 @@ export class HighlightStyleDialog {
           this.render()
         })
       })
-      header.append(name, remove)
+      actions.append(copy, remove)
+      header.append(name, actions)
       card.append(header)
       device.states.sort((a, b) => a.order - b.order).forEach(state =>
         card.append(this.renderDeviceState(device, state))
@@ -234,6 +240,38 @@ export class HighlightStyleDialog {
     addDevice.prepend(createPhaseIcon(Plus))
     section.append(addDevice)
     return section
+  }
+
+  private copyDevice(source: DeviceStyleDefinition) {
+    const devices = this.draft.presentationProfile.devices
+    const sourceIndex = devices.indexOf(source)
+    const locale = this.options.getLocale?.() ?? 'zh'
+    const name = this.uniqueCopyValue(
+      source.name,
+      new Set(devices.map(device => device.name)),
+      locale === 'en' ? ' Copy' : ' 副本'
+    )
+    const copy: DeviceStyleDefinition = {
+      ...source,
+      id: this.newId(`${source.id}-copy`),
+      name,
+      states: source.states.map((state, index) => ({
+        ...state,
+        id: this.newId(`${state.id}-copy`),
+        order: index
+      }))
+    }
+    devices.splice(sourceIndex + 1, 0, copy)
+    devices.forEach((device, index) => { device.order = index })
+    this.emitPreview()
+    this.render()
+  }
+
+  private uniqueCopyValue(source: string, existing: Set<string>, suffix: string) {
+    let candidate = `${source}${suffix}`
+    let index = 2
+    while (existing.has(candidate)) candidate = `${source}${suffix} ${index++}`
+    return candidate
   }
 
   private createDefaultDevice(index: number, order: number): DeviceStyleDefinition {
@@ -361,6 +399,30 @@ export class HighlightStyleDialog {
       this.emitPreview()
     })
     const style = this.asHighlightStyle(state)
+    const actions = document.createElement('div')
+    actions.className = 'highlight-item-actions'
+    const copy = this.iconButton('复制设备状态', Copy, () => {
+      const sourceIndex = device.states.indexOf(state)
+      const key = this.uniqueCopyValue(
+        state.key,
+        new Set(device.states.map(item => item.key)),
+        '_COPY'
+      )
+      const displayName = this.uniqueCopyValue(
+        state.displayName,
+        new Set(device.states.map(item => item.displayName)),
+        (this.options.getLocale?.() ?? 'zh') === 'en' ? ' Copy' : ' 副本'
+      )
+      device.states.splice(sourceIndex + 1, 0, {
+        ...state,
+        id: this.newId(`${state.id}-copy`),
+        key,
+        displayName
+      })
+      device.states.forEach((item, index) => { item.order = index })
+      this.emitPreview()
+      this.render()
+    })
     const remove = this.iconButton('删除设备状态', Trash2, () => {
       const locale = this.options.getLocale?.() ?? 'zh'
       void this.confirmationModal.confirm({
@@ -378,6 +440,7 @@ export class HighlightStyleDialog {
         this.render()
       })
     })
+    actions.append(copy, remove)
     row.append(
       this.field('状态 key', key),
       this.field('右键名称', displayName),
@@ -385,7 +448,7 @@ export class HighlightStyleDialog {
         Object.assign(state, changed)
         this.emitPreview()
       }),
-      remove,
+      actions,
       autoHighlightFlowLabel,
       this.field('流路行为', flowBehavior)
     )

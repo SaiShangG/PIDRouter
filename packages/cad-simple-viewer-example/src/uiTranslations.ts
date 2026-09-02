@@ -177,6 +177,7 @@ const pairs: TranslationPair[] = [
   ['自定义颜色', 'Custom color'], ['自定义十六进制颜色', 'Custom hexadecimal color'],
   ['自定义透明度', 'Custom opacity'], ['自定义线宽', 'Custom line width'], ['预览', 'Preview'],
   ['高亮透明度', 'Highlight opacity'], ['应用并关闭', 'Apply and close'],
+  ['复制设备', 'Copy device'], ['复制设备状态', 'Copy device state'],
   ['导入高亮样式 JSON', 'Import highlight styles JSON'], ['下载高亮样式 JSON', 'Download highlight styles JSON'],
   ['高亮样式导入失败，请选择有效的 JSON 文件。', 'Failed to import highlight styles. Select a valid JSON file.'],
   ['请先激活一个 Phase', 'Activate a Phase first'], ['连通流路', 'Connected flow'],
