@@ -4,6 +4,7 @@ import {
   ProcessAssistantMatrixApi
 } from '../src/api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from '../src/api/processAssistantFileApi'
+import { ProcessAssistantGeneralApi } from '../src/api/processAssistantGeneralApi'
 import { ProcessAssistantOperationApi } from '../src/api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from '../src/api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from '../src/api/processAssistantProcedureApi'
@@ -117,6 +118,22 @@ describe('ProcessAssistantClient', () => {
 })
 
 describe('ProcessAssistant endpoint services', () => {
+  it('runs the general skill with the selected project', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(null, { status: 204 })
+    ) as jest.MockedFunction<typeof fetch>
+    const general = new ProcessAssistantGeneralApi(createClient(fetchMock))
+
+    await expect(general.run({ projectId: 10 })).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.example.test/api/v1/Skill/general',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ projectId: 10 })
+      })
+    )
+  })
+
   it('uses the direct skill export endpoints', async () => {
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({

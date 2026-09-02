@@ -47,6 +47,7 @@ import {
   ProcessAssistantMatrixApi
 } from './api/processAssistantExportApi'
 import { ProcessAssistantFileApi } from './api/processAssistantFileApi'
+import { ProcessAssistantGeneralApi } from './api/processAssistantGeneralApi'
 import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi'
 import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
@@ -444,6 +445,9 @@ class CadViewerApp {
     baseUrl: PROCESS_ASSISTANT_API_URL
   })
   private readonly processAssistantFileApi = new ProcessAssistantFileApi(
+    this.processAssistantClient
+  )
+  private readonly processAssistantGeneralApi = new ProcessAssistantGeneralApi(
     this.processAssistantClient
   )
   private readonly processAssistantProjectApi = new ProcessAssistantProjectApi(
@@ -2207,8 +2211,16 @@ class CadViewerApp {
     }
     importButton.prepend(createPhaseIcon(FileUp))
     importButton.addEventListener('click', async () => {
+      if (this.activeProjectId === undefined) {
+        this.showMessage(translate(this.appLocale, 'noProjectSelected'), 'error')
+        return
+      }
+      const projectId = this.activeProjectId
       const files = await this.phaseConfigImportModal.open(
-        this.getPhaseConfigImportLabels()
+        this.getPhaseConfigImportLabels(),
+        async () => {
+          await this.processAssistantGeneralApi.run({ projectId })
+        }
       )
       if (!files) return
       this.phaseConfigFiles = files
@@ -2286,7 +2298,8 @@ class CadViewerApp {
       cancel: translate(this.appLocale, 'importConfigCancel'),
       confirm: translate(this.appLocale, 'importConfigConfirm'),
       uploading: translate(this.appLocale, 'importConfigUploading'),
-      complete: translate(this.appLocale, 'importConfigComplete')
+      complete: translate(this.appLocale, 'importConfigComplete'),
+      uploadFailed: translate(this.appLocale, 'importConfigUploadFailed')
     }
   }
 

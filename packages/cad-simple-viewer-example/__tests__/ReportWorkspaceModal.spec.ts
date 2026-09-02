@@ -98,6 +98,9 @@ const buttonByText = (text: string) =>
 const openExportSettings = (locale: 'en' | 'zh' = 'zh') =>
   buttonByText(locale === 'zh' ? '页面设置&导出' : 'Page settings & export')?.click()
 
+const selectFirstPdfPhase = () =>
+  document.querySelector<HTMLButtonElement>('.report-phase-node')?.click()
+
 describe('ReportWorkspaceModal', () => {
   afterEach(() => {
     document.body.replaceChildren()
@@ -116,12 +119,16 @@ describe('ReportWorkspaceModal', () => {
     ).toBe('Search page, sequence, or Phase')
     expect(document.querySelector('.report-page-preview')).toBeNull()
     expect(buttonByText('Preview page')).toBeUndefined()
+    expect(document.querySelector('.report-phase-node.is-selected')).toBeNull()
+    expect(document.querySelector('.report-phase-node')?.getAttribute('aria-selected'))
+      .toBe('false')
   })
 
   it('excludes and restores a slot without deleting it', () => {
     const { store } = createHarness()
     const slotId = store.snapshot().pages[0].id
 
+    selectFirstPdfPhase()
     buttonByText('从报告排除')?.click()
     expect(store.snapshot().pages).toHaveLength(2)
     expect(store.snapshot().pages.find(page => page.id === slotId)?.excluded).toBe(
@@ -137,6 +144,7 @@ describe('ReportWorkspaceModal', () => {
   it('replaces the selected page without changing its slot id or position', () => {
     const { store } = createHarness()
     const before = store.snapshot()
+    selectFirstPdfPhase()
     const replacement = document.querySelector<HTMLSelectElement>(
       '[aria-label="替换页面来源"]'
     )!
@@ -199,6 +207,54 @@ describe('ReportWorkspaceModal', () => {
 
     buttonByText('批量恢复')?.click()
     expect(store.snapshot().pages.every(page => !page.excluded)).toBe(true)
+  })
+
+  it('selects a PDF Process and displays Sequence and Phase hierarchy', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes.push({
+      ...state.processes[0],
+      id: 'process-2',
+      name: 'SIP',
+      sequences: [{
+        ...state.processes[0].sequences[0],
+        id: 'sip-sequence',
+        name: 'SIP cleaning',
+        phases: [{
+          ...state.processes[0].sequences[0].phases[0],
+          id: 'sip-phase',
+          name: 'SIP step'
+        }]
+      }]
+    })
+    const { store } = createHarness('zh', state)
+    const process = document.querySelector<HTMLSelectElement>(
+      '.report-page-browser [aria-label="PDF Process"]'
+    )!
+
+    process.value = 'process-2'
+    process.dispatchEvent(new Event('change'))
+    await Promise.resolve()
+
+    expect(store.snapshot().processId).toBe('process-2')
+    expect(store.snapshot().pages.map(page => page.phaseId)).toEqual(['sip-phase'])
+    const group = document.querySelector('.report-sequence-group')
+    expect(group?.firstElementChild?.classList.contains('report-sequence-node')).toBe(true)
+    expect(group?.querySelector('.report-phase-node')?.textContent).toContain(
+      'SIP step'
+    )
+    expect(group?.querySelectorAll('.report-phase-node')).toHaveLength(1)
+    const sequence = group?.querySelector<HTMLButtonElement>('.report-sequence-node')
+    expect(sequence?.getAttribute('aria-expanded')).toBe('true')
+    expect(sequence?.textContent).toContain('1 个 Phase')
+    expect(group?.querySelector('.report-page-row strong')?.textContent).toBe('页 001')
+    expect(group?.querySelector('.report-page-status svg')).not.toBeNull()
+    sequence?.click()
+    expect(document.querySelector('.report-sequence-node')?.getAttribute('aria-expanded'))
+      .toBe('false')
+    expect(document.querySelector('.report-phase-list')?.hasAttribute('hidden')).toBe(true)
+    expect(document.querySelector<HTMLInputElement>(
+      '[aria-label="自定义 PDF 文件名"]'
+    )?.value).toBe('SIP-report')
   })
 
   it('exports the current Sequence with a custom filename', async () => {
@@ -523,6 +579,7 @@ describe('ReportWorkspaceModal', () => {
     )
     const { modal } = createHarness('zh', workspace, exportReport)
 
+    selectFirstPdfPhase()
     openExportSettings()
     buttonByText('合并为一个 PDF')?.click()
     const status = document.querySelector('.report-export-status')

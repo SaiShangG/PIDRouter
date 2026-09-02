@@ -177,6 +177,8 @@ const pairs: TranslationPair[] = [
   ['自定义颜色', 'Custom color'], ['自定义十六进制颜色', 'Custom hexadecimal color'],
   ['自定义透明度', 'Custom opacity'], ['自定义线宽', 'Custom line width'], ['预览', 'Preview'],
   ['高亮透明度', 'Highlight opacity'], ['应用并关闭', 'Apply and close'],
+  ['导入高亮样式 JSON', 'Import highlight styles JSON'], ['下载高亮样式 JSON', 'Download highlight styles JSON'],
+  ['高亮样式导入失败，请选择有效的 JSON 文件。', 'Failed to import highlight styles. Select a valid JSON file.'],
   ['请先激活一个 Phase', 'Activate a Phase first'], ['连通流路', 'Connected flow'],
   ['该 Phase 的 PID Overlay 版本不受支持。原始数据已保留，显式重建前不会覆盖。', 'This Phase uses an unsupported PID Overlay version. Its original data is preserved and will not be overwritten until it is explicitly rebuilt.'],
   ['部分高亮样式引用不存在，已使用默认样式。', 'Some highlight style references are missing. Default styles are being used.'],
@@ -208,6 +210,8 @@ export const translateUiText = (locale: AppLocale, text: string): string => {
   const dynamic: Array<[RegExp, (match: RegExpMatchArray) => string]> = locale === 'en'
     ? [
       [/^序列 (\d+)/, m => `Sequence ${m[1]}`],
+      [/^(\d+) 个 Phase$/, m => `${m[1]} Phases`],
+      [/^页 (\d+)$/, m => `Page ${m[1]}`],
       [/^确认删除工艺“(.+)”？将同时删除 (\d+) 个序列和 (\d+) 个 Phase，此操作无法撤销。$/, m => `Delete process “${m[1]}”? This also deletes ${m[2]} sequences and ${m[3]} Phases. This action cannot be undone.`],
       [/^将同时删除 (\d+) 个序列和 (\d+) 个 Phase，此操作无法撤销。$/, m => `This also deletes ${m[1]} sequences and ${m[2]} Phases. This action cannot be undone.`],
       [/^此操作将永久删除该序列及其 (\d+) 个 Phase，无法撤销。$/, m => `This permanently deletes the sequence and its ${m[1]} Phases. This action cannot be undone.`],

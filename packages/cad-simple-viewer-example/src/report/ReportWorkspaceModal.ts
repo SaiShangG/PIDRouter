@@ -1,5 +1,19 @@
 import JSZip from 'jszip'
-import { Download, Eye, FileArchive, FileSpreadsheet, FileText, RotateCcw, Trash2, X } from 'lucide'
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleX,
+  Download,
+  Eye,
+  FileArchive,
+  FileSpreadsheet,
+  FileText,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  TriangleAlert,
+  X
+} from 'lucide'
 
 import type {
   MatrixDeviceType,
@@ -96,12 +110,12 @@ interface GeneratedMatrix {
 }
 
 const ROW_HEIGHT = 66
-const OVERSCAN = 6
 
 export class ReportWorkspaceModal {
   readonly element = document.createElement('div')
   private manifest: ReportManifest
   private selectedSlotId?: string
+  private collapsedPdfSequenceIds = new Set<string>()
   private query = ''
   private sequenceFilterId = 'all'
   private filter: 'all' | 'excluded' | 'replaced' | 'issues' = 'all'
@@ -115,6 +129,7 @@ export class ReportWorkspaceModal {
   private exportScope: 'all' | 'current' | 'selected' = 'all'
   private exportFileName = ''
   private exportSequenceIds = new Set<string>()
+  private pdfProcessId = ''
   private matrixProcessId = ''
   private matrixSequenceIds = new Set<string>()
   private matrixPhaseIds = new Set<string>()
@@ -166,13 +181,14 @@ export class ReportWorkspaceModal {
 
   open() {
     const workspace = this.getWorkspace()
-    this.manifest = this.store.reconcile(workspace)
+    if (!workspace.processes.some(item => item.id === this.pdfProcessId)) {
+      this.pdfProcessId = workspace.activeProcessId ?? workspace.processes[0]?.id ?? ''
+    }
+    this.manifest = this.store.reconcile(this.getPdfWorkspace(workspace))
     this.store.persist()
     this.initializePdfExportSelection(workspace)
     this.initializeMatrixSelection(workspace)
-    this.selectedSlotId =
-      this.manifest.pages.find(page => page.id === this.selectedSlotId)?.id ??
-      this.manifest.pages[0]?.id
+    this.selectedSlotId = undefined
     this.element.hidden = false
     document.body.classList.add('report-workspace-open')
     this.render()
@@ -328,6 +344,31 @@ export class ReportWorkspaceModal {
   ) {
     const panel = document.createElement('section')
     panel.className = 'report-page-browser'
+    const workspace = this.getWorkspace()
+    const processLabel = document.createElement('label')
+    processLabel.className = 'report-pdf-process-field'
+    processLabel.textContent = 'Process'
+    const processSelect = document.createElement('select')
+    processSelect.setAttribute('aria-label', 'PDF Process')
+    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
+    processSelect.value = this.pdfProcessId
+    processSelect.disabled = Boolean(this.exportController)
+    processSelect.addEventListener('change', () => {
+      this.pdfProcessId = processSelect.value
+      this.manifest = this.store.reconcile(this.getPdfWorkspace(workspace))
+      this.store.persist()
+      this.sequenceFilterId = 'all'
+      this.filter = 'all'
+      this.listScrollTop = 0
+      this.exportSequenceIds.clear()
+      this.exportFileName = ''
+      this.initializePdfExportSelection(workspace)
+      this.pendingWarningOptions = undefined
+      this.selectedSlotId = undefined
+      this.render()
+    })
+    processLabel.append(processSelect)
+
     const search = document.createElement('input')
     search.type = 'search'
     search.value = this.query
@@ -415,17 +456,17 @@ export class ReportWorkspaceModal {
 
     const viewport = document.createElement('div')
     viewport.className = 'report-page-viewport'
-    viewport.setAttribute('role', 'listbox')
+    viewport.setAttribute('role', 'tree')
     viewport.setAttribute('aria-label', '报告页面列表')
     viewport.addEventListener('scroll', () => {
       this.listScrollTop = viewport.scrollTop
       this.renderList()
     })
     this.listViewport = viewport
-    panel.append(searchRow, sequenceRow, filters, viewport)
+    panel.append(processLabel, searchRow, sequenceRow, filters, viewport)
+    this.renderList()
     queueMicrotask(() => {
       viewport.scrollTop = this.listScrollTop
-      this.renderList()
     })
     return panel
   }
@@ -438,54 +479,97 @@ export class ReportWorkspaceModal {
     const issueSlotIds = new Set(issues.map(issue => issue.slotId).filter(Boolean))
     const issuePhaseIds = new Set(issues.map(issue => issue.phaseId).filter(Boolean))
     const contexts = this.getFilteredContexts(this.getPageContexts(workspace))
-    const height = viewport.clientHeight || 500
-    const start = Math.max(0, Math.floor(viewport.scrollTop / ROW_HEIGHT) - OVERSCAN)
-    const end = Math.min(
-      contexts.length,
-      Math.ceil((viewport.scrollTop + height) / ROW_HEIGHT) + OVERSCAN
-    )
-    const canvas = document.createElement('div')
-    canvas.className = 'report-page-window'
-    canvas.style.height = `${contexts.length * ROW_HEIGHT}px`
-    contexts.slice(start, end).forEach((context, offset) => {
-      const row = document.createElement('button')
-      row.type = 'button'
-      row.className = 'report-page-row'
-      row.style.transform = `translateY(${(start + offset) * ROW_HEIGHT}px)`
-      row.classList.toggle('is-selected', context.slot.id === this.selectedSlotId)
-      row.classList.toggle('is-excluded', context.slot.excluded)
-      row.setAttribute('role', 'option')
-      row.setAttribute(
-        'aria-selected',
-        String(context.slot.id === this.selectedSlotId)
-      )
-      const number = document.createElement('strong')
-      number.textContent = String(context.pageNumber).padStart(3, '0')
-      const identity = document.createElement('span')
-      identity.className = 'report-page-identity'
-      const sequence = document.createElement('b')
-      sequence.textContent = `序列 ${String(context.sequence?.number ?? 0).padStart(2, '0')} · ${context.sequence?.name ?? '来源缺失'}`
-      const phase = document.createElement('span')
-      phase.textContent = `Phase ${String(context.phase?.number ?? 0).padStart(2, '0')} · ${context.phase?.name ?? '来源缺失'}`
-      identity.append(sequence, phase)
-      const status = document.createElement('i')
-      const hasIssue =
-        issueSlotIds.has(context.slot.id) || issuePhaseIds.has(context.slot.phaseId)
-      status.textContent = context.slot.excluded
-        ? '已排除'
-        : hasIssue
-          ? '问题'
-          : context.slot.replacement
-            ? '已替换'
-            : '正常'
-      row.append(number, identity, status)
-      row.addEventListener('click', () => {
-        this.selectedSlotId = context.slot.id
-        this.render()
-      })
-      canvas.append(row)
+    const groups = new Map<string, PageContext[]>()
+    contexts.forEach(context => {
+      const sequenceId = context.sequence?.id ?? context.slot.sequenceId
+      const group = groups.get(sequenceId) ?? []
+      group.push(context)
+      groups.set(sequenceId, group)
     })
-    viewport.replaceChildren(canvas)
+    const tree = document.createElement('div')
+    tree.className = 'report-page-tree'
+    groups.forEach(groupContexts => {
+      const first = groupContexts[0]
+      const sequenceId = first.sequence?.id ?? first.slot.sequenceId
+      const expanded = !this.collapsedPdfSequenceIds.has(sequenceId)
+      const group = document.createElement('section')
+      group.className = 'report-sequence-group'
+      group.setAttribute('role', 'group')
+      const sequence = document.createElement('button')
+      sequence.type = 'button'
+      sequence.className = 'report-sequence-node'
+      sequence.setAttribute('aria-expanded', String(expanded))
+      sequence.setAttribute(
+        'aria-label',
+        `${expanded ? '折叠' : '展开'}序列 ${first.sequence?.number ?? 0}`
+      )
+      const sequenceIdentity = document.createElement('span')
+      sequenceIdentity.textContent = `序列 ${String(first.sequence?.number ?? 0).padStart(2, '0')} · ${first.sequence?.name ?? '来源缺失'}`
+      const count = document.createElement('span')
+      count.className = 'report-sequence-count'
+      count.textContent = `${groupContexts.length} 个 Phase`
+      sequence.append(
+        createPhaseIcon(ChevronDown, 'report-sequence-chevron'),
+        sequenceIdentity,
+        count
+      )
+      sequence.addEventListener('click', () => {
+        if (expanded) this.collapsedPdfSequenceIds.add(sequenceId)
+        else this.collapsedPdfSequenceIds.delete(sequenceId)
+        this.renderList()
+      })
+      const phases = document.createElement('div')
+      phases.className = 'report-phase-list'
+      phases.setAttribute('role', 'group')
+      phases.hidden = !expanded
+      group.append(sequence, phases)
+      groupContexts.forEach(context => {
+        const row = document.createElement('button')
+        row.type = 'button'
+        row.className = 'report-page-row report-phase-node'
+        row.classList.toggle('is-selected', context.slot.id === this.selectedSlotId)
+        row.classList.toggle('is-excluded', context.slot.excluded)
+        row.setAttribute('role', 'treeitem')
+        row.setAttribute(
+          'aria-selected',
+          String(context.slot.id === this.selectedSlotId)
+        )
+        const number = document.createElement('strong')
+        number.textContent = `页 ${String(context.pageNumber).padStart(3, '0')}`
+        const identity = document.createElement('span')
+        identity.className = 'report-page-identity'
+        identity.textContent = `Phase ${String(context.phase?.number ?? 0).padStart(2, '0')} · ${context.phase?.name ?? '来源缺失'}`
+        const status = document.createElement('i')
+        const hasIssue =
+          issueSlotIds.has(context.slot.id) || issuePhaseIds.has(context.slot.phaseId)
+        const statusDefinition = context.slot.excluded
+          ? ['已排除', CircleX]
+          : hasIssue
+            ? ['问题', TriangleAlert]
+            : context.slot.replacement
+              ? ['已替换', RefreshCw]
+              : ['正常', CircleCheck]
+        status.className = `report-page-status is-${context.slot.excluded
+          ? 'excluded'
+          : hasIssue
+            ? 'issue'
+            : context.slot.replacement
+              ? 'replaced'
+              : 'ready'}`
+        status.append(
+          createPhaseIcon(statusDefinition[1] as typeof CircleCheck),
+          document.createTextNode(statusDefinition[0] as string)
+        )
+        row.append(number, identity, status)
+        row.addEventListener('click', () => {
+          this.selectedSlotId = context.slot.id
+          this.render()
+        })
+        phases.append(row)
+      })
+      tree.append(group)
+    })
+    viewport.replaceChildren(tree)
     localizeDom(viewport, this.getLocale())
   }
 
@@ -831,7 +915,7 @@ export class ReportWorkspaceModal {
     if (this.exportScope === 'selected') {
       const selected = document.createElement('div')
       selected.className = 'report-export-sequences'
-      this.getActiveProcess()?.sequences.forEach(sequence => {
+      this.getPdfProcess()?.sequences.forEach(sequence => {
         const option = document.createElement('label')
         const checkbox = document.createElement('input')
         checkbox.type = 'checkbox'
@@ -1047,6 +1131,7 @@ export class ReportWorkspaceModal {
     processSelect.addEventListener('change', () => {
       this.matrixProcessId = processSelect.value
       this.selectAllMatrixScope()
+      this.matrixFileName = ''
       this.initializeMatrixFileName()
       this.matrixMessage = ''
       this.render()
@@ -1509,14 +1594,18 @@ export class ReportWorkspaceModal {
     this.commitAndRender()
   }
 
-  private getActiveProcess() {
+  private getPdfProcess() {
     const workspace = this.getWorkspace()
-    return workspace.processes.find(item => item.id === workspace.activeProcessId)
+    return workspace.processes.find(item => item.id === this.pdfProcessId)
       ?? workspace.processes[0]
   }
 
+  private getPdfWorkspace(workspace: PhaseWorkspaceState): PhaseWorkspaceState {
+    return { ...workspace, activeProcessId: this.pdfProcessId }
+  }
+
   private initializePdfExportSelection(workspace: PhaseWorkspaceState) {
-    const process = workspace.processes.find(item => item.id === workspace.activeProcessId)
+    const process = workspace.processes.find(item => item.id === this.pdfProcessId)
       ?? workspace.processes[0]
     const validIds = new Set(process?.sequences.map(item => item.id))
     this.exportSequenceIds = new Set(
@@ -1531,7 +1620,7 @@ export class ReportWorkspaceModal {
   }
 
   private getExportSequenceIds() {
-    const process = this.getActiveProcess()
+    const process = this.getPdfProcess()
     if (!process) return []
     if (this.exportScope === 'current') {
       const current = process.sequences.find(

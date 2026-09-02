@@ -26,7 +26,8 @@ export function injectReportWorkspaceStyles() {
     .report-workspace-modal .report-icon-button { display: grid; place-items: center; width: 34px; padding: 0; }
     .report-workspace-body { display: grid; grid-template-columns: minmax(290px, 35%) minmax(0, 65%); min-height: 0; }
     .report-page-browser, .report-page-inspector { min-width: 0; min-height: 0; padding: 14px; }
-    .report-page-browser { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 9px; border-right: 1px solid #c9d3d5; background: #f8fafa; }
+    .report-page-browser { display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr); gap: 9px; border-right: 1px solid #c9d3d5; background: #f8fafa; }
+    .report-pdf-process-field { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; color: #52676d; font-size: 11px; font-weight: 650; }
     .report-search-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 7px; }
     .report-sequence-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; }
     .report-sequence-row select { min-width: 0; font-size: 10px; }
@@ -35,14 +36,23 @@ export function injectReportWorkspaceStyles() {
     .report-filter-row button { min-height: 29px; padding: 4px 8px; white-space: nowrap; font-size: 10px; }
     .report-filter-row button.is-active { border-color: var(--app-accent, #087b58); color: #fff; background: var(--app-accent, #087b58); }
     .report-page-viewport { position: relative; min-height: 0; overflow-y: auto; border: 1px solid #cbd5d7; border-radius: 5px; background: #fff; }
-    .report-page-window { position: relative; width: 100%; }
-    .report-page-row { position: absolute; left: 0; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; height: 66px; padding: 8px; border: 0; border-bottom: 1px solid #e2e8e9; border-radius: 0; text-align: left; }
-    .report-page-row > strong { color: #5d7076; font-size: 11px; font-variant-numeric: tabular-nums; }
-    .report-page-identity { display: grid; gap: 3px; min-width: 0; }
-    .report-page-identity b, .report-page-identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .report-page-identity b { font-size: 11px; }
-    .report-page-identity span { color: #65777d; font-size: 10px; }
-    .report-page-row i { color: #27775f; font-size: 9px; font-style: normal; font-weight: 700; }
+    .report-page-tree { display: grid; align-content: start; }
+    .report-sequence-group + .report-sequence-group { border-top: 1px solid #b8c8cb; }
+    .report-workspace-modal .report-sequence-node { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 7px; width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 0; color: #263f45; background: #eef4f2; text-align: left; font-size: 11px; font-weight: 750; }
+    .report-sequence-chevron { transition: transform 140ms ease; }
+    .report-sequence-node[aria-expanded='false'] .report-sequence-chevron { transform: rotate(-90deg); }
+    .report-sequence-count { color: #587068; font-size: 9px; font-weight: 650; white-space: nowrap; }
+    .report-phase-list[hidden] { display: none; }
+    .report-workspace-modal .report-page-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 52px 64px; align-items: center; gap: 8px; width: 100%; height: 48px; min-height: 48px; padding: 7px 8px 7px 35px; border: 0; border-top: 1px solid #e2e8e9; border-radius: 0; text-align: left; }
+    .report-page-row::before { position: absolute; top: 0; bottom: 50%; left: 14px; width: 13px; border-bottom: 1px solid #9babad; border-left: 1px solid #9babad; content: ''; }
+    .report-page-row:not(:last-child)::after { position: absolute; top: 50%; bottom: 0; left: 14px; border-left: 1px solid #9babad; content: ''; }
+    .report-page-row > strong { grid-column: 2; grid-row: 1; color: #5d7076; font-size: 9px; font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+    .report-page-identity { min-width: 0; overflow: hidden; color: #536b71; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .report-page-status { display: inline-flex; grid-column: 3; align-items: center; justify-content: flex-end; gap: 4px; color: #27775f; font-size: 9px; font-style: normal; font-weight: 700; white-space: nowrap; }
+    .report-page-status .phase-ui-icon { width: 13px; height: 13px; }
+    .report-page-status.is-issue { color: #9a5a00; }
+    .report-page-status.is-excluded { color: #69777b; }
+    .report-page-status.is-replaced { color: #28658a; }
     .report-page-row.is-selected { color: var(--app-success-text, #075d43); background: var(--app-success-surface, #e3f5ee); box-shadow: inset 3px 0 var(--app-accent, #087b58); }
     .report-page-row.is-excluded { opacity: .56; }
     .report-page-row.is-excluded .report-page-identity { text-decoration: line-through; }
