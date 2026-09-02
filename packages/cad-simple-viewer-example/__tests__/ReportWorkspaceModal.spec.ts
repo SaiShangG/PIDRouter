@@ -170,8 +170,49 @@ describe('ReportWorkspaceModal', () => {
       {
         fileName: 'CIP-report.pdf',
         mode: 'merged',
-        sequenceIds: ['sequence']
+        processId: 'process',
+        sequenceIds: ['sequence'],
+        pages: [
+          { sequenceId: 'sequence', phaseId: 'phase-1' },
+          { sequenceId: 'sequence', phaseId: 'phase-2' }
+        ]
       },
+      expect.any(AbortSignal),
+      expect.any(Function)
+    )
+  })
+
+  it('exports resolved pages after applying exclusions and replacements', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes[0].sequences[0].phases.push({
+      ...state.processes[0].sequences[0].phases[1],
+      id: 'phase-3',
+      number: 3,
+      name: 'Step 3'
+    })
+    const { store, exportReport } = createHarness('zh', state)
+    const pages = store.snapshot().pages
+    selectFirstPdfPhase()
+    buttonByText('从报告排除')?.click()
+    document.querySelectorAll<HTMLButtonElement>('.report-phase-node')[1].click()
+    const replacement = document.querySelector<HTMLSelectElement>(
+      '[aria-label="替换页面来源"]'
+    )!
+    replacement.value = pages[2].id
+    replacement.dispatchEvent(new Event('change'))
+    buttonByText('确认替换')?.click()
+
+    openExportSettings()
+    buttonByText('合并为一个 PDF')?.click()
+    await Promise.resolve()
+
+    expect(exportReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pages: [
+          { sequenceId: 'sequence', phaseId: 'phase-3' },
+          { sequenceId: 'sequence', phaseId: 'phase-3' }
+        ]
+      }),
       expect.any(AbortSignal),
       expect.any(Function)
     )
@@ -280,7 +321,12 @@ describe('ReportWorkspaceModal', () => {
       {
         fileName: 'CIP Batch 42.pdf',
         mode: 'merged',
-        sequenceIds: ['sequence']
+        processId: 'process',
+        sequenceIds: ['sequence'],
+        pages: [
+          { sequenceId: 'sequence', phaseId: 'phase-1' },
+          { sequenceId: 'sequence', phaseId: 'phase-2' }
+        ]
       },
       expect.any(AbortSignal),
       expect.any(Function)
@@ -318,7 +364,12 @@ describe('ReportWorkspaceModal', () => {
       {
         fileName: 'CIP-report.pdf',
         mode: 'merged',
-        sequenceIds: ['sequence-2']
+        processId: 'process',
+        sequenceIds: ['sequence-2'],
+        pages: [
+          { sequenceId: 'sequence-2', phaseId: 'phase-1-second' },
+          { sequenceId: 'sequence-2', phaseId: 'phase-2-second' }
+        ]
       },
       expect.any(AbortSignal),
       expect.any(Function)

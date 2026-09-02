@@ -165,6 +165,7 @@ import { ProjectManagementModal } from './project/ProjectManagementModal'
 import { injectProjectManagementStyles } from './project/projectManagementStyles'
 import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
+import { buildPhaseReportSelection } from './report/buildPhaseReportSelection'
 import type { PhaseReportProgress } from './report/phaseReportExportTypes'
 import { ReportManifestStore } from './report/reportManifest'
 import {
@@ -738,32 +739,14 @@ class CadViewerApp {
   ) {
     await this.initialize()
     this.captureLoadedPhaseState()
-    const workspace = this.phaseStore.snapshot()
-    const process = workspace.processes.find(
-      item => item.id === workspace.activeProcessId
-    ) ?? workspace.processes[0]
-    if (!process) throw new Error('Process is required to export a report')
     if (this.activeProjectId === undefined) {
       throw new Error('PDF export requires an active Project')
     }
-    const selectedSequenceIds = new Set(options.sequenceIds)
-    const selectedSequences = process.sequences.filter(sequence =>
-      selectedSequenceIds.has(sequence.id)
+    const { processId, sequences } = buildPhaseReportSelection(
+      options,
+      (value, label) => this.requireExportBackendId(value, label)
     )
-    const processId = this.requireExportBackendId(process.id, 'Process')
-    const sequences = Object.fromEntries(
-      selectedSequences.map(sequence => [
-        String(this.requireExportBackendId(sequence.id, 'Sequence')),
-        sequence.phases.map(phase =>
-          this.requireExportBackendId(phase.id, 'Phase')
-        )
-      ]
-      )
-    )
-    const total = Object.values(sequences).reduce(
-      (sum, phaseIds) => sum + phaseIds.length,
-      0
-    )
+    const total = options.pages.length
     const exportedFile = await this.createFlowPathExport(
       processId,
       sequences,
@@ -2221,7 +2204,9 @@ class CadViewerApp {
         async selectedFiles => {
           await this.processAssistantGeneralApi.run({
             files: selectedFiles,
-            projectId
+            projectId,
+            name: selectedFiles.map(file => file.name).join(', '),
+            skillName: 'procedure-configuration'
           })
         }
       )

@@ -73,7 +73,12 @@ interface ReportWorkspaceActions {
 export interface PhaseReportExportOptions {
   mode: PhaseReportOutputMode
   fileName: string
+  processId: string
   sequenceIds: string[]
+  pages: Array<{
+    sequenceId: string
+    phaseId: string
+  }>
 }
 
 interface PageContext {
@@ -1641,10 +1646,21 @@ export class ReportWorkspaceModal {
       .trim()
       .replace(/[<>:"/\\|?*]/g, '-')
       .replace(/\.(pdf|zip)$/i, '') || 'process-report'
+    const sequenceIds = this.getExportSequenceIds()
+    const selectedSequenceIds = new Set(sequenceIds)
     return {
       mode,
       fileName: `${baseName}.${mode === 'merged' ? 'pdf' : 'zip'}`,
-      sequenceIds: this.getExportSequenceIds()
+      processId: this.pdfProcessId,
+      sequenceIds,
+      pages: this.manifest.pages
+        .filter(
+          page => selectedSequenceIds.has(page.sequenceId) && !page.excluded
+        )
+        .map(page => ({
+          sequenceId: page.sequenceId,
+          phaseId: page.replacement?.phaseId ?? page.phaseId
+        }))
     }
   }
 

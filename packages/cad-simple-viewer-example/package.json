@@ -28,7 +28,8 @@
     "lucide": "^0.468.0",
     "pdfjs-dist": "^5.7.284",
     "three": "^0.172.0",
-    "vue": "^3.4.21"
+    "vue": "^3.4.21",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/three": "0.172.0",

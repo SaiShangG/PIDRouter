@@ -128,7 +128,14 @@ describe('ProcessAssistant endpoint services', () => {
       new File(['second'], 'sequence.xls')
     ]
 
-    await expect(general.run({ files, projectId: 10 })).resolves.toBeUndefined()
+    await expect(general.run({
+      files,
+      projectId: 10,
+      selection: { 1: { 2: [3] } },
+      name: 'CIP import',
+      skillName: 'parse-config',
+      jsonArgs: JSON.stringify({ overwrite: true })
+    })).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith(
       'http://api.example.test/api/v1/Skill/general',
       expect.objectContaining({
@@ -139,8 +146,32 @@ describe('ProcessAssistant endpoint services', () => {
     const body = request?.body as FormData
     expect(body).toBeInstanceOf(FormData)
     expect(body.getAll('files')).toEqual(files)
-    expect(body.get('projectId')).toBe('10')
+    expect(body.get('ProjectId')).toBe('10')
+    expect(body.get('Selection')).toBe('{"1":{"2":[3]}}')
+    expect(body.get('Name')).toBe('CIP import')
+    expect(body.get('SkillName')).toBe('parse-config')
+    expect(body.get('JsonArgs')).toBe('{"overwrite":true}')
     expect((request?.headers as Headers).has('Content-Type')).toBe(false)
+  })
+
+  it('supplies neutral structured arguments when optional values are omitted', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(null, { status: 204 })
+    ) as jest.MockedFunction<typeof fetch>
+    const general = new ProcessAssistantGeneralApi(createClient(fetchMock))
+
+    await general.run({
+      files: [],
+      projectId: 10,
+      name: 'Configuration import',
+      skillName: 'procedure-configuration'
+    })
+
+    const body = fetchMock.mock.calls[0][1]?.body as FormData
+    expect(body.get('Selection')).toBe('{}')
+    expect(body.get('Name')).toBe('Configuration import')
+    expect(body.get('SkillName')).toBe('procedure-configuration')
+    expect(body.get('JsonArgs')).toBe('{}')
   })
 
   it('uses the direct skill export endpoints', async () => {
