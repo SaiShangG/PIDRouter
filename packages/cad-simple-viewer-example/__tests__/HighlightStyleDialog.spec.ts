@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 
-import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import { toPersistedPresentationProfile } from '../src/phase/phaseWorkspaceRepository'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import { HighlightStyleDialog } from '../src/presentation/HighlightStyleDialog'
 
 const value = () => ({
@@ -244,6 +244,14 @@ describe('HighlightStyleDialog', () => {
     await (dialog as unknown as { importStyles(file: File): Promise<void> })
       .importStyles(importedFile)
 
+    expect(dialog.element.querySelector('[aria-label="设备名称"]')).toBeNull()
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect(preview.textContent).toContain('导入预览')
+    expect([...preview.querySelectorAll('.highlight-import-summary strong')]
+      .map(item => item.textContent)).toEqual(['1', '1', '0'])
+    ;[...preview.querySelectorAll('button')]
+      .find(button => button.textContent === '确认导入')!
+      .click()
     expect(dialog.element.querySelector<HTMLInputElement>(
       '[aria-label="设备名称"]'
     )?.value).toBe('Filter')
@@ -254,5 +262,91 @@ describe('HighlightStyleDialog', () => {
     delete (URL as Partial<typeof URL>).createObjectURL
     delete (URL as Partial<typeof URL>).revokeObjectURL
     anchorClick.mockRestore()
+  })
+
+  it('checks duplicates by deviceType and deviceState and supports replacement', async () => {
+    const existing = value()
+    existing.presentationProfile.devices.push({
+      id: 'valve',
+      name: 'Valve',
+      order: 0,
+      states: [{
+        id: 'valve-open',
+        key: 'OPEN',
+        displayName: 'OPEN',
+        color: 0x00c853,
+        lineWidthPx: 3,
+        opacity: 1,
+        enabled: true,
+        autoHighlightFlow: true,
+        flowBehavior: 'conducting',
+        order: 0
+      }]
+    })
+    const dialog = new HighlightStyleDialog({ value: existing, onClose: jest.fn() })
+    dialog.open()
+    const importedFile = {
+      text: async () => JSON.stringify({
+        presentationProfile: {
+          deviceStyles: [
+            {
+              id: 'import-open', deviceType: 'Valve', deviceState: 'OPEN',
+              displayName: 'Open imported', color: '#123456', lineWidthPx: 4,
+              opacity: 1, autoHighlightFlow: true, flowBehavior: 'conducting'
+            },
+            {
+              id: 'import-close', deviceType: 'Valve', deviceState: 'CLOSE',
+              displayName: 'Close imported', color: '#B8B8B8', lineWidthPx: 3,
+              opacity: 1, autoHighlightFlow: false, flowBehavior: 'blocking'
+            }
+          ],
+          utilities: [{
+            id: 'utility-1', name: 'Utility 1', color: '#C700B6',
+            lineWidthPx: 3, opacity: 1
+          }]
+        }
+      })
+    } as File
+    await (dialog as unknown as { importStyles(file: File): Promise<void> })
+      .importStyles(importedFile)
+
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect([...preview.querySelectorAll('.highlight-import-summary strong')]
+      .map(item => item.textContent)).toEqual(['1', '2', '1'])
+    expect(preview.textContent).toContain('重复设备：Valve')
+    expect(preview.textContent).toContain('重复状态：Valve / OPEN')
+    expect(preview.textContent).not.toContain('重复状态：Valve / CLOSE')
+
+    ;[...preview.querySelectorAll('button')]
+      .find(button => button.textContent === '替换全部配置')!
+      .click()
+    ;[...preview.querySelectorAll('button')]
+      .find(button => button.textContent === '确认导入')!
+      .click()
+    expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="状态 key"]')]
+      .map(input => input.value)).toEqual(['OPEN', 'CLOSE'])
+    expect(dialog.element.querySelector<HTMLInputElement>('[aria-label="右键显示名称"]')
+      ?.value).toBe('Open imported')
+  })
+
+  it('blocks confirmation when a style lacks deviceType or deviceState', async () => {
+    const dialog = new HighlightStyleDialog({ value: value(), onClose: jest.fn() })
+    dialog.open()
+    await (dialog as unknown as { importStyles(file: File): Promise<void> })
+      .importStyles({
+        text: async () => JSON.stringify({
+          presentationProfile: {
+            deviceStyles: [{ id: 'invalid', deviceType: 'Valve' }],
+            utilities: []
+          }
+        })
+      } as File)
+
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect(preview.textContent).toContain(
+      'deviceStyles[0] 缺少有效的 deviceType 或 deviceState。'
+    )
+    expect([...preview.querySelectorAll<HTMLButtonElement>('button')]
+      .find(button => button.textContent === '确认导入')?.disabled).toBe(true)
   })
 })

@@ -13,6 +13,11 @@ import { normalizePresentationProfile } from '../phase/phaseWorkspaceStore'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
+import {
+  HighlightStyleImportPreviewModal,
+  type HighlightStyleImportAnalysis,
+  type HighlightStyleImportMode
+} from './HighlightStyleImportPreviewModal'
 
 export interface HighlightStyleDraft {
   presentationProfile: PresentationProfile
@@ -338,21 +343,116 @@ export class HighlightStyleDialog {
     try {
       const parsed: unknown = JSON.parse(await file.text())
       if (!isRecord(parsed) || !isRecord(parsed.presentationProfile)) {
-        throw new Error('Invalid highlight style file')
+        this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
+        return
       }
       const profile = parsed.presentationProfile
       if (!Array.isArray(profile.deviceStyles) || !Array.isArray(profile.utilities)) {
-        throw new Error('Invalid highlight style file')
+        this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
+        return
       }
-      this.draft.presentationProfile = normalizePresentationProfile(profile)
-      this.emitPreview()
-      this.render()
+      const errors = this.validateImportedStyles(profile.deviceStyles)
+      this.openImportPreview(profile, errors)
     } catch {
-      const locale = this.options.getLocale?.() ?? 'zh'
-      window.alert(locale === 'en'
-        ? 'Failed to import highlight styles. Select a valid JSON file.'
-        : '高亮样式导入失败，请选择有效的 JSON 文件。')
+      this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
     }
+  }
+
+  private validateImportedStyles(styles: unknown[]) {
+    const errors: string[] = []
+    styles.forEach((style, index) => {
+      if (!isRecord(style) || typeof style.deviceType !== 'string' ||
+        !style.deviceType.trim() || typeof style.deviceState !== 'string' ||
+        !style.deviceState.trim()) {
+        errors.push(`deviceStyles[${index}] 缺少有效的 deviceType 或 deviceState。`)
+      }
+    })
+    return errors
+  }
+
+  private openImportPreview(
+    profile: Record<string, unknown> | undefined,
+    errors: string[]
+  ) {
+    const styles = profile?.deviceStyles as unknown[] | undefined ?? []
+    const utilities = profile?.utilities as unknown[] | undefined ?? []
+    const deviceTypes = new Set<string>()
+    const importedPairs = new Set<string>()
+    const duplicateStates = new Set<string>()
+    styles.forEach(style => {
+      if (!isRecord(style) || typeof style.deviceType !== 'string' ||
+        typeof style.deviceState !== 'string') return
+      const deviceType = style.deviceType.trim()
+      const deviceState = style.deviceState.trim()
+      if (!deviceType || !deviceState) return
+      deviceTypes.add(deviceType)
+      const pair = `${deviceType}\u0000${deviceState}`
+      if (importedPairs.has(pair)) duplicateStates.add(`${deviceType} / ${deviceState}`)
+      importedPairs.add(pair)
+    })
+    const existingDevices = new Map(
+      this.draft.presentationProfile.devices.map(device => [device.name, device])
+    )
+    const duplicateDevices = [...deviceTypes].filter(type => existingDevices.has(type))
+    importedPairs.forEach(pair => {
+      const [deviceType, deviceState] = pair.split('\u0000')
+      if (existingDevices.get(deviceType)?.states.some(state => state.key === deviceState)) {
+        duplicateStates.add(`${deviceType} / ${deviceState}`)
+      }
+    })
+    const analysis: HighlightStyleImportAnalysis = {
+      deviceCount: deviceTypes.size,
+      stateCount: styles.length,
+      utilityCount: utilities.length,
+      duplicateDevices,
+      duplicateStates: [...duplicateStates],
+      errors
+    }
+    const locale = this.options.getLocale?.() ?? 'zh'
+    const localizedErrors = locale === 'en'
+      ? errors.map(error => error.includes('deviceStyles')
+        ? error.replace('缺少有效的', 'is missing a valid')
+        : 'Invalid highlight style JSON format.')
+      : errors
+    const modal = new HighlightStyleImportPreviewModal({
+      locale,
+      analysis: { ...analysis, errors: localizedErrors },
+      onConfirm: mode => {
+        if (!profile) return
+        this.applyImportedProfile(normalizePresentationProfile(profile), mode)
+      },
+      onClose: () => undefined
+    })
+    modal.open()
+  }
+
+  private applyImportedProfile(imported: PresentationProfile, mode: HighlightStyleImportMode) {
+    if (mode === 'replace') {
+      this.draft.presentationProfile = imported
+    } else {
+      const current = this.draft.presentationProfile
+      imported.devices.forEach(importedDevice => {
+        const existing = current.devices.find(device => device.name === importedDevice.name)
+        if (!existing) {
+          current.devices.push({ ...importedDevice, order: current.devices.length })
+          return
+        }
+        importedDevice.states.forEach(importedState => {
+          const index = existing.states.findIndex(state => state.key === importedState.key)
+          if (index >= 0) {
+            existing.states[index] = { ...importedState, order: index }
+          } else {
+            existing.states.push({ ...importedState, order: existing.states.length })
+          }
+        })
+      })
+      imported.utilities.forEach(utility => current.utilities.push({
+        ...utility,
+        order: current.utilities.length
+      }))
+    }
+    this.emitPreview()
+    this.render()
   }
 
   private renderDeviceState(

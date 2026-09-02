@@ -145,6 +145,22 @@ export function injectPhaseWorkspaceStyles() {
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }
     .highlight-default-field { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.2fr); align-items: center; gap: 12px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; font-weight: 650; }
     .highlight-style-actions { padding: 10px 16px 16px; border-top: 1px solid #dbe3e5; }
+    .highlight-import-preview-dialog { width: min(560px, 100%); }
+    .highlight-import-preview-dialog h2 { display: flex; align-items: center; gap: 8px; }
+    .highlight-import-preview-body { display: grid; gap: 14px; padding: 16px; }
+    .highlight-import-summary { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid #dbe3e5; border-radius: 6px; overflow: hidden; }
+    .highlight-import-summary > div { display: grid; gap: 3px; padding: 12px; text-align: center; background: #f8fafa; }
+    .highlight-import-summary > div + div { border-left: 1px solid #dbe3e5; }
+    .highlight-import-summary strong { color: #075d43; font-size: 22px; }
+    .highlight-import-summary span { color: #53676e; font-size: 11px; }
+    .highlight-import-issues { display: grid; gap: 6px; max-height: 180px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+    .highlight-import-issues li { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #e0c176; border-radius: 4px; color: #735b16; background: #fff9e8; font-size: 11px; }
+    .highlight-import-issues li.is-error { border-color: #d9948e; color: #8f2d26; background: #fff4f3; }
+    .highlight-import-valid { margin: 0; color: #467067; font-size: 12px; }
+    .highlight-import-modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 3px; border: 1px solid #cbd7d9; border-radius: 6px; background: #eef3f3; }
+    .phase-workspace-modal .highlight-import-modes button { border: 0; background: transparent; color: #53676e; font-size: 12px; font-weight: 700; }
+    .phase-workspace-modal .highlight-import-modes button[aria-checked='true'] { color: #fff; background: var(--app-accent, #087b58); }
+    .highlight-import-actions { padding: 10px 16px 16px; border-top: 1px solid #dbe3e5; }
     .style-source-dialog { width: min(560px, 100%); }
     .style-source-body { display: grid; gap: 16px; padding: 16px; }
     .style-source-segments { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border: 1px solid #cbd7d9; border-radius: 6px; background: #eef3f3; }
