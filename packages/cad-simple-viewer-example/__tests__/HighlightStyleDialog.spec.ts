@@ -123,7 +123,7 @@ describe('HighlightStyleDialog', () => {
     ).toBe('Utility 1')
   })
 
-  it('adds a device and nested state configuration', () => {
+  it('adds a device with the default OPEN and CLOSE states', () => {
     const dialog = new HighlightStyleDialog({
       value: value(),
       onClose: jest.fn()
@@ -139,11 +139,7 @@ describe('HighlightStyleDialog', () => {
         .find(button => button.textContent?.includes('新增设备'))!
         .click()
     expect(dialog.element.querySelectorAll('.highlight-device-card')).toHaveLength(1)
-
-      ;[...dialog.element.querySelectorAll('button')]
-        .find(button => button.textContent?.includes('新增状态'))!
-        .click()
-    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(1)
+    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(2)
     expect(dialog.element.querySelector('[aria-label="状态 key"]')).not.toBeNull()
     expect(dialog.element.querySelector('[aria-label="右键显示名称"]')).not.toBeNull()
     expect(
@@ -152,25 +148,76 @@ describe('HighlightStyleDialog', () => {
       )
     ).not.toBeNull()
 
-    const autoHighlightFlow = dialog.element.querySelector<HTMLInputElement>(
+    const stateKeys = [...dialog.element.querySelectorAll<HTMLInputElement>(
+      '[aria-label="状态 key"]'
+    )].map(input => input.value)
+    const autoHighlightFlow = dialog.element.querySelectorAll<HTMLInputElement>(
       '[aria-label="自动高亮流路"]'
-    )!
-    const flowBehavior = dialog.element.querySelector<HTMLSelectElement>(
+    )
+    const flowBehaviors = dialog.element.querySelectorAll<HTMLSelectElement>(
       '[aria-label="流路行为"]'
-    )!
-    expect(autoHighlightFlow.checked).toBe(false)
-    expect(flowBehavior.value).toBe('neutral')
-    autoHighlightFlow.click()
-    flowBehavior.value = 'conducting'
-    flowBehavior.dispatchEvent(new Event('change'))
+    )
+    expect(stateKeys).toEqual(['OPEN', 'CLOSE'])
+    expect(autoHighlightFlow[0].checked).toBe(true)
+    expect(autoHighlightFlow[1].checked).toBe(false)
+    expect(flowBehaviors[0].value).toBe('conducting')
+    expect(flowBehaviors[1].value).toBe('blocking')
 
       ;[...dialog.element.querySelectorAll('button')]
         .find(button => button.textContent === '应用')!
         .click()
-    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(1)
+    expect(dialog.element.querySelectorAll('.highlight-device-row')).toHaveLength(2)
+  })
+
+  it('downloads and imports highlight styles as JSON', async () => {
+    const createObjectURL = jest.fn(() => 'blob:highlight-styles')
+    const revokeObjectURL = jest.fn()
+    Object.defineProperties(URL, {
+      createObjectURL: { configurable: true, value: createObjectURL },
+      revokeObjectURL: { configurable: true, value: revokeObjectURL }
+    })
+    const anchorClick = jest.spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    const dialog = new HighlightStyleDialog({ value: value(), onClose: jest.fn() })
+    dialog.open()
+
+    dialog.element.querySelector<HTMLButtonElement>(
+      '[aria-label="下载高亮样式 JSON"]'
+    )!.click()
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
+    expect(anchorClick).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:highlight-styles')
+
+    const importedFile = {
+      text: async () => JSON.stringify({
+        presentationProfile: {
+          deviceStyles: [{
+            id: 'filter-open',
+            deviceType: 'Filter',
+            deviceState: 'OPEN',
+            displayName: 'OPEN',
+            color: '#00C853',
+            lineWidthPx: 3,
+            opacity: 1,
+            autoHighlightFlow: true,
+            flowBehavior: 'conducting'
+          }],
+          utilities: []
+        }
+      })
+    } as File
+    await (dialog as unknown as { importStyles(file: File): Promise<void> })
+      .importStyles(importedFile)
+
     expect(dialog.element.querySelector<HTMLInputElement>(
-      '[aria-label="自动高亮流路"]'
-    )?.checked).toBe(true)
-    expect(flowBehavior.value).toBe('conducting')
+      '[aria-label="设备名称"]'
+    )?.value).toBe('Filter')
+    expect(dialog.element.querySelector<HTMLInputElement>(
+      '[aria-label="状态 key"]'
+    )?.value).toBe('OPEN')
+
+    delete (URL as Partial<typeof URL>).createObjectURL
+    delete (URL as Partial<typeof URL>).revokeObjectURL
+    anchorClick.mockRestore()
   })
 })

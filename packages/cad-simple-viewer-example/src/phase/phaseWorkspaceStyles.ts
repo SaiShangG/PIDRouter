@@ -115,6 +115,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .phase-delete-confirm { border-color: var(--app-danger, #9f352c); color: #fff; background: var(--app-danger, #a83d33); }
     .phase-workspace .phase-delete-confirm:hover { background: var(--app-danger-hover, #922f27); }
     .highlight-style-dialog { width: min(780px, 100%); }
+    .highlight-style-header-actions { display: flex; gap: 6px; align-items: center; }
     .highlight-style-tabs { display: flex; gap: 2px; padding: 10px 16px 0; border-bottom: 1px solid #dbe3e5; }
     .phase-workspace .highlight-style-tabs button, .phase-workspace-modal .highlight-style-tabs button { min-height: 34px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: #53676e; font-size: 12px; font-weight: 700; }
     .phase-workspace .highlight-style-tabs button[aria-selected='true'], .phase-workspace-modal .highlight-style-tabs button[aria-selected='true'] { border-bottom-color: var(--app-accent, #087b58); color: var(--app-success-text, #075d43); }

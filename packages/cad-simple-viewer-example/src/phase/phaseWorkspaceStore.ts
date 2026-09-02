@@ -468,7 +468,7 @@ const migrateLegacyDevices = (value: Record<string, unknown>) => {
   return [...devices.values()]
 }
 
-const normalizeProfile = (value: unknown): PresentationProfile => {
+export const normalizePresentationProfile = (value: unknown): PresentationProfile => {
   const defaults = createDefaultPresentationProfile()
   if (!isRecord(value)) return defaults
   const persistedDevices = Array.isArray(value.deviceStyles)
@@ -793,7 +793,7 @@ const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => (
 })
 
 const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
-  const presentationProfile = normalizeProfile(state.presentationProfile)
+  const presentationProfile = normalizePresentationProfile(state.presentationProfile)
   return {
     ...state,
     version: PHASE_WORKSPACE_SCHEMA_VERSION,
@@ -1161,7 +1161,7 @@ export class PhaseWorkspaceStore {
   }
 
   updatePresentationProfile(presentationProfile: PresentationProfile) {
-    const normalized = normalizeProfile(presentationProfile)
+    const normalized = normalizePresentationProfile(presentationProfile)
     this.state.presentationProfile = normalized
   }
 

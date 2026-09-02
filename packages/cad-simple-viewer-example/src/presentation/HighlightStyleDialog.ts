@@ -1,4 +1,4 @@
-import { Plus, Trash2, X } from 'lucide'
+import { Download, Plus, Trash2, Upload, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
@@ -8,6 +8,8 @@ import type {
   HighlightStyle,
   PresentationProfile
 } from '../phase/types'
+import { toPersistedPresentationProfile } from '../phase/phaseWorkspaceRepository'
+import { normalizePresentationProfile } from '../phase/phaseWorkspaceStore'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
@@ -32,6 +34,9 @@ const toHex = (color: number) =>
 
 const parseHex = (value: string) =>
   /^#[0-9a-f]{6}$/i.test(value) ? Number.parseInt(value.slice(1), 16) : undefined
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export class HighlightStyleDialog {
   readonly element = document.createElement('div')
@@ -105,8 +110,17 @@ export class HighlightStyleDialog {
     const title = document.createElement('h2')
     title.id = 'highlightStyleDialogTitle'
     title.textContent = '高亮样式设置'
+    const headerActions = document.createElement('div')
+    headerActions.className = 'highlight-style-header-actions'
+    const importStyles = this.iconButton('导入高亮样式 JSON', Upload, () => {
+      this.selectImportFile()
+    })
+    const exportStyles = this.iconButton('下载高亮样式 JSON', Download, () => {
+      this.downloadStyles()
+    })
     const close = this.iconButton('关闭对话框', X, () => this.close())
-    header.append(title, close)
+    headerActions.append(importStyles, exportStyles, close)
+    header.append(title, headerActions)
 
     const tabs = document.createElement('div')
     tabs.className = 'highlight-style-tabs'
@@ -213,18 +227,94 @@ export class HighlightStyleDialog {
     })
     const addDevice = this.button('新增设备', () => {
       const index = devices.length + 1
-      devices.push({
-        id: this.newId(`device-${index}`),
-        name: `设备 ${index}`,
-        states: [],
-        order: devices.length
-      })
+      devices.push(this.createDefaultDevice(index, devices.length))
       this.emitPreview()
       this.render()
     })
     addDevice.prepend(createPhaseIcon(Plus))
     section.append(addDevice)
     return section
+  }
+
+  private createDefaultDevice(index: number, order: number): DeviceStyleDefinition {
+    return {
+      id: this.newId(`device-${index}`),
+      name: `设备 ${index}`,
+      states: [
+        {
+          id: this.newId(`device-${index}-open`),
+          key: 'OPEN',
+          displayName: 'OPEN',
+          color: 0x00c853,
+          lineWidthPx: 3,
+          opacity: 1,
+          enabled: true,
+          autoHighlightFlow: true,
+          flowBehavior: 'conducting',
+          order: 0
+        },
+        {
+          id: this.newId(`device-${index}-close`),
+          key: 'CLOSE',
+          displayName: 'CLOSE',
+          color: 0xb8b8b8,
+          lineWidthPx: 3,
+          opacity: 1,
+          enabled: true,
+          autoHighlightFlow: false,
+          flowBehavior: 'blocking',
+          order: 1
+        }
+      ],
+      order
+    }
+  }
+
+  private downloadStyles() {
+    const presentationProfile = toPersistedPresentationProfile(
+      this.draft.presentationProfile
+    )
+    const blob = new Blob([
+      JSON.stringify({ presentationProfile }, null, 2)
+    ], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'highlight-styles.json'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  private selectImportFile() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'application/json,.json'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (file) void this.importStyles(file)
+    })
+    input.click()
+  }
+
+  private async importStyles(file: File) {
+    try {
+      const parsed: unknown = JSON.parse(await file.text())
+      if (!isRecord(parsed) || !isRecord(parsed.presentationProfile)) {
+        throw new Error('Invalid highlight style file')
+      }
+      const profile = parsed.presentationProfile
+      if (!Array.isArray(profile.deviceStyles) || !Array.isArray(profile.utilities)) {
+        throw new Error('Invalid highlight style file')
+      }
+      this.draft.presentationProfile = normalizePresentationProfile(profile)
+      this.emitPreview()
+      this.render()
+    } catch {
+      const locale = this.options.getLocale?.() ?? 'zh'
+      window.alert(locale === 'en'
+        ? 'Failed to import highlight styles. Select a valid JSON file.'
+        : '高亮样式导入失败，请选择有效的 JSON 文件。')
+    }
   }
 
   private renderDeviceState(
