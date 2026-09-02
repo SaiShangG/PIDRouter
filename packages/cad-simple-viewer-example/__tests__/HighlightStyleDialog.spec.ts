@@ -179,9 +179,9 @@ describe('HighlightStyleDialog', () => {
       onClose: jest.fn()
     })
     dialog.open()
-    ;[...dialog.element.querySelectorAll('button')]
-      .find(button => button.textContent?.includes('新增设备'))!
-      .click()
+      ;[...dialog.element.querySelectorAll('button')]
+        .find(button => button.textContent?.includes('新增设备'))!
+        .click()
 
     dialog.element.querySelector<HTMLButtonElement>('[aria-label="复制设备"]')!
       .click()
@@ -195,9 +195,9 @@ describe('HighlightStyleDialog', () => {
     expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="状态 key"]')]
       .map(input => input.value)).toEqual(['OPEN', 'OPEN_COPY', 'CLOSE', 'OPEN', 'CLOSE'])
 
-    ;[...dialog.element.querySelectorAll('button')]
-      .find(button => button.textContent === '应用')!
-      .click()
+      ;[...dialog.element.querySelectorAll('button')]
+        .find(button => button.textContent === '应用')!
+        .click()
     const devices = onApply.mock.calls[0][0].presentationProfile.devices
     expect(new Set(devices.map((device: { id: string }) => device.id)).size).toBe(2)
     expect(new Set(devices.flatMap((device: { states: Array<{ id: string }> }) =>
@@ -249,9 +249,9 @@ describe('HighlightStyleDialog', () => {
     expect(preview.textContent).toContain('导入预览')
     expect([...preview.querySelectorAll('.highlight-import-summary strong')]
       .map(item => item.textContent)).toEqual(['1', '1', '0'])
-    ;[...preview.querySelectorAll('button')]
-      .find(button => button.textContent === '确认导入')!
-      .click()
+      ;[...preview.querySelectorAll('button')]
+        .find(button => button.textContent === '确认导入')!
+        .click()
     expect(dialog.element.querySelector<HTMLInputElement>(
       '[aria-label="设备名称"]'
     )?.value).toBe('Filter')
@@ -317,12 +317,12 @@ describe('HighlightStyleDialog', () => {
     expect(preview.textContent).toContain('重复状态：Valve / OPEN')
     expect(preview.textContent).not.toContain('重复状态：Valve / CLOSE')
 
-    ;[...preview.querySelectorAll('button')]
-      .find(button => button.textContent === '替换全部配置')!
-      .click()
-    ;[...preview.querySelectorAll('button')]
-      .find(button => button.textContent === '确认导入')!
-      .click()
+      ;[...preview.querySelectorAll('button')]
+        .find(button => button.textContent === '替换全部配置')!
+        .click()
+      ;[...preview.querySelectorAll('button')]
+        .find(button => button.textContent === '确认导入')!
+        .click()
     expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="状态 key"]')]
       .map(input => input.value)).toEqual(['OPEN', 'CLOSE'])
     expect(dialog.element.querySelector<HTMLInputElement>('[aria-label="右键显示名称"]')
