@@ -15,6 +15,7 @@ export interface PhaseConfigImportLabels {
   confirm: string
   uploading: string
   complete: string
+  uploadFailed: string
 }
 
 export class PhaseConfigImportModal {
@@ -23,8 +24,7 @@ export class PhaseConfigImportModal {
   private files: File[] = []
   private labels?: PhaseConfigImportLabels
   private resolve?: (files?: File[]) => void
-  private progressTimer?: number
-  private completionTimer?: number
+  private submit?: (files: File[]) => Promise<void>
 
   constructor() {
     this.element.className = 'phase-config-import-modal'
@@ -44,9 +44,13 @@ export class PhaseConfigImportModal {
     document.body.append(this.element)
   }
 
-  open(labels: PhaseConfigImportLabels): Promise<File[] | undefined> {
+  open(
+    labels: PhaseConfigImportLabels,
+    submit: (files: File[]) => Promise<void>
+  ): Promise<File[] | undefined> {
     this.close()
     this.labels = labels
+    this.submit = submit
     this.files = []
     this.render()
     this.element.hidden = false
@@ -176,7 +180,7 @@ export class PhaseConfigImportModal {
     confirm.className = 'phase-config-import-confirm'
     confirm.textContent = labels.confirm
     confirm.disabled = true
-    confirm.addEventListener('click', () => this.startUpload())
+    confirm.addEventListener('click', () => void this.startUpload())
     footer.append(cancel, confirm)
     shell.append(header, body, footer)
     this.element.append(shell)
@@ -227,8 +231,8 @@ export class PhaseConfigImportModal {
     confirm.disabled = false
   }
 
-  private startUpload() {
-    if (this.files.length === 0 || !this.labels) return
+  private async startUpload() {
+    if (this.files.length === 0 || !this.labels || !this.submit) return
     const dropZone = this.element.querySelector<HTMLButtonElement>(
       '.phase-config-import-dropzone'
     )
@@ -247,29 +251,30 @@ export class PhaseConfigImportModal {
     confirm.disabled = true
     progress.hidden = false
     progressStatus.textContent = this.labels.uploading
-    let value = 0
-    this.progressTimer = window.setInterval(() => {
-      value = Math.min(100, value + 4)
-      progressValue.textContent = `${value}%`
-      progressTrack.setAttribute('aria-valuenow', String(value))
-      progressBar.style.width = `${value}%`
-      if (value < 100) return
-      this.clearProgressTimers()
+    try {
+      await this.submit(this.files)
+      progressValue.textContent = '100%'
+      progressTrack.setAttribute('aria-valuenow', '100')
+      progressBar.style.width = '100%'
       progressStatus.textContent = this.labels?.complete ?? ''
-      this.completionTimer = window.setTimeout(() => this.finish(this.files), 300)
-    }, 80)
+      this.finish(this.files)
+    } catch {
+      const validation = this.element.querySelector<HTMLParagraphElement>(
+        '.phase-config-import-validation'
+      )
+      if (validation) {
+        validation.textContent = this.labels.uploadFailed
+        validation.hidden = false
+      }
+      dropZone.disabled = false
+      confirm.disabled = false
+      progress.hidden = true
+    }
   }
 
   private formatFileSize(size: number) {
     if (size < 1024) return `${size} B`
     return `${(size / 1024).toFixed(1)} KB`
-  }
-
-  private clearProgressTimers() {
-    if (this.progressTimer !== undefined) window.clearInterval(this.progressTimer)
-    if (this.completionTimer !== undefined) window.clearTimeout(this.completionTimer)
-    this.progressTimer = undefined
-    this.completionTimer = undefined
   }
 
   private close() {
@@ -278,12 +283,12 @@ export class PhaseConfigImportModal {
 
   private finish(files?: File[]) {
     if (this.element.hidden) return
-    this.clearProgressTimers()
     this.element.hidden = true
     document.body.classList.remove('phase-config-import-modal-open')
     this.focusController.deactivate()
     const resolve = this.resolve
     this.resolve = undefined
+    this.submit = undefined
     resolve?.(files)
   }
 }
