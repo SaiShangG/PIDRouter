@@ -130,7 +130,7 @@ export class ReportWorkspaceModal {
   private matrixQuery = ''
   private matrixMessage = ''
   private activeTab: 'pdf' | 'matrix' = 'pdf'
-  private activePdfPanel: 'page' | 'export' | 'generated' = 'page'
+  private activePdfPanel: 'page' | 'generated' = 'page'
   private activeMatrixPanel: 'export' | 'generated' = 'export'
   private activeExportKind: 'pdf' | 'matrix' = 'pdf'
   private generatedReports: GeneratedReport[] = []
@@ -242,9 +242,11 @@ export class ReportWorkspaceModal {
       body.className = 'report-matrix-workspace'
       body.append(this.createMatrixPanel())
     }
-    shell.append(header, body)
     if (this.exportController && !this.exportController.signal.aborted) {
-      shell.append(this.createExportOverlay())
+      shell.classList.add('is-exporting')
+      shell.append(header, this.createExportStatus(), body)
+    } else {
+      shell.append(header, body)
     }
     this.element.append(shell)
     localizeDom(this.element, this.getLocale())
@@ -279,30 +281,31 @@ export class ReportWorkspaceModal {
     return tabs
   }
 
-  private createExportOverlay() {
-    const overlay = document.createElement('div')
-    overlay.className = 'report-export-overlay'
-    overlay.setAttribute('role', 'status')
-    overlay.setAttribute('aria-live', 'polite')
+  private createExportStatus() {
+    const status = document.createElement('div')
+    status.className = 'report-export-status'
+    status.setAttribute('role', 'status')
+    status.setAttribute('aria-live', 'polite')
     const spinner = document.createElement('div')
     spinner.className = 'report-export-spinner'
     spinner.setAttribute('aria-hidden', 'true')
+    const copy = document.createElement('div')
     const message = document.createElement('strong')
     message.textContent = this.activeExportKind === 'matrix'
       ? 'Matrix 正在后台生成，请稍候'
-      : 'PDF 正在生成中，请不要操作 Viewer'
-    overlay.append(spinner, message)
+      : 'PDF 正在后台生成，请稍候'
+    copy.append(message)
     if (this.exportProgress) {
       const progress = document.createElement('span')
       progress.textContent = this.getProgressText(this.exportProgress)
-      overlay.append(progress)
+      copy.append(progress)
     }
     const cancel = document.createElement('button')
     cancel.type = 'button'
     cancel.textContent = '取消生成'
     cancel.addEventListener('click', () => this.cancelExport())
-    overlay.append(cancel)
-    return overlay
+    status.append(spinner, copy, cancel)
+    return status
   }
 
   private cancelExport() {
@@ -497,8 +500,7 @@ export class ReportWorkspaceModal {
     tabs.setAttribute('role', 'tablist')
     tabs.setAttribute('aria-label', 'PDF 报告设置')
       ; ([
-        ['page', '页面设置'],
-        ['export', '导出设置'],
+        ['page', '页面设置&导出'],
         ['generated', `生成记录 ${this.generatedReports.length}`]
       ] as const).forEach(([value, label]) => {
         const button = document.createElement('button')
@@ -517,7 +519,6 @@ export class ReportWorkspaceModal {
     content.setAttribute('role', 'tabpanel')
     if (this.activePdfPanel === 'page') {
       content.append(this.createInspector(contexts, issues))
-    } else if (this.activePdfPanel === 'export') {
       const sequenceIds = new Set(this.getExportSequenceIds())
       const scopedIssues = issues.filter(issue => sequenceIds.has(issue.sequenceId))
       if (scopedIssues.length > 0) {
@@ -537,6 +538,7 @@ export class ReportWorkspaceModal {
     panel.className = 'report-page-inspector'
     const title = document.createElement('h3')
     title.textContent = '页面属性'
+    title.dataset.sectionNumber = '01'
     panel.append(title)
     if (!context) {
       if (issues.length > 0) panel.append(this.createIssueList(issues, contexts))
@@ -773,6 +775,7 @@ export class ReportWorkspaceModal {
     section.className = 'report-export-controls'
     const title = document.createElement('h3')
     title.textContent = '生成 PDF 报告'
+    title.dataset.sectionNumber = '02'
     const sequenceIds = this.getExportSequenceIds()
     const sequenceIdSet = new Set(sequenceIds)
     const scopedIssues = issues.filter(issue => sequenceIdSet.has(issue.sequenceId))

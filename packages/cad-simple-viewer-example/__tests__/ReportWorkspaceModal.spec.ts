@@ -96,7 +96,7 @@ const buttonByText = (text: string) =>
   )
 
 const openExportSettings = (locale: 'en' | 'zh' = 'zh') =>
-  buttonByText(locale === 'zh' ? '导出设置' : 'Export settings')?.click()
+  buttonByText(locale === 'zh' ? '页面设置&导出' : 'Page settings & export')?.click()
 
 describe('ReportWorkspaceModal', () => {
   afterEach(() => {
@@ -295,7 +295,9 @@ describe('ReportWorkspaceModal', () => {
     expect(pdfTab.getAttribute('aria-selected')).toBe('true')
     expect(document.querySelector('#pdfExportPanel')).not.toBeNull()
     expect(document.querySelector('.report-matrix-controls')).toBeNull()
-    buttonByText('导出设置')?.click()
+    expect(
+      document.querySelector('#pdfExportPanel .report-pdf-tabs')?.textContent
+    ).toBe('页面设置&导出生成记录 0')
     expect(buttonByText('每个序列一个 PDF（ZIP）')).not.toBeUndefined()
 
     matrixTab.click()
@@ -477,18 +479,21 @@ describe('ReportWorkspaceModal', () => {
 
     openExportSettings()
     buttonByText('合并为一个 PDF')?.click()
-    const overlay = document.querySelector('.report-export-overlay')
-    expect(overlay?.parentElement).toBe(
+    const status = document.querySelector('.report-export-status')
+    expect(status?.parentElement).toBe(
       document.querySelector('.report-workspace-shell')
     )
-    expect(overlay?.textContent).toContain(
-      'PDF 正在生成中，请不要操作 Viewer'
+    expect(status?.textContent).toContain(
+      'PDF 正在后台生成，请稍候'
+    )
+    expect(status?.nextElementSibling).toBe(
+      document.querySelector('.report-workspace-body')
     )
     expect(document.body.classList.contains('report-pdf-exporting')).toBe(true)
     expect(
       document.querySelector<HTMLButtonElement>('.report-icon-button')?.disabled
     ).toBe(true)
-    buttonByText('页面设置')?.click()
+    buttonByText('页面设置&导出')?.click()
     expect(buttonByText('从报告排除')?.disabled).toBe(true)
     modal.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(modal.element.hidden).toBe(false)
@@ -496,11 +501,11 @@ describe('ReportWorkspaceModal', () => {
     finishExport?.()
     await Promise.resolve()
     await Promise.resolve()
-    expect(document.querySelector('.report-export-overlay')).toBeNull()
+    expect(document.querySelector('.report-export-status')).toBeNull()
     expect(document.body.classList.contains('report-pdf-exporting')).toBe(false)
   })
 
-  it('localizes the overlay and aborts export when cancellation is requested', async () => {
+  it('localizes the status bar and aborts export when cancellation is requested', async () => {
     let exportSignal: AbortSignal | undefined
     const exportReport = jest.fn(
       (_options, signal: AbortSignal, onProgress) =>
@@ -524,21 +529,21 @@ describe('ReportWorkspaceModal', () => {
 
     openExportSettings('en')
     buttonByText('Merge into one PDF')?.click()
-    expect(document.querySelector('.report-export-overlay')?.textContent).toContain(
-      'Generating PDF. Please do not operate the Viewer.'
+    expect(document.querySelector('.report-export-status')?.textContent).toContain(
+      'Generating PDF in the background. Please wait.'
     )
-    expect(document.querySelector('.report-export-overlay')?.textContent).toContain(
+    expect(document.querySelector('.report-export-status')?.textContent).toContain(
       'Generating page 1 / 2'
     )
 
     buttonByText('Cancel generation')?.click()
     expect(exportSignal?.aborted).toBe(true)
-    expect(document.querySelector('.report-export-overlay')).toBeNull()
+    expect(document.querySelector('.report-export-status')).toBeNull()
     expect(document.body.textContent).toContain('Report generation canceled')
 
     await Promise.resolve()
     await Promise.resolve()
-    expect(document.querySelector('.report-export-overlay')).toBeNull()
+    expect(document.querySelector('.report-export-status')).toBeNull()
     expect(document.body.textContent).toContain('Report generation canceled')
   })
 
