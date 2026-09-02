@@ -1036,6 +1036,23 @@ export class ReportWorkspaceModal {
     const scopeTitle = document.createElement('h3')
     scopeTitle.textContent = 'Sequence / Phase 范围'
 
+    const processLabel = document.createElement('label')
+    processLabel.className = 'report-matrix-process-field'
+    processLabel.textContent = 'Process'
+    const processSelect = document.createElement('select')
+    processSelect.setAttribute('aria-label', 'Matrix Process')
+    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
+    processSelect.value = this.matrixProcessId
+    processSelect.disabled = Boolean(this.exportController)
+    processSelect.addEventListener('change', () => {
+      this.matrixProcessId = processSelect.value
+      this.selectAllMatrixScope()
+      this.initializeMatrixFileName()
+      this.matrixMessage = ''
+      this.render()
+    })
+    processLabel.append(processSelect)
+
     const search = document.createElement('input')
     search.type = 'search'
     search.value = this.matrixQuery
@@ -1132,28 +1149,12 @@ export class ReportWorkspaceModal {
       empty.textContent = '未找到匹配的 Sequence 或 Phase'
       scope.append(empty)
     }
-    scopePanel.append(scopeTitle, search, scopeActions, scope)
+    scopePanel.append(scopeTitle, processLabel, search, scopeActions, scope)
 
     const settingsPanel = document.createElement('section')
     settingsPanel.className = 'report-matrix-settings-panel'
     const title = document.createElement('h3')
     title.textContent = 'Matrix 导出设置'
-
-    const processLabel = document.createElement('label')
-    processLabel.textContent = 'Process'
-    const processSelect = document.createElement('select')
-    processSelect.setAttribute('aria-label', 'Matrix Process')
-    workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
-    processSelect.value = this.matrixProcessId
-    processSelect.disabled = Boolean(this.exportController)
-    processSelect.addEventListener('change', () => {
-      this.matrixProcessId = processSelect.value
-      this.selectAllMatrixScope()
-      this.initializeMatrixFileName()
-      this.matrixMessage = ''
-      this.render()
-    })
-    processLabel.append(processSelect)
 
     const fileNameLabel = document.createElement('label')
     fileNameLabel.textContent = '文件名'
@@ -1213,7 +1214,6 @@ export class ReportWorkspaceModal {
 
     settingsPanel.append(
       title,
-      processLabel,
       fileNameLabel,
       formatLabel,
       devices,

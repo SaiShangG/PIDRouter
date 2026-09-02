@@ -384,6 +384,52 @@ describe('ReportWorkspaceModal', () => {
     ).toBe(true)
   })
 
+  it('places Process in the scope panel and refreshes its Sequence tree', () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes.push({
+      ...state.processes[0],
+      id: 'process-2',
+      name: 'SIP',
+      sequences: [{
+        ...state.processes[0].sequences[0],
+        id: 'sip-sequence',
+        name: 'SIP cleaning',
+        phases: [{
+          ...state.processes[0].sequences[0].phases[0],
+          id: 'sip-phase',
+          name: 'SIP step'
+        }]
+      }]
+    })
+    createHarness('zh', state)
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+
+    const scopePanel = document.querySelector('.report-matrix-scope-panel')!
+    const process = scopePanel.querySelector<HTMLSelectElement>(
+      '[aria-label="Matrix Process"]'
+    )!
+    expect(document.querySelector(
+      '.report-matrix-settings-panel [aria-label="Matrix Process"]'
+    )).toBeNull()
+    expect(process.parentElement?.nextElementSibling?.getAttribute('type')).toBe('search')
+
+    process.value = 'process-2'
+    process.dispatchEvent(new Event('change'))
+
+    expect(document.querySelector('.report-matrix-tree')?.textContent).toContain(
+      'SIP step'
+    )
+    expect(document.querySelector('.report-matrix-tree')?.textContent).not.toContain(
+      'Step 2'
+    )
+    expect(document.querySelector<HTMLInputElement>(
+      '[aria-label="自定义 Matrix 文件名"]'
+    )?.value).toBe('SIP-matrix')
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 1 个 Sequence，1 个 Phase'
+    )
+  })
+
   it('normalizes a custom Matrix filename and shows export failure details', async () => {
     const exportMatrix = jest.fn(async () => {
       throw new Error('service unavailable')
