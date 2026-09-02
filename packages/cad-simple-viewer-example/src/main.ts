@@ -2218,8 +2218,11 @@ class CadViewerApp {
       const projectId = this.activeProjectId
       const files = await this.phaseConfigImportModal.open(
         this.getPhaseConfigImportLabels(),
-        async () => {
-          await this.processAssistantGeneralApi.run({ projectId })
+        async selectedFiles => {
+          await this.processAssistantGeneralApi.run({
+            files: selectedFiles,
+            projectId
+          })
         }
       )
       if (!files) return

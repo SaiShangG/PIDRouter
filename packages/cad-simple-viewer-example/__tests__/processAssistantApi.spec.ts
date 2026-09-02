@@ -118,20 +118,29 @@ describe('ProcessAssistantClient', () => {
 })
 
 describe('ProcessAssistant endpoint services', () => {
-  it('runs the general skill with the selected project', async () => {
+  it('uploads general skill files as multipart form data', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       new Response(null, { status: 204 })
     ) as jest.MockedFunction<typeof fetch>
     const general = new ProcessAssistantGeneralApi(createClient(fetchMock))
+    const files = [
+      new File(['first'], 'process.xlsx'),
+      new File(['second'], 'sequence.xls')
+    ]
 
-    await expect(general.run({ projectId: 10 })).resolves.toBeUndefined()
+    await expect(general.run({ files, projectId: 10 })).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith(
       'http://api.example.test/api/v1/Skill/general',
       expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ projectId: 10 })
+        method: 'POST'
       })
     )
+    const request = fetchMock.mock.calls[0][1]
+    const body = request?.body as FormData
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.getAll('files')).toEqual(files)
+    expect(body.get('projectId')).toBe('10')
+    expect((request?.headers as Headers).has('Content-Type')).toBe(false)
   })
 
   it('uses the direct skill export endpoints', async () => {
