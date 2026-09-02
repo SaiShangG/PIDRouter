@@ -19,6 +19,8 @@ import type {
   MatrixDeviceType,
   MatrixFormat
 } from '../api/processAssistantExportApi'
+import { ExcelPreviewModal } from '../excel/ExcelPreviewModal'
+import { injectExcelPreviewStyles } from '../excel/excelPreviewStyles'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import type {
@@ -156,6 +158,7 @@ export class ReportWorkspaceModal {
   private generatedReports: GeneratedReport[] = []
   private generatedMatrices: GeneratedMatrix[] = []
   private generatedReportSequence = 0
+  private readonly excelPreview: ExcelPreviewModal
   private readonly pdfPreview: PdfPreviewModal
   private readonly focusController = createModalFocusController(this.element)
 
@@ -166,6 +169,8 @@ export class ReportWorkspaceModal {
     private readonly getLocale: () => AppLocale = () => 'zh'
   ) {
     this.manifest = store.snapshot()
+    injectExcelPreviewStyles()
+    this.excelPreview = new ExcelPreviewModal(getLocale)
     this.pdfPreview = new PdfPreviewModal(getLocale)
     this.element.className = 'report-workspace-modal'
     this.element.hidden = true
@@ -211,6 +216,7 @@ export class ReportWorkspaceModal {
 
   refreshLocale() {
     if (!this.element.hidden) this.render()
+    this.excelPreview.refreshLocale()
   }
 
   private render() {
@@ -1091,6 +1097,9 @@ export class ReportWorkspaceModal {
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
       actions.append(
+        this.createFileAction(Eye, '查看 Matrix', () => {
+          void this.excelPreview.open(matrix.fileName, matrix.bytes)
+        }),
         this.createFileAction(Download, '下载 Matrix', () => {
           this.downloadFile(matrix.fileName, matrix.bytes, this.matrixMimeType(matrix.fileName))
         }),

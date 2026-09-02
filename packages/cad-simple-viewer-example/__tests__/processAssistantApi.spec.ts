@@ -120,7 +120,13 @@ describe('ProcessAssistantClient', () => {
 describe('ProcessAssistant endpoint services', () => {
   it('uploads general skill files as multipart form data', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
-      new Response(null, { status: 204 })
+      new Response(JSON.stringify({
+        success: true,
+        message: null,
+        result: 'general-task-id'
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
     ) as jest.MockedFunction<typeof fetch>
     const general = new ProcessAssistantGeneralApi(createClient(fetchMock))
     const files = [
@@ -135,7 +141,11 @@ describe('ProcessAssistant endpoint services', () => {
       name: 'CIP import',
       skillName: 'parse-config',
       jsonArgs: JSON.stringify({ overwrite: true })
-    })).resolves.toBeUndefined()
+    })).resolves.toEqual({
+      success: true,
+      message: null,
+      result: 'general-task-id'
+    })
     expect(fetchMock).toHaveBeenCalledWith(
       'http://api.example.test/api/v1/Skill/general',
       expect.objectContaining({

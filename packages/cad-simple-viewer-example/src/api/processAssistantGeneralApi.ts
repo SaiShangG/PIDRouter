@@ -9,6 +9,12 @@ export interface RunGeneralSkillRequest {
   jsonArgs?: string
 }
 
+export interface RunGeneralSkillResponse {
+  success: boolean
+  message: string | null
+  result: string | null
+}
+
 export class ProcessAssistantGeneralApi {
   constructor(private readonly client: ProcessAssistantClient) { }
 
@@ -20,7 +26,7 @@ export class ProcessAssistantGeneralApi {
     body.append('Name', request.name)
     body.append('SkillName', request.skillName)
     body.append('JsonArgs', request.jsonArgs ?? '{}')
-    return this.client.request<unknown>('POST', '/api/v1/Skill/general', {
+    return this.client.request<RunGeneralSkillResponse>('POST', '/api/v1/Skill/general', {
       body,
       signal
     })
