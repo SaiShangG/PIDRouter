@@ -9,9 +9,9 @@ describe('buildPhaseReportSelection', () => {
       processId: 'process-10',
       sequenceIds: ['sequence-20', 'sequence-30'],
       pages: [
-        { sequenceId: 'sequence-20', phaseId: 'phase-202' },
-        { sequenceId: 'sequence-20', phaseId: 'phase-203' },
-        { sequenceId: 'sequence-30', phaseId: 'phase-301' }
+        { processId: 'process-10', sequenceId: 'sequence-20', phaseId: 'phase-202' },
+        { processId: 'process-10', sequenceId: 'sequence-20', phaseId: 'phase-203' },
+        { processId: 'process-11', sequenceId: 'sequence-30', phaseId: 'phase-301' }
       ]
     }
 
@@ -20,9 +20,10 @@ describe('buildPhaseReportSelection', () => {
         Number(value.slice(value.lastIndexOf('-') + 1))
       )
     ).toEqual({
-      processId: 10,
-      sequences: {
+      10: {
         20: [202, 203],
+      },
+      11: {
         30: [301]
       }
     })

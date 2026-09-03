@@ -26,6 +26,7 @@ const pairs: TranslationPair[] = [
   ['切换为中文', 'Switch to Chinese'],
   ['报告', 'Report'], ['独立报告工作区', 'Independent report workspace'],
   ['PDF 报告页面', 'PDF report pages'], ['关闭报告工作区', 'Close report workspace'],
+  ['全部工艺', 'All processes'],
   ['Matrix 导出页面', 'Matrix export'], ['报告导出类型', 'Report export type'],
   ['导出 PDF', 'Export PDF'], ['配置并导出设备 Matrix', 'Configure and export device matrix'],
   ['搜索页码、序列或 Phase', 'Search page, sequence, or Phase'],

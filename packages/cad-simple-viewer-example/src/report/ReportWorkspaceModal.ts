@@ -38,6 +38,7 @@ import type {
   PhaseReportProgress
 } from './phaseReportExportTypes'
 import {
+  ALL_REPORT_PROCESSES_ID,
   type ReportManifest,
   ReportManifestStore,
   type ReportPageSlot,
@@ -78,6 +79,7 @@ export interface PhaseReportExportOptions {
   processId: string
   sequenceIds: string[]
   pages: Array<{
+    processId: string
     sequenceId: string
     phaseId: string
   }>
@@ -191,7 +193,10 @@ export class ReportWorkspaceModal {
 
   open() {
     const workspace = this.getWorkspace()
-    if (!workspace.processes.some(item => item.id === this.pdfProcessId)) {
+    if (
+      this.pdfProcessId !== ALL_REPORT_PROCESSES_ID &&
+      !workspace.processes.some(item => item.id === this.pdfProcessId)
+    ) {
       this.pdfProcessId = workspace.activeProcessId ?? workspace.processes[0]?.id ?? ''
     }
     this.manifest = this.store.reconcile(this.getPdfWorkspace(workspace))
@@ -361,6 +366,7 @@ export class ReportWorkspaceModal {
     processLabel.textContent = 'Process'
     const processSelect = document.createElement('select')
     processSelect.setAttribute('aria-label', 'PDF Process')
+    processSelect.add(new Option('全部工艺', ALL_REPORT_PROCESSES_ID))
     workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
     processSelect.value = this.pdfProcessId
     processSelect.disabled = Boolean(this.exportController)
@@ -372,6 +378,7 @@ export class ReportWorkspaceModal {
       this.filter = 'all'
       this.listScrollTop = 0
       this.exportSequenceIds.clear()
+      this.exportScope = 'all'
       this.exportFileName = ''
       this.initializePdfExportSelection(workspace)
       this.pendingWarningOptions = undefined
@@ -926,7 +933,7 @@ export class ReportWorkspaceModal {
     if (this.exportScope === 'selected') {
       const selected = document.createElement('div')
       selected.className = 'report-export-sequences'
-      this.getPdfProcess()?.sequences.forEach(sequence => {
+      this.getPdfProcesses().flatMap(process => process.sequences).forEach(sequence => {
         const option = document.createElement('label')
         const checkbox = document.createElement('input')
         checkbox.type = 'checkbox'
@@ -1467,9 +1474,7 @@ export class ReportWorkspaceModal {
         await this.addGeneratedReport(
           result,
           options.mode,
-          this.manifest.pages.filter(
-            page => options.sequenceIds.includes(page.sequenceId) && !page.excluded
-          ).length
+          options.pages.length
         )
         this.activePdfPanel = 'generated'
       }
@@ -1614,14 +1619,29 @@ export class ReportWorkspaceModal {
       ?? workspace.processes[0]
   }
 
+  private getPdfProcesses() {
+    const workspace = this.getWorkspace()
+    return this.pdfProcessId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : [this.getPdfProcess()].filter(
+          (process): process is ProcessDefinition => Boolean(process)
+        )
+  }
+
   private getPdfWorkspace(workspace: PhaseWorkspaceState): PhaseWorkspaceState {
     return { ...workspace, activeProcessId: this.pdfProcessId }
   }
 
   private initializePdfExportSelection(workspace: PhaseWorkspaceState) {
-    const process = workspace.processes.find(item => item.id === this.pdfProcessId)
-      ?? workspace.processes[0]
-    const validIds = new Set(process?.sequences.map(item => item.id))
+    const processes = this.pdfProcessId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : [workspace.processes.find(item => item.id === this.pdfProcessId)
+        ?? workspace.processes[0]].filter(
+          (process): process is ProcessDefinition => Boolean(process)
+        )
+    const validIds = new Set(
+      processes.flatMap(process => process.sequences.map(item => item.id))
+    )
     this.exportSequenceIds = new Set(
       [...this.exportSequenceIds].filter(id => validIds.has(id))
     )
@@ -1629,25 +1649,28 @@ export class ReportWorkspaceModal {
       this.exportSequenceIds = new Set(validIds)
     }
     if (!this.exportFileName) {
-      this.exportFileName = `${process?.name ?? 'process'}-report`
+      this.exportFileName = this.pdfProcessId === ALL_REPORT_PROCESSES_ID
+        ? 'all-processes-report'
+        : `${processes[0]?.name ?? 'process'}-report`
     }
   }
 
   private getExportSequenceIds() {
-    const process = this.getPdfProcess()
-    if (!process) return []
+    const processes = this.getPdfProcesses()
+    if (processes.length === 0) return []
     if (this.exportScope === 'current') {
+      const process = processes[0]
       const current = process.sequences.find(
         item => item.id === process.activeSequenceId
       ) ?? process.sequences[0]
       return current ? [current.id] : []
     }
     if (this.exportScope === 'selected') {
-      return process.sequences
+      return processes.flatMap(process => process.sequences)
         .filter(item => this.exportSequenceIds.has(item.id))
         .map(item => item.id)
     }
-    return process.sequences.map(item => item.id)
+    return processes.flatMap(process => process.sequences.map(item => item.id))
   }
 
   private getExportOptions(mode: PhaseReportOutputMode): PhaseReportExportOptions {
@@ -1667,7 +1690,8 @@ export class ReportWorkspaceModal {
           page => selectedSequenceIds.has(page.sequenceId) && !page.excluded
         )
         .map(page => ({
-          sequenceId: page.sequenceId,
+          processId: page.replacement?.processId ?? page.processId,
+          sequenceId: page.replacement?.sequenceId ?? page.sequenceId,
           phaseId: page.replacement?.phaseId ?? page.phaseId
         }))
     }

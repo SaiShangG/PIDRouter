@@ -742,14 +742,13 @@ class CadViewerApp {
     if (this.activeProjectId === undefined) {
       throw new Error('PDF export requires an active Project')
     }
-    const { processId, sequences } = buildPhaseReportSelection(
+    const selection = buildPhaseReportSelection(
       options,
       (value, label) => this.requireExportBackendId(value, label)
     )
     const total = options.pages.length
     const exportedFile = await this.createFlowPathExport(
-      processId,
-      sequences,
+      selection,
       options.fileName,
       options.mode === 'merged',
       signal
@@ -763,15 +762,14 @@ class CadViewerApp {
   }
 
   private async createFlowPathExport(
-    processId: number,
-    sequences: Record<string, number[]>,
+    selection: Record<string, Record<string, number[]>>,
     fileName: string,
     isPdfMerge: boolean,
     signal: AbortSignal
   ) {
     const response = await this.processAssistantFlowPathApi.create({
       projectId: this.activeProjectId!,
-      selection: { [processId]: sequences },
+      selection,
       name: fileName,
       isPdfMerge
     }, signal)

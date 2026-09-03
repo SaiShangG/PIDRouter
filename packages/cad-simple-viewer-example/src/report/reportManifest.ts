@@ -2,6 +2,7 @@ import type { PhaseWorkspaceState } from '../phase/types'
 
 export const REPORT_MANIFEST_STORAGE_KEY =
   'cad-simple-viewer-example-report-manifest'
+export const ALL_REPORT_PROCESSES_ID = 'all'
 
 export interface PhaseReportPageSource {
   kind: 'phase'
@@ -128,10 +129,13 @@ export class ReportManifestStore {
       this.manifest.pages.map(slot => [pageKey(slot.sequenceId, slot.phaseId), slot])
     )
     const pages: ReportPageSlot[] = []
-    const process =
-      workspace.processes.find(item => item.id === workspace.activeProcessId) ??
-      workspace.processes[0]
-    if (process) {
+    const processes = workspace.activeProcessId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : [
+          workspace.processes.find(item => item.id === workspace.activeProcessId) ??
+          workspace.processes[0]
+        ].filter((process): process is NonNullable<typeof process> => Boolean(process))
+    for (const process of processes) {
       for (const sequence of process.sequences) {
         for (const phase of sequence.phases) {
           const previous = existing.get(pageKey(sequence.id, phase.id))
@@ -149,7 +153,9 @@ export class ReportManifestStore {
         }
       }
     }
-    this.manifest.processId = process?.id
+    this.manifest.processId = workspace.activeProcessId === ALL_REPORT_PROCESSES_ID
+      ? ALL_REPORT_PROCESSES_ID
+      : processes[0]?.id
     this.manifest.pages = pages
     this.manifest.updatedAt = this.now()
     return this.snapshot()
@@ -184,9 +190,9 @@ export class ReportManifestStore {
   preflight(workspace: PhaseWorkspaceState): ReportPreflightIssue[] {
     const issues: ReportPreflightIssue[] = []
     const phaseLocations = new Map<string, { processId: string; sequenceId: string }>()
-    const reportProcesses = workspace.processes.filter(
-      process => process.id === this.manifest.processId
-    )
+    const reportProcesses = this.manifest.processId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : workspace.processes.filter(process => process.id === this.manifest.processId)
     for (const process of reportProcesses) {
       for (const sequence of process.sequences) {
         if (sequence.phases.length === 0) {

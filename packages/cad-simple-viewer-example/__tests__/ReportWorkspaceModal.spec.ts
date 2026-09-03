@@ -173,8 +173,8 @@ describe('ReportWorkspaceModal', () => {
         processId: 'process',
         sequenceIds: ['sequence'],
         pages: [
-          { sequenceId: 'sequence', phaseId: 'phase-1' },
-          { sequenceId: 'sequence', phaseId: 'phase-2' }
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-1' },
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-2' }
         ]
       },
       expect.any(AbortSignal),
@@ -209,8 +209,8 @@ describe('ReportWorkspaceModal', () => {
     expect(exportReport).toHaveBeenCalledWith(
       expect.objectContaining({
         pages: [
-          { sequenceId: 'sequence', phaseId: 'phase-3' },
-          { sequenceId: 'sequence', phaseId: 'phase-3' }
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-3' },
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-3' }
         ]
       }),
       expect.any(AbortSignal),
@@ -298,6 +298,47 @@ describe('ReportWorkspaceModal', () => {
     )?.value).toBe('SIP-report')
   })
 
+  it('exports every Process when All processes is selected', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes.push({
+      ...state.processes[0],
+      id: 'process-2',
+      name: 'SIP',
+      sequences: [{
+        ...state.processes[0].sequences[0],
+        id: 'sequence-2',
+        phases: [{
+          ...state.processes[0].sequences[0].phases[0],
+          id: 'phase-3'
+        }]
+      }]
+    })
+    const { exportReport } = createHarness('en', state)
+    const process = document.querySelector<HTMLSelectElement>(
+      '.report-page-browser [aria-label="PDF Process"]'
+    )!
+
+    process.value = 'all'
+    process.dispatchEvent(new Event('change'))
+    openExportSettings('en')
+    buttonByText('Merge into one PDF')?.click()
+    await Promise.resolve()
+
+    expect(exportReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processId: 'all',
+        sequenceIds: ['sequence', 'sequence-2'],
+        pages: [
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-1' },
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-2' },
+          { processId: 'process-2', sequenceId: 'sequence-2', phaseId: 'phase-3' }
+        ]
+      }),
+      expect.any(AbortSignal),
+      expect.any(Function)
+    )
+  })
+
   it('exports the current Sequence with a custom filename', async () => {
     const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
     state.activeProcessId = 'process'
@@ -324,8 +365,8 @@ describe('ReportWorkspaceModal', () => {
         processId: 'process',
         sequenceIds: ['sequence'],
         pages: [
-          { sequenceId: 'sequence', phaseId: 'phase-1' },
-          { sequenceId: 'sequence', phaseId: 'phase-2' }
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-1' },
+          { processId: 'process', sequenceId: 'sequence', phaseId: 'phase-2' }
         ]
       },
       expect.any(AbortSignal),
@@ -367,8 +408,8 @@ describe('ReportWorkspaceModal', () => {
         processId: 'process',
         sequenceIds: ['sequence-2'],
         pages: [
-          { sequenceId: 'sequence-2', phaseId: 'phase-1-second' },
-          { sequenceId: 'sequence-2', phaseId: 'phase-2-second' }
+          { processId: 'process', sequenceId: 'sequence-2', phaseId: 'phase-1-second' },
+          { processId: 'process', sequenceId: 'sequence-2', phaseId: 'phase-2-second' }
         ]
       },
       expect.any(AbortSignal),
