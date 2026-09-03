@@ -48,9 +48,12 @@ export class HighlightStyleDialog {
   private draft: HighlightStyleDraft
   private activeTab: 'device' | 'utility' = 'device'
   private readonly focusController = createModalFocusController(this.element)
-  private readonly confirmationModal = new ConfirmationModal()
+  private readonly confirmationModal: ConfirmationModal
 
   constructor(private readonly options: HighlightStyleDialogOptions) {
+    this.confirmationModal = new ConfirmationModal(
+      () => this.options.getLocale?.() ?? 'zh'
+    )
     this.draft = cloneDraft(options.value)
     this.element.className = 'phase-workspace-modal highlight-style-modal'
     this.element.hidden = true

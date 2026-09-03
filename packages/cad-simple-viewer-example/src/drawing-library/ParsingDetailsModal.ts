@@ -2,8 +2,8 @@ import { FileJson, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
-import { localizeDom } from '../uiTranslations'
 import { createModalFocusController } from '../ui/modalFocus'
+import { localizeDom } from '../uiTranslations'
 import type { DrawingRecord } from './types'
 
 export class ParsingDetailsModal {
