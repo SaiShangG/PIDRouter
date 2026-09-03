@@ -1,9 +1,11 @@
 import { FolderPlus, Pencil, Save, Search, Trash2, X } from 'lucide'
 
 import type { DrawingRecord, DrawingRepository } from '../drawing-library/types'
+import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
+import { localizeDom } from '../uiTranslations'
 import type { ProjectRecord, ProjectRepository } from './types'
 
 export interface ProjectManagementModalOptions {
@@ -38,14 +40,16 @@ export class ProjectManagementModal {
   private isEditing = true
   private busy = false
   private message = ''
-  private readonly confirmationModal = new ConfirmationModal()
+  private readonly confirmationModal: ConfirmationModal
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(
     private readonly repository: ProjectRepository,
     private readonly drawingRepository: Pick<DrawingRepository, 'list'>,
-    private readonly options: ProjectManagementModalOptions = {}
+    private readonly options: ProjectManagementModalOptions = {},
+    private readonly getLocale: () => AppLocale = () => 'zh'
   ) {
+    this.confirmationModal = new ConfirmationModal(getLocale)
     this.element.className = 'project-management-modal'
     this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
@@ -109,6 +113,7 @@ export class ProjectManagementModal {
     body.append(this.createProjectList(), this.createEditor())
     shell.append(body)
     this.element.append(shell)
+    localizeDom(this.element, this.getLocale())
   }
 
   private createHeader() {

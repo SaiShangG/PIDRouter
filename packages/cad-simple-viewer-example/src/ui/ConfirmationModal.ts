@@ -1,6 +1,8 @@
 import { AlertTriangle, X } from 'lucide'
 
+import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
+import { localizeDom } from '../uiTranslations'
 import { createModalFocusController } from './modalFocus'
 
 export interface ConfirmationModalOptions {
@@ -16,7 +18,7 @@ export class ConfirmationModal {
   private resolve?: (confirmed: boolean) => void
   private readonly focusController = createModalFocusController(this.element)
 
-  constructor() {
+  constructor(private readonly getLocale: () => AppLocale = () => 'zh') {
     this.element.className = 'confirmation-modal'
     this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
@@ -87,6 +89,7 @@ export class ConfirmationModal {
     actions.append(cancel, confirm)
     shell.append(header, message, actions)
     this.element.append(shell)
+    localizeDom(this.element, this.getLocale())
   }
 
   private close(confirmed: boolean) {

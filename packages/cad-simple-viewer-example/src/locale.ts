@@ -100,7 +100,7 @@ const messages = {
     phaseSaved: 'Phase saved',
     phaseSaveFailed: 'Failed to save Phase',
     noPhase: 'No Phase created',
-    switchTo: '切换为中文',
+    switchTo: 'Switch to Chinese',
     languageButton: 'Switch to Chinese'
   }
 } as const

@@ -1,8 +1,10 @@
 import { Eye, FileJson, RotateCcw, Search, Trash2, Upload, X } from 'lucide'
 
+import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
+import { localizeDom } from '../uiTranslations'
 import { ParsingDetailsModal } from './ParsingDetailsModal'
 import type { DrawingRecord, DrawingRepository } from './types'
 
@@ -47,14 +49,17 @@ export class DrawingLibraryModal {
   private drawingNumber = ''
   private busy = false
   private message = ''
-  private readonly confirmationModal = new ConfirmationModal()
-  private readonly parsingDetailsModal = new ParsingDetailsModal()
+  private readonly confirmationModal: ConfirmationModal
+  private readonly parsingDetailsModal: ParsingDetailsModal
   private readonly focusController = createModalFocusController(this.element)
 
   constructor(
     private readonly repository: DrawingRepository,
-    private readonly actions: DrawingLibraryActions
+    private readonly actions: DrawingLibraryActions,
+    private readonly getLocale: () => AppLocale = () => 'zh'
   ) {
+    this.confirmationModal = new ConfirmationModal(getLocale)
+    this.parsingDetailsModal = new ParsingDetailsModal(getLocale)
     this.element.className = 'drawing-library-modal'
     this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
@@ -108,6 +113,7 @@ export class DrawingLibraryModal {
     body.append(this.createUploadPanel(), this.createLibraryPanel())
     shell.append(body)
     this.element.append(shell)
+    localizeDom(this.element, this.getLocale())
   }
 
   private createHeader() {

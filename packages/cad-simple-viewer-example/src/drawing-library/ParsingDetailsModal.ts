@@ -1,6 +1,8 @@
 import { FileJson, X } from 'lucide'
 
+import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
+import { localizeDom } from '../uiTranslations'
 import { createModalFocusController } from '../ui/modalFocus'
 import type { DrawingRecord } from './types'
 
@@ -8,7 +10,7 @@ export class ParsingDetailsModal {
   readonly element = document.createElement('div')
   private readonly focusController = createModalFocusController(this.element)
 
-  constructor() {
+  constructor(private readonly getLocale: () => AppLocale = () => 'zh') {
     this.element.className = 'parsing-details-modal'
     this.element.hidden = true
     this.element.setAttribute('role', 'dialog')
@@ -94,6 +96,7 @@ export class ParsingDetailsModal {
     body.append(warningSection)
     shell.append(header, body)
     this.element.append(shell)
+    localizeDom(this.element, this.getLocale())
     this.element.hidden = false
     document.body.classList.add('parsing-details-open')
     this.focusController.activate(close)

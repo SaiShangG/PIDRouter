@@ -683,7 +683,8 @@ class CadViewerApp {
       this.drawingLibraryRepository,
       {
         open: record => this.openLibraryDrawing(record)
-      }
+      },
+      () => this.appLocale
     )
     this.pidDrawingLibraryButton.addEventListener('click', () => {
       this.captureLoadedPhaseState()
@@ -699,7 +700,8 @@ class CadViewerApp {
       {
         onSelect: project => this.switchProject(project),
         onDelete: projectId => this.handleDeletedProject(projectId)
-      }
+      },
+      () => this.appLocale
     )
     this.projectManagementButton.addEventListener('click', () => {
       void this.projectManagement?.open()
