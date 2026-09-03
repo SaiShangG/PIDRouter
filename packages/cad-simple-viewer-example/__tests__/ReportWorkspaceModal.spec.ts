@@ -320,6 +320,20 @@ describe('ReportWorkspaceModal', () => {
 
     process.value = 'all'
     process.dispatchEvent(new Event('change'))
+    const sequenceLabels = [
+      ...document.querySelectorAll<HTMLElement>('.report-sequence-node')
+    ].map(node => node.textContent)
+    expect(sequenceLabels).toEqual(expect.arrayContaining([
+      expect.stringContaining('CIP · 序列 01 · Tank cleaning'),
+      expect.stringContaining('SIP · 序列 01 · Tank cleaning')
+    ]))
+    const sequenceOptions = [
+      ...document.querySelectorAll<HTMLOptionElement>('[aria-label="Filter by sequence"] option')
+    ].map(option => option.textContent)
+    expect(sequenceOptions).toEqual(expect.arrayContaining([
+      'CIP · 序列 01 · Tank cleaning',
+      'SIP · 序列 01 · Tank cleaning'
+    ]))
     openExportSettings('en')
     buttonByText('Merge into one PDF')?.click()
     await Promise.resolve()

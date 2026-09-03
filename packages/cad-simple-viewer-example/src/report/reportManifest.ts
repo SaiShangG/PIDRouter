@@ -82,11 +82,11 @@ export class ReportManifestStore {
     this.manifest = initialManifest
       ? cloneManifest(initialManifest)
       : {
-          id: this.createId(),
-          pages: [],
-          createdAt: timestamp,
-          updatedAt: timestamp
-        }
+        id: this.createId(),
+        pages: [],
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
   }
 
   static load(
@@ -132,9 +132,9 @@ export class ReportManifestStore {
     const processes = workspace.activeProcessId === ALL_REPORT_PROCESSES_ID
       ? workspace.processes
       : [
-          workspace.processes.find(item => item.id === workspace.activeProcessId) ??
-          workspace.processes[0]
-        ].filter((process): process is NonNullable<typeof process> => Boolean(process))
+        workspace.processes.find(item => item.id === workspace.activeProcessId) ??
+        workspace.processes[0]
+      ].filter((process): process is NonNullable<typeof process> => Boolean(process))
     for (const process of processes) {
       for (const sequence of process.sequences) {
         for (const phase of sequence.phases) {
@@ -143,12 +143,12 @@ export class ReportManifestStore {
             previous
               ? { ...cloneSlot(previous), processId: process.id }
               : {
-                  id: this.createId(),
-                  processId: process.id,
-                  sequenceId: sequence.id,
-                  phaseId: phase.id,
-                  excluded: false
-                }
+                id: this.createId(),
+                processId: process.id,
+                sequenceId: sequence.id,
+                phaseId: phase.id,
+                excluded: false
+              }
           )
         }
       }

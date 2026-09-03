@@ -426,8 +426,11 @@ export class ReportWorkspaceModal {
     contexts.forEach(context => {
       if (!context.sequence || seenSequenceIds.has(context.sequence.id)) return
       seenSequenceIds.add(context.sequence.id)
+      const processPrefix = this.pdfProcessId === ALL_REPORT_PROCESSES_ID
+        ? `${context.process?.name ?? 'Process'} · `
+        : ''
       sequence.add(new Option(
-        `序列 ${String(context.sequence.number).padStart(2, '0')} · ${context.sequence.name}`,
+        `${processPrefix}序列 ${String(context.sequence.number).padStart(2, '0')} · ${context.sequence.name}`,
         context.sequence.id
       ))
     })
@@ -522,7 +525,10 @@ export class ReportWorkspaceModal {
         `${expanded ? '折叠' : '展开'}序列 ${first.sequence?.number ?? 0}`
       )
       const sequenceIdentity = document.createElement('span')
-      sequenceIdentity.textContent = `序列 ${String(first.sequence?.number ?? 0).padStart(2, '0')} · ${first.sequence?.name ?? '来源缺失'}`
+      const processPrefix = this.pdfProcessId === ALL_REPORT_PROCESSES_ID
+        ? `${first.process?.name ?? 'Process'} · `
+        : ''
+      sequenceIdentity.textContent = `${processPrefix}序列 ${String(first.sequence?.number ?? 0).padStart(2, '0')} · ${first.sequence?.name ?? '来源缺失'}`
       const count = document.createElement('span')
       count.className = 'report-sequence-count'
       count.textContent = `${groupContexts.length} 个 Phase`
@@ -1624,8 +1630,8 @@ export class ReportWorkspaceModal {
     return this.pdfProcessId === ALL_REPORT_PROCESSES_ID
       ? workspace.processes
       : [this.getPdfProcess()].filter(
-          (process): process is ProcessDefinition => Boolean(process)
-        )
+        (process): process is ProcessDefinition => Boolean(process)
+      )
   }
 
   private getPdfWorkspace(workspace: PhaseWorkspaceState): PhaseWorkspaceState {
