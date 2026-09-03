@@ -801,7 +801,7 @@ class CadViewerApp {
         const timeout = window.setTimeout(() => {
           signal.removeEventListener('abort', handleAbort)
           resolve()
-        }, 1000)
+        }, 4000)
         signal.addEventListener('abort', handleAbort, { once: true })
       })
     }
