@@ -167,7 +167,10 @@ import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
 import { buildPhaseReportSelection } from './report/buildPhaseReportSelection'
 import type { PhaseReportProgress } from './report/phaseReportExportTypes'
-import { ReportManifestStore } from './report/reportManifest'
+import {
+  ALL_REPORT_PROCESSES_ID,
+  ReportManifestStore
+} from './report/reportManifest'
 import {
   type MatrixExportSelection,
   type PhaseReportExportOptions,
@@ -816,27 +819,32 @@ class CadViewerApp {
     if (this.activeProjectId === undefined) {
       throw new Error('Matrix export requires an active Project')
     }
-    const processId = this.requireExportBackendId(selection.processId, 'Process')
     const selectedSequenceIds = new Set(selection.sequenceIds)
     const selectedPhaseIds = new Set(selection.phaseIds)
-    const process = this.phaseStore.snapshot().processes.find(
-      item => item.id === selection.processId
-    )
-    if (!process) throw new Error('Selected Process does not exist')
-    const sequences = Object.fromEntries(
-      process.sequences
-        .filter(sequence => selectedSequenceIds.has(sequence.id))
-        .map(sequence => [
-          String(this.requireExportBackendId(sequence.id, 'Sequence')),
-          sequence.phases
-            .filter(phase => selectedPhaseIds.has(phase.id))
-            .map(phase => this.requireExportBackendId(phase.id, 'Phase'))
-        ])
-        .filter(([, phaseIds]) => phaseIds.length > 0)
+    const workspace = this.phaseStore.snapshot()
+    const processes = selection.processId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : workspace.processes.filter(item => item.id === selection.processId)
+    if (processes.length === 0) throw new Error('Selected Process does not exist')
+    const matrixSelection = Object.fromEntries(
+      processes.map(process => [
+        String(this.requireExportBackendId(process.id, 'Process')),
+        Object.fromEntries(
+          process.sequences
+            .filter(sequence => selectedSequenceIds.has(sequence.id))
+            .map(sequence => [
+              String(this.requireExportBackendId(sequence.id, 'Sequence')),
+              sequence.phases
+                .filter(phase => selectedPhaseIds.has(phase.id))
+                .map(phase => this.requireExportBackendId(phase.id, 'Phase'))
+            ])
+            .filter(([, phaseIds]) => phaseIds.length > 0)
+        )
+      ]).filter(([, sequences]) => Object.keys(sequences).length > 0)
     )
     const response = await this.processAssistantMatrixApi.create({
       projectId: this.activeProjectId,
-      selection: { [processId]: sequences },
+      selection: matrixSelection,
       name: selection.fileName
     }, signal)
     if (!response.success || !response.result) {

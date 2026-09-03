@@ -125,6 +125,8 @@ export class ReportWorkspaceModal {
   private manifest: ReportManifest
   private selectedSlotId?: string
   private collapsedPdfSequenceIds = new Set<string>()
+  private collapsedMatrixProcessIds = new Set<string>()
+  private collapsedMatrixSequenceIds = new Set<string>()
   private query = ''
   private sequenceFilterId = 'all'
   private filter: 'all' | 'excluded' | 'replaced' | 'issues' = 'all'
@@ -1138,7 +1140,7 @@ export class ReportWorkspaceModal {
 
   private createMatrixExportControls() {
     const workspace = this.getWorkspace()
-    const process = workspace.processes.find(item => item.id === this.matrixProcessId)
+    const processes = this.getMatrixProcesses(workspace)
     const section = document.createElement('section')
     section.className = 'report-matrix-controls'
 
@@ -1152,6 +1154,7 @@ export class ReportWorkspaceModal {
     processLabel.textContent = 'Process'
     const processSelect = document.createElement('select')
     processSelect.setAttribute('aria-label', 'Matrix Process')
+    processSelect.add(new Option('全部工艺', ALL_REPORT_PROCESSES_ID))
     workspace.processes.forEach(item => processSelect.add(new Option(item.name, item.id)))
     processSelect.value = this.matrixProcessId
     processSelect.disabled = Boolean(this.exportController)
@@ -1186,7 +1189,7 @@ export class ReportWorkspaceModal {
         const button = document.createElement('button')
         button.type = 'button'
         button.textContent = label
-        button.disabled = Boolean(this.exportController) || !process
+        button.disabled = Boolean(this.exportController)
         button.addEventListener('click', () => {
           action()
           this.matrixMessage = ''
@@ -1200,60 +1203,132 @@ export class ReportWorkspaceModal {
     scope.setAttribute('role', 'group')
     scope.setAttribute('aria-label', 'Sequence / Phase 范围')
     const query = this.matrixQuery.trim().toLocaleLowerCase()
-    process?.sequences.forEach(sequence => {
-      const visiblePhases = query
-        ? sequence.phases.filter(phase =>
-          phase.name.toLocaleLowerCase().includes(query) ||
-          String(phase.number).includes(query)
-        )
-        : sequence.phases
-      const sequenceMatches = !query ||
-        sequence.name.toLocaleLowerCase().includes(query) ||
-        String(sequence.number).includes(query)
-      if (!sequenceMatches && visiblePhases.length === 0) return
-
-      const group = document.createElement('div')
-      group.className = 'report-matrix-sequence'
-      const selectedPhaseCount = sequence.phases.filter(phase =>
-        this.matrixPhaseIds.has(phase.id)
+    processes.forEach(item => {
+      const processMatches = !query || item.name.toLocaleLowerCase().includes(query)
+      const processExpanded = Boolean(query) || !this.collapsedMatrixProcessIds.has(item.id)
+      const processGroup = document.createElement('section')
+      processGroup.className = 'report-matrix-process'
+      processGroup.setAttribute('role', 'group')
+      const processPhaseIds = item.sequences.flatMap(sequence =>
+        sequence.phases.map(phase => phase.id)
+      )
+      const selectedProcessPhaseCount = processPhaseIds.filter(id =>
+        this.matrixPhaseIds.has(id)
       ).length
-      group.append(this.createMatrixCheckbox(
-        `Sequence ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
-        sequence.phases.length > 0 && selectedPhaseCount === sequence.phases.length,
-        checked => {
-          if (checked) {
-            this.matrixSequenceIds.add(sequence.id)
-            sequence.phases.forEach(phase => this.matrixPhaseIds.add(phase.id))
-          } else {
-            this.matrixSequenceIds.delete(sequence.id)
-            sequence.phases.forEach(phase => this.matrixPhaseIds.delete(phase.id))
-          }
-          this.render()
-        },
-        selectedPhaseCount > 0 && selectedPhaseCount < sequence.phases.length
-      ))
-      const phases = sequenceMatches ? sequence.phases : visiblePhases
-      phases.forEach(phase => {
-        const option = this.createMatrixCheckbox(
-          `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`,
-          this.matrixPhaseIds.has(phase.id),
-          checked => {
-            if (checked) {
-              this.matrixPhaseIds.add(phase.id)
-              this.matrixSequenceIds.add(sequence.id)
-            } else {
-              this.matrixPhaseIds.delete(phase.id)
-              if (!sequence.phases.some(item => this.matrixPhaseIds.has(item.id))) {
-                this.matrixSequenceIds.delete(sequence.id)
-              }
-            }
+      if (this.matrixProcessId === ALL_REPORT_PROCESSES_ID) {
+        const processHeader = document.createElement('div')
+        processHeader.className = 'report-matrix-process-header'
+        const processToggle = this.createMatrixTreeToggle(
+          processExpanded,
+          `Process ${item.name}`,
+          () => {
+            if (processExpanded) this.collapsedMatrixProcessIds.add(item.id)
+            else this.collapsedMatrixProcessIds.delete(item.id)
             this.render()
           }
         )
-        option.classList.add('is-phase')
-        group.append(option)
+        const processOption = this.createMatrixCheckbox(
+          `Process · ${item.name}`,
+          processPhaseIds.length > 0 && selectedProcessPhaseCount === processPhaseIds.length,
+          checked => {
+            if (checked) {
+              item.sequences.forEach(sequence => {
+                this.matrixSequenceIds.add(sequence.id)
+                sequence.phases.forEach(phase => this.matrixPhaseIds.add(phase.id))
+              })
+            } else {
+              item.sequences.forEach(sequence => {
+                this.matrixSequenceIds.delete(sequence.id)
+                sequence.phases.forEach(phase => this.matrixPhaseIds.delete(phase.id))
+              })
+            }
+            this.render()
+          },
+          selectedProcessPhaseCount > 0 && selectedProcessPhaseCount < processPhaseIds.length
+        )
+        processOption.classList.add('report-matrix-process-option')
+        processHeader.append(processToggle, processOption)
+        processGroup.append(processHeader)
+      }
+      const sequencesGroup = document.createElement('div')
+      sequencesGroup.className = 'report-matrix-process-sequences'
+      sequencesGroup.hidden = !processExpanded
+      item.sequences.forEach(sequence => {
+        const visiblePhases = query && !processMatches
+          ? sequence.phases.filter(phase =>
+            phase.name.toLocaleLowerCase().includes(query) ||
+            String(phase.number).includes(query)
+          )
+          : sequence.phases
+        const sequenceMatches = processMatches ||
+          sequence.name.toLocaleLowerCase().includes(query) ||
+          String(sequence.number).includes(query)
+        if (!sequenceMatches && visiblePhases.length === 0) return
+
+        const group = document.createElement('div')
+        group.className = 'report-matrix-sequence'
+        const sequenceExpanded = Boolean(query) ||
+          !this.collapsedMatrixSequenceIds.has(sequence.id)
+        const selectedPhaseCount = sequence.phases.filter(phase =>
+          this.matrixPhaseIds.has(phase.id)
+        ).length
+        const sequenceHeader = document.createElement('div')
+        sequenceHeader.className = 'report-matrix-sequence-header'
+        const sequenceToggle = this.createMatrixTreeToggle(
+          sequenceExpanded,
+          `Sequence ${sequence.number}`,
+          () => {
+            if (sequenceExpanded) this.collapsedMatrixSequenceIds.add(sequence.id)
+            else this.collapsedMatrixSequenceIds.delete(sequence.id)
+            this.render()
+          }
+        )
+        const sequenceOption = this.createMatrixCheckbox(
+          `Sequence ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
+          sequence.phases.length > 0 && selectedPhaseCount === sequence.phases.length,
+          checked => {
+            if (checked) {
+              this.matrixSequenceIds.add(sequence.id)
+              sequence.phases.forEach(phase => this.matrixPhaseIds.add(phase.id))
+            } else {
+              this.matrixSequenceIds.delete(sequence.id)
+              sequence.phases.forEach(phase => this.matrixPhaseIds.delete(phase.id))
+            }
+            this.render()
+          },
+          selectedPhaseCount > 0 && selectedPhaseCount < sequence.phases.length
+        )
+        sequenceHeader.append(sequenceToggle, sequenceOption)
+        group.append(sequenceHeader)
+        const phasesGroup = document.createElement('div')
+        phasesGroup.className = 'report-matrix-phases'
+        phasesGroup.hidden = !sequenceExpanded
+        const phases = sequenceMatches ? sequence.phases : visiblePhases
+        phases.forEach(phase => {
+          const option = this.createMatrixCheckbox(
+            `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`,
+            this.matrixPhaseIds.has(phase.id),
+            checked => {
+              if (checked) {
+                this.matrixPhaseIds.add(phase.id)
+                this.matrixSequenceIds.add(sequence.id)
+              } else {
+                this.matrixPhaseIds.delete(phase.id)
+                if (!sequence.phases.some(item => this.matrixPhaseIds.has(item.id))) {
+                  this.matrixSequenceIds.delete(sequence.id)
+                }
+              }
+              this.render()
+            }
+          )
+          option.classList.add('is-phase')
+          phasesGroup.append(option)
+        })
+        group.append(phasesGroup)
+        sequencesGroup.append(group)
       })
-      scope.append(group)
+      processGroup.append(sequencesGroup)
+      if (sequencesGroup.childElementCount) scope.append(processGroup)
     })
     if (!scope.childElementCount) {
       const empty = document.createElement('p')
@@ -1361,8 +1436,26 @@ export class ReportWorkspaceModal {
     return label
   }
 
+  private createMatrixTreeToggle(
+    expanded: boolean,
+    label: string,
+    onToggle: () => void
+  ) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'report-matrix-tree-toggle'
+    button.setAttribute('aria-expanded', String(expanded))
+    button.setAttribute('aria-label', `${expanded ? '折叠' : '展开'} ${label}`)
+    button.append(createPhaseIcon(ChevronDown, 'report-matrix-tree-chevron'))
+    button.addEventListener('click', onToggle)
+    return button
+  }
+
   private initializeMatrixSelection(workspace: PhaseWorkspaceState) {
-    if (!workspace.processes.some(item => item.id === this.matrixProcessId)) {
+    if (
+      this.matrixProcessId !== ALL_REPORT_PROCESSES_ID &&
+      !workspace.processes.some(item => item.id === this.matrixProcessId)
+    ) {
       this.matrixProcessId = workspace.activeProcessId ?? workspace.processes[0]?.id ?? ''
       this.selectAllMatrixScope()
     }
@@ -1374,17 +1467,29 @@ export class ReportWorkspaceModal {
     const process = this.getWorkspace().processes.find(
       item => item.id === this.matrixProcessId
     )
-    this.matrixFileName = `${process?.name ?? 'process'}-matrix`
+    this.matrixFileName = `${
+      this.matrixProcessId === ALL_REPORT_PROCESSES_ID
+        ? 'all-processes'
+        : process?.name ?? 'process'
+    }-matrix`
   }
 
   private selectAllMatrixScope() {
-    const process = this.getWorkspace().processes.find(
-      item => item.id === this.matrixProcessId
+    const processes = this.getMatrixProcesses(this.getWorkspace())
+    this.matrixSequenceIds = new Set(
+      processes.flatMap(process => process.sequences.map(item => item.id))
     )
-    this.matrixSequenceIds = new Set(process?.sequences.map(item => item.id))
     this.matrixPhaseIds = new Set(
-      process?.sequences.flatMap(sequence => sequence.phases.map(phase => phase.id))
+      processes.flatMap(process =>
+        process.sequences.flatMap(sequence => sequence.phases.map(phase => phase.id))
+      )
     )
+  }
+
+  private getMatrixProcesses(workspace: PhaseWorkspaceState) {
+    return this.matrixProcessId === ALL_REPORT_PROCESSES_ID
+      ? workspace.processes
+      : workspace.processes.filter(item => item.id === this.matrixProcessId)
   }
 
   private clearMatrixScope() {
@@ -1393,9 +1498,12 @@ export class ReportWorkspaceModal {
   }
 
   private selectCurrentMatrixSequence() {
-    const process = this.getWorkspace().processes.find(
-      item => item.id === this.matrixProcessId
-    )
+    const workspace = this.getWorkspace()
+    const targetProcessId = this.matrixProcessId === ALL_REPORT_PROCESSES_ID
+      ? workspace.activeProcessId
+      : this.matrixProcessId
+    const process = workspace.processes.find(item => item.id === targetProcessId) ??
+      workspace.processes[0]
     const sequence = process?.sequences.find(
       item => item.id === process.activeSequenceId
     ) ?? process?.sequences[0]

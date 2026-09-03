@@ -592,6 +592,86 @@ describe('ReportWorkspaceModal', () => {
     )
   })
 
+  it('selects and exports Matrix scope across all Processes', async () => {
+    const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
+    state.processes.push({
+      ...state.processes[0],
+      id: 'process-2',
+      name: 'SIP',
+      sequences: [{
+        ...state.processes[0].sequences[0],
+        id: 'sip-sequence',
+        name: 'SIP cleaning',
+        phases: [{
+          ...state.processes[0].sequences[0].phases[0],
+          id: 'sip-phase',
+          name: 'SIP step'
+        }]
+      }]
+    })
+    const { exportMatrix } = createHarness('zh', state)
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+
+    const process = document.querySelector<HTMLSelectElement>(
+      '[aria-label="Matrix Process"]'
+    )!
+    expect([...process.options].map(option => option.value)).toContain('all')
+    process.value = 'all'
+    process.dispatchEvent(new Event('change'))
+
+    expect(document.querySelector('.report-matrix-tree')?.textContent).toContain('Step 1')
+    expect(document.querySelector('.report-matrix-tree')?.textContent).toContain('SIP step')
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 2 个 Sequence，3 个 Phase'
+    )
+    expect(document.querySelectorAll('.report-matrix-process-option')).toHaveLength(2)
+    expect(document.querySelector('.report-matrix-tree')?.textContent).toContain('Process · CIP')
+    expect(document.querySelector('.report-matrix-tree')?.textContent).toContain('Process · SIP')
+    expect(buttonByText('全部选择')?.disabled).toBe(false)
+    expect(buttonByText('全部清除')?.disabled).toBe(false)
+    expect(buttonByText('当前 Sequence')?.disabled).toBe(false)
+
+    const processToggle = document.querySelector<HTMLButtonElement>(
+      '.report-matrix-process-header .report-matrix-tree-toggle'
+    )!
+    expect(processToggle.getAttribute('aria-expanded')).toBe('true')
+    processToggle.click()
+    expect(document.querySelector(
+      '.report-matrix-process-header .report-matrix-tree-toggle'
+    )?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.querySelector<HTMLElement>(
+      '.report-matrix-process-sequences'
+    )?.hidden).toBe(true)
+
+    const sequenceToggle = document.querySelectorAll<HTMLButtonElement>(
+      '.report-matrix-sequence-header .report-matrix-tree-toggle'
+    )[1]
+    sequenceToggle.click()
+    expect(document.querySelectorAll<HTMLElement>('.report-matrix-phases')[1].hidden).toBe(true)
+
+    buttonByText('全部清除')?.click()
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 0 个 Sequence，0 个 Phase'
+    )
+    buttonByText('当前 Sequence')?.click()
+    expect(document.querySelector('.report-matrix-summary')?.textContent).toContain(
+      '已选择 1 个 Sequence，2 个 Phase'
+    )
+    buttonByText('全部选择')?.click()
+
+    document.querySelector<HTMLButtonElement>(
+      '#matrixExportPanel .report-primary-button'
+    )?.click()
+    await Promise.resolve()
+
+    expect(exportMatrix).toHaveBeenCalledWith(expect.objectContaining({
+      processId: 'all',
+      sequenceIds: ['sequence', 'sip-sequence'],
+      phaseIds: ['phase-1', 'phase-2', 'sip-phase'],
+      fileName: 'all-processes-matrix.xlsx'
+    }), expect.any(AbortSignal))
+  })
+
   it('normalizes a custom Matrix filename and shows export failure details', async () => {
     const exportMatrix = jest.fn(async () => {
       throw new Error('service unavailable')
