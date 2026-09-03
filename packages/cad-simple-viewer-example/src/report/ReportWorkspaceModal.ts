@@ -1467,11 +1467,10 @@ export class ReportWorkspaceModal {
     const process = this.getWorkspace().processes.find(
       item => item.id === this.matrixProcessId
     )
-    this.matrixFileName = `${
-      this.matrixProcessId === ALL_REPORT_PROCESSES_ID
+    this.matrixFileName = `${this.matrixProcessId === ALL_REPORT_PROCESSES_ID
         ? 'all-processes'
         : process?.name ?? 'process'
-    }-matrix`
+      }-matrix`
   }
 
   private selectAllMatrixScope() {
