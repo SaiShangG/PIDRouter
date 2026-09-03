@@ -72,6 +72,25 @@ describe('parsePhasePidOverlay', () => {
     }])
   })
 
+  it('normalizes null overlay collections from direct Process imports', () => {
+    const overlay = createValidOverlay()
+    overlay.flowPaths = null as unknown as typeof overlay.flowPaths
+    overlay.deviceStates = null as unknown as typeof overlay.deviceStates
+    overlay.textNotes = null as unknown as typeof overlay.textNotes
+
+    const result = parsePhasePidOverlay(overlay)
+
+    expect(result.status).toBe('valid')
+    if (result.status !== 'valid') return
+    expect(result.overlay.drawing).toEqual({
+      fileId: 5,
+      displayName: 'PID-1001.dwg'
+    })
+    expect(result.overlay.flowPaths).toEqual([])
+    expect(result.overlay.deviceStates).toEqual([])
+    expect(result.overlay.textNotes).toEqual([])
+  })
+
   it('skips invalid and duplicate entries while retaining valid entries', () => {
     const overlay = createValidOverlay()
     overlay.flowPaths.push(

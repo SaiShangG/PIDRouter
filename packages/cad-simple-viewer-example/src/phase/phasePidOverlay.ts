@@ -238,7 +238,7 @@ export const parsePhasePidOverlay = (
     (value.Comment !== null && typeof value.Comment !== 'string') ||
     (value.flowPaths !== null && !Array.isArray(value.flowPaths)) ||
     (value.deviceStates !== null && !Array.isArray(value.deviceStates)) ||
-    !Array.isArray(value.textNotes)
+    (value.textNotes !== null && !Array.isArray(value.textNotes))
   ) {
     return { status: 'invalid', reason: 'invalid-root', warnings: [] }
   }
@@ -300,7 +300,8 @@ export const parsePhasePidOverlay = (
 
   const textNotes: PhasePidOverlayTextNote[] = []
   const textNoteIds = new Set<string>()
-  value.textNotes.forEach((candidate, index) => {
+  const textNoteValues = Array.isArray(value.textNotes) ? value.textNotes : []
+  textNoteValues.forEach((candidate, index) => {
     const textNote = readTextNote(candidate)
     if (!textNote) {
       warnings.push({ code: 'invalid-text-note', path: `textNotes[${index}]` })
