@@ -22,13 +22,13 @@ export interface NewPhaseRequest {
   number: number
   name: string
   sourceKind:
-    | 'unassigned'
-    | 'previous'
-    | 'history'
-    | 'project'
-    | 'local'
-    | 'url'
-    | 'blank'
+  | 'unassigned'
+  | 'previous'
+  | 'history'
+  | 'project'
+  | 'local'
+  | 'url'
+  | 'blank'
   sourcePhaseId?: string
   fileId?: number
   drawingDisplayName: string
@@ -732,7 +732,7 @@ export class PhaseWorkspacePanel {
     })
     this.element.append(modal)
     localizeDom(modal, this.getLocale())
-    ;(mode === 'rename' ? name : number).focus()
+      ; (mode === 'rename' ? name : number).focus()
     if (mode === 'rename') name.select()
   }
 
@@ -914,15 +914,6 @@ export class PhaseWorkspacePanel {
         ? `Phase ${String(source.number).padStart(2, '0')} · ${source.name}`
         : '新图纸'
     )
-    const status = document.createElement('div')
-    status.className = 'phase-overview-statuses'
-    const presentationProfile = this.getState().presentationProfile
-    status.append(
-      this.createStatusBadge(`${phase.flowState.flowPaths.length} 条流路`),
-      this.createStatusBadge(`${presentationProfile.utilities.length} 个 Utility`),
-      this.createStatusBadge(`${presentationProfile.defaultFlowStyle.lineWidthPx} px 默认线宽`)
-    )
-    this.addDetail(details, '状态', status)
     edit.addEventListener('click', () => {
       const editor = document.createElement('div')
       editor.className = 'phase-overview-rename'
@@ -1084,10 +1075,10 @@ export class PhaseWorkspacePanel {
       process.sequences.flatMap(sequence =>
         sequence.phases.flatMap(phase =>
           phase.id !== phaseId &&
-          phase.drawing.kind === 'assigned' &&
-          projectFileIds.has(
-            Number(/^file:(\d+)$/.exec(phase.drawing.assetId)?.[1])
-          )
+            phase.drawing.kind === 'assigned' &&
+            projectFileIds.has(
+              Number(/^file:(\d+)$/.exec(phase.drawing.assetId)?.[1])
+            )
             ? [{ process, sequence, phase }]
             : []
         )
@@ -1112,10 +1103,8 @@ export class PhaseWorkspacePanel {
     markedSources.forEach(({ process, sequence, phase }, index) => {
       markedPhase.add(
         new Option(
-          `${process.name} / 序列 ${String(sequence.number).padStart(2, '0')} ${
-            sequence.name
-          } / Phase ${String(phase.number).padStart(2, '0')} ${phase.name} / ${
-            phase.drawing.kind === 'assigned' ? phase.drawing.displayName : ''
+          `${process.name} / 序列 ${String(sequence.number).padStart(2, '0')} ${sequence.name
+          } / Phase ${String(phase.number).padStart(2, '0')} ${phase.name} / ${phase.drawing.kind === 'assigned' ? phase.drawing.displayName : ''
           }`,
           String(index)
         )
@@ -1290,10 +1279,9 @@ export class PhaseWorkspacePanel {
     sequence.phases.forEach(phase => {
       history.add(
         new Option(
-          `Phase ${phase.number} · ${phase.name} · ${
-            phase.drawing.kind === 'assigned'
-              ? phase.drawing.displayName
-              : '未关联图纸'
+          `Phase ${phase.number} · ${phase.name} · ${phase.drawing.kind === 'assigned'
+            ? phase.drawing.displayName
+            : '未关联图纸'
           }`,
           phase.id
         )
@@ -1437,13 +1425,6 @@ export class PhaseWorkspacePanel {
     button.textContent = label
     button.className = primary ? 'phase-workspace-primary' : ''
     return button
-  }
-
-  private createStatusBadge(label: string) {
-    const badge = document.createElement('span')
-    badge.className = 'phase-status-badge'
-    badge.textContent = label
-    return badge
   }
 
   private createEditIcon() {

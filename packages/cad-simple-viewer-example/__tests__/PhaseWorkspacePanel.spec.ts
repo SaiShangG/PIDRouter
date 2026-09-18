@@ -311,8 +311,8 @@ describe('PhaseWorkspacePanel', () => {
     ).toBe(true)
   })
 
-  it('shows the active Phase style summary without an inline style action', () => {
-    const { store, panel } = createHarness()
+  it.each(['zh', 'en'] as const)('omits the overview status row in %s', locale => {
+    const { store, panel } = createHarness(locale)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
     store.createPhase({
@@ -324,8 +324,13 @@ describe('PhaseWorkspacePanel', () => {
     })
     panel.render()
 
-    expect(panel.element.textContent).toContain('0 条流路')
-    expect(panel.element.textContent).toContain('3 px 默认线宽')
+    const overview = panel.element.querySelector('.phase-workspace-overview')!
+    expect(overview.querySelectorAll('.phase-overview-row')).toHaveLength(2)
+    expect(overview.querySelector('.phase-overview-drawing')).not.toBeNull()
+    expect(overview.querySelector('.phase-overview-statuses')).toBeNull()
+    expect(overview.querySelector('.phase-status-badge')).toBeNull()
+    expect([...overview.querySelectorAll('dt')].map(term => term.textContent))
+      .not.toEqual(expect.arrayContaining([locale === 'zh' ? '状态' : 'Status']))
     expect(panel.element.querySelector('[aria-label="高亮样式"]')).toBeNull()
   })
 
