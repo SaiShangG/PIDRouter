@@ -239,16 +239,6 @@ const uniqueHandleKeys = (keys: string[]) => {
   ]
 }
 
-const handleKeysFromNumber = (handleId: number) => {
-  if (!Number.isFinite(handleId) || handleId < 0) return []
-
-  const integerHandle = Math.trunc(handleId)
-  return uniqueHandleKeys([
-    integerHandle.toString(16).toUpperCase(),
-    String(integerHandle)
-  ])
-}
-
 const handleKeysFromObjectId = (objectId: AcDbObjectId) => {
   const raw = String(objectId).trim()
   if (!raw) return []
@@ -3493,10 +3483,10 @@ class CadViewerApp {
   ) {
     const objectIds = new Set<AcDbObjectId>([objectId])
     connectedHandles.forEach(handleId => {
-      handleKeysFromNumber(handleId).forEach(handleKey => {
-        const connectedObjectId = this.resolveObjectIdByHandleKey(handleKey)
-        if (connectedObjectId) objectIds.add(connectedObjectId)
-      })
+      const handleKey = normalizeFlowHandle(handleId)
+      if (handleKey === undefined) return
+      const connectedObjectId = this.resolveObjectIdByHandleKey(handleKey)
+      if (connectedObjectId) objectIds.add(connectedObjectId)
     })
     return objectIds
   }

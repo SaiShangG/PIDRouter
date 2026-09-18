@@ -15,6 +15,23 @@ describe('flowGraph', () => {
     expect(normalizeFlowHandle(-1)).toBeUndefined()
   })
 
+  it('keeps decimal numeric handles distinct from hexadecimal string handles', () => {
+    expect(normalizeFlowHandle(2930)).toBe('B72')
+    expect(normalizeFlowHandle('2930')).toBe('2930')
+
+    const graph = buildFlowGraphIndex({
+      Map: {
+        Graph: {
+          Vertices: [1, 2930, 0x2930],
+          Edges: [{ Source: 1, Target: 2930 }]
+        }
+      }
+    })
+
+    expect(graph.adjacency.get('1')).toEqual(['B72'])
+    expect(graph.adjacency.get('2930')).toEqual([])
+  })
+
   it('matches configured device names against Name and YQJ_CODE', () => {
     expect(controlModuleMatchesDeviceName({ Name: ' Valve ' }, 'valve')).toBe(true)
     expect(controlModuleMatchesDeviceName({
