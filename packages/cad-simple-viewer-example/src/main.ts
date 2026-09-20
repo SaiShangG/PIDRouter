@@ -1485,28 +1485,28 @@ class CadViewerApp {
   }
 
   private async switchProject(project: ProjectRecord): Promise<void> {
-    if (project.id === this.activeProjectId) {
-      const shouldReloadActiveWorkspace =
-        this.phaseRepository !== undefined &&
-        (!this.activeProject ||
-          this.activeProject.name !== project.name ||
-          this.activeProject.description !== project.description ||
-          !areEqualNumberSets(this.activeProject.fileIds, project.fileIds))
-      if (shouldReloadActiveWorkspace) {
-        const loaded = await this.loadProjectWorkspace(project)
-        if (!loaded) return
+    try {
+      if (project.id === this.activeProjectId) {
+        const shouldReloadActiveWorkspace =
+          this.phaseRepository !== undefined &&
+          (!this.activeProject ||
+            this.activeProject.name !== project.name ||
+            this.activeProject.description !== project.description ||
+            !areEqualNumberSets(this.activeProject.fileIds, project.fileIds))
+        if (shouldReloadActiveWorkspace) {
+          const loaded = await this.loadProjectWorkspace(project)
+          if (!loaded) return
+          await this.prepareProjectForPhaseSelection()
+          this.syncAppToolbarContext()
+          return
+        }
+        this.activeProject = project
+        this.projectManagementButton.title = project.name
+        this.phasePanel?.render()
         await this.prepareProjectForPhaseSelection()
         this.syncAppToolbarContext()
         return
       }
-      this.activeProject = project
-      this.projectManagementButton.title = project.name
-      this.phasePanel?.render()
-      await this.prepareProjectForPhaseSelection()
-      this.syncAppToolbarContext()
-      return
-    }
-    try {
       const loaded = await this.loadProjectWorkspace(project)
       if (!loaded) return
       await this.prepareProjectForPhaseSelection()
@@ -1522,8 +1522,6 @@ class CadViewerApp {
     restorePhase = false
   ): Promise<boolean> {
     const token = ++this.projectLoadToken
-    this.cancelAllBackendPhaseSaves()
-    this.invalidateLoadedPhaseBinding()
     const projectDetails = await this.projectRepository.get(project.id)
     if (token !== this.projectLoadToken) return false
     const config = getProcessAssistantConfig()
@@ -1538,6 +1536,8 @@ class CadViewerApp {
     })
     const workspace = await repository.load()
     if (token !== this.projectLoadToken) return false
+    this.cancelAllBackendPhaseSaves()
+    this.invalidateLoadedPhaseBinding()
     const presentationProfile = this.getOrCreateProjectPresentationProfile(
       projectDetails.id,
       workspace.presentationProfile

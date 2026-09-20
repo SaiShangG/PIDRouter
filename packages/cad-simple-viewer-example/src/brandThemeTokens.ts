@@ -66,6 +66,120 @@ export function injectBrandThemeTokens() {
       --ml-ui-border: var(--app-border);
       --ml-ui-accent: var(--app-accent);
     }
+    :root body select {
+      box-sizing: border-box;
+      min-width: 0;
+      border: 1px solid var(--app-border-strong);
+      border-radius: var(--app-radius-control);
+      background-color: var(--app-surface-elevated);
+      color: var(--app-text);
+      accent-color: var(--app-accent);
+      font-family: inherit;
+      cursor: pointer;
+    }
+    :root body select:hover:not(:disabled) { border-color: var(--app-accent); }
+    :root body select:focus-visible {
+      border-color: var(--app-accent);
+      outline: 2px solid var(--app-accent);
+      outline-offset: 2px;
+      box-shadow: none;
+    }
+    :root body select:disabled {
+      color: var(--app-text-muted);
+      background-color: var(--app-surface-subtle);
+      border-color: var(--app-border);
+      cursor: not-allowed;
+      opacity: .65;
+    }
+    :root body select[aria-invalid="true"] { border-color: var(--app-danger); }
+    :root body select option, :root body select optgroup {
+      background: var(--app-surface-elevated);
+      color: var(--app-text);
+    }
+    :root body select option:checked {
+      background: var(--app-accent);
+      color: var(--app-text-on-dark);
+    }
+    :root body select option:disabled { color: var(--app-text-muted); }
+    :root body .ml-ex-ui-dropdown {
+      background: var(--app-surface-elevated);
+      border-color: var(--app-border-strong);
+      border-radius: var(--app-radius-panel);
+      box-shadow: var(--app-shadow-overlay);
+    }
+    :root body .ml-ex-ui-dropdown-item { color: var(--app-text); }
+    :root body .ml-ex-ui-dropdown-item:is(:hover, :focus-visible):not(:disabled) {
+      background: var(--app-success-surface);
+      color: var(--app-success-text);
+    }
+    :root body .ml-ex-ui-dropdown-item:focus-visible {
+      outline: 2px solid var(--app-accent);
+      outline-offset: -2px;
+    }
+    @supports (appearance: base-select) {
+      :root body select:not([multiple]):where(:not([size]), [size="1"]),
+      :root body select:not([multiple]):where(:not([size]), [size="1"])::picker(select) {
+        appearance: base-select;
+      }
+      :root body select:not([multiple]):where(:not([size]), [size="1"]) {
+        align-items: center;
+        gap: 8px;
+        padding-inline: 10px;
+        background-image: none;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      :root body select::picker-icon {
+        flex: 0 0 auto;
+        margin-inline-start: auto;
+        color: var(--app-accent);
+      }
+      :root body select:disabled::picker-icon { color: var(--app-text-muted); }
+      :root body select:open { border-color: var(--app-accent); }
+      :root body select::picker(select) {
+        box-sizing: border-box;
+        min-width: anchor-size(width);
+        max-width: calc(100vw - 16px);
+        max-height: min(320px, 60dvh);
+        margin-block: 4px;
+        padding: 4px;
+        overflow: auto;
+        border: 1px solid var(--app-border-strong);
+        border-radius: var(--app-radius-panel);
+        background: var(--app-surface-elevated);
+        color: var(--app-text);
+        box-shadow: var(--app-shadow-overlay);
+        font: inherit;
+        scrollbar-width: thin;
+        scrollbar-color: var(--app-border-strong) var(--app-surface-elevated);
+      }
+      :root body select option {
+        min-height: 34px;
+        gap: 10px;
+        padding: 7px 10px;
+        border-radius: var(--app-radius-control);
+        line-height: 1.4;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+      }
+      :root body select option:is(:hover, :focus-visible):not(:disabled) {
+        outline: none;
+        background: var(--app-success-surface);
+        color: var(--app-success-text);
+      }
+      :root body select option:checked,
+      :root body select option:checked:is(:hover, :focus-visible) {
+        background: var(--app-accent);
+        color: var(--app-text-on-dark);
+      }
+      :root body select option::checkmark { color: currentColor; }
+      :root body select option:disabled {
+        color: var(--app-text-muted);
+        cursor: not-allowed;
+      }
+    }
   `
   document.head.append(style)
 }
