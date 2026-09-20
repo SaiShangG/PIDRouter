@@ -5,7 +5,7 @@ import { LoginView } from './LoginView'
 export function startLogin(
   service: AuthService,
   startWorkspace: (user: AuthUser) => Promise<void>,
-  prepareWorkspace: () => void | Promise<void> = () => {}
+  prepareWorkspace: () => void | Promise<void> = () => { }
 ) {
   injectLoginStyles()
   document.body.classList.add('login-active')

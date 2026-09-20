@@ -137,7 +137,7 @@ export class LoginView {
       this.username.setAttribute('aria-invalid', String(!username))
       this.password.setAttribute('aria-invalid', String(!this.password.value))
       this.renderLabels()
-      ;(!username ? this.username : this.password).focus()
+        ; (!username ? this.username : this.password).focus()
       return
     }
     this.statusKey = undefined
