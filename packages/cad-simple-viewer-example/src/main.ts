@@ -53,6 +53,8 @@ import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
+import { AccountControls } from './auth/AccountControls'
+import type { AuthService, AuthUser } from './auth/authService'
 import {
   BrushHighlightFeature,
   type BrushHighlightOverlay,
@@ -374,6 +376,8 @@ type LayoutObjectHost = {
 }
 
 class CadViewerApp {
+  readonly ready: Promise<void>
+  private readonly account: AccountControls
   private container: HTMLDivElement
   private fileInput: HTMLInputElement
   private centerOpenButton: HTMLButtonElement
@@ -487,7 +491,7 @@ class CadViewerApp {
   private brushHighlightFeature?: BrushHighlightFeature
   private brushStyleSelection?: StyleSourceSelection
 
-  constructor() {
+  constructor(authService: AuthService, user: AuthUser) {
     this.container = document.getElementById('cad-container') as HTMLDivElement
     this.fileInput = document.getElementById(
       'fileInputElement'
@@ -556,6 +560,8 @@ class CadViewerApp {
       '[data-viewer-toolbar-placement]'
     ) as NodeListOf<HTMLButtonElement>
     this.devToolbar = document.getElementById('appToolbar') as HTMLElement
+    this.account = new AccountControls(authService, user)
+    this.devToolbar.append(this.account.element)
     this.setupLanguageToggle()
     this.setupFileHandling()
     this.setupPredefinedFileActions()
@@ -573,7 +579,7 @@ class CadViewerApp {
     this.setupViewerToolbarMenu()
     this.updateEmptyStateVisibility()
     this.applyAppLocale()
-    void this.initialize()
+    this.ready = this.initialize()
   }
 
   private setupLanguageToggle() {
@@ -645,6 +651,7 @@ class CadViewerApp {
       'Open File'
     )
     localizeDom(document, this.appLocale)
+    this.account.refreshLocale()
     this.valveDebugFeature?.setLocale(this.appLocale as ValveDebugLocale)
   }
 
@@ -1441,6 +1448,7 @@ class CadViewerApp {
     } catch (error) {
       log.error('Failed to initialize CAD viewer:', error)
       this.showMessage('Failed to initialize CAD viewer', 'error')
+      throw error
     } finally {
       document.body.classList.remove('app-booting')
     }
@@ -4599,7 +4607,7 @@ class CadViewerApp {
   }
 }
 
-async function bootstrap(): Promise<void> {
+export function prepareWorkspaceStyles(): void {
   injectAppShellResponsiveStyles()
   injectConfirmationModalStyles()
   injectToastStyles()
@@ -4607,11 +4615,10 @@ async function bootstrap(): Promise<void> {
   injectUiReferenceThemeStyles()
   injectPhaseConfigImportModalStyles()
   injectPhaseWorkspaceStyles()
-  new CadViewerApp()
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => void bootstrap())
-} else {
-  void bootstrap()
+export async function bootstrap(authService: AuthService, user: AuthUser): Promise<void> {
+  prepareWorkspaceStyles()
+  const app = new CadViewerApp(authService, user)
+  await app.ready
 }
