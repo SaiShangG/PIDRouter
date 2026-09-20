@@ -2,13 +2,15 @@
 
 import {
   PhaseWorkspacePanel,
-  type PhaseWorkspacePanelActions
+  type PhaseWorkspacePanelActions,
+  type TankWorkspaceBindings
 } from '../src/phase/PhaseWorkspacePanel'
 import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 
 const createHarness = (
   locale: 'en' | 'zh' = 'zh',
-  projectFileIds: readonly number[] = [5]
+  projectFileIds: readonly number[] = [5],
+  withTanks = false
 ) => {
   let id = 0
   const store = new PhaseWorkspaceStore(
@@ -58,18 +60,124 @@ const createHarness = (
     deletePhase: jest.fn(async () => undefined),
     renameDrawing: jest.fn()
   }
+  const tanks: TankWorkspaceBindings = {
+    getTanks: () => [
+      { id: 'file:5:E65', name: 'Vessel_1', handleKey: 'E65' },
+      { id: 'file:5:1B3C', name: 'Vessel_2', handleKey: '1B3C' }
+    ],
+    locateTank: jest.fn(() => true),
+    stopLocatingTank: jest.fn(),
+    assignPhaseTank: jest.fn(async (processId, sequenceId, phaseId, tankId) => {
+      store.assignPhaseTank(processId, sequenceId, phaseId, tankId)
+    })
+  }
   const panel = new PhaseWorkspacePanel(
     () => store.snapshot(),
     actions,
     () => locale,
-    () => projectFileIds
+    () => projectFileIds,
+    withTanks ? tanks : undefined
   )
   document.body.append(panel.element)
-  return { store, panel, actions }
+  return { store, panel, actions, tanks }
 }
 
 describe('PhaseWorkspacePanel', () => {
   afterEach(() => document.body.replaceChildren())
+
+  it.each(['zh', 'en'] as const)('filters Phases by Tank and cancels blinking without clearing the filter in %s', locale => {
+    const { store, panel, tanks } = createHarness(locale, [5], true)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const phases = [1, 2, 3].map(number => store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number,
+      name: `Rinse ${number}`, source: { kind: 'unassigned' }
+    }))
+    store.assignPhaseTank(process.id, sequence.id, phases[0].id, 'file:5:E65')
+    store.assignPhaseTank(process.id, sequence.id, phases[1].id, 'file:5:1B3C')
+    panel.render()
+    const selectTank = (value: string) => {
+      const select = panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!
+      select.value = value
+      select.dispatchEvent(new Event('change'))
+    }
+    const visiblePhases = () => [...panel.element.querySelectorAll('.phase-tree-node')].map(node => node.textContent)
+    expect(panel.element.querySelector('.phase-process-selector')!.closest('section')!.nextElementSibling)
+      .toBe(panel.element.querySelector('.phase-tank-section'))
+    expect(panel.element.querySelector('.phase-tank-selector select')?.getAttribute('aria-label'))
+      .toBe(locale === 'zh' ? '当前 Tank' : 'Current Tank')
+    expect(panel.element.querySelectorAll('.phase-tank-selector option')).toHaveLength(4)
+    selectTank('file:5:E65')
+    expect(tanks.locateTank).toHaveBeenLastCalledWith('file:5:E65')
+    expect(visiblePhases()).toHaveLength(1)
+    expect(visiblePhases()[0]).toContain('Rinse 1')
+    expect(panel.element.querySelector('.phase-overview-card')).toBeNull()
+    panel.element.querySelector<HTMLButtonElement>('.phase-tank-selector button')!.click()
+    expect(tanks.stopLocatingTank).toHaveBeenCalled()
+    expect(panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!.value).toBe('file:5:E65')
+    expect(panel.element.querySelector('.phase-tank-selector button')?.getAttribute('aria-pressed')).toBe('false')
+    selectTank('file:5:1B3C')
+    expect(visiblePhases()[0]).toContain('Rinse 2')
+    selectTank('unassigned')
+    expect(visiblePhases()[0]).toContain('Rinse 3')
+    expect(panel.element.querySelector('.phase-overview-card')).not.toBeNull()
+    selectTank('')
+    expect(visiblePhases()).toHaveLength(3)
+    panel.resetTankSelection()
+    panel.render()
+    expect(panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!.value).toBe('')
+  })
+
+  it('assigns and clears Tank ownership from the bottom of Phase details', async () => {
+    const { store, panel, tanks } = createHarness('en', [5], true)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const phase = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Rinse', source: { kind: 'unassigned' }
+    })
+    panel.render()
+    let select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Tank"]')!
+    expect(select.closest('.phase-overview-row')).toBe(panel.element.querySelector('.phase-workspace-overview')!.lastElementChild)
+    select.value = 'file:5:E65'
+    select.dispatchEvent(new Event('change'))
+    await Promise.resolve()
+    expect(tanks.assignPhaseTank).toHaveBeenCalledWith(process.id, sequence.id, phase.id, 'file:5:E65')
+    select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Tank"]')!
+    expect(select.value).toBe('file:5:E65')
+    select.value = ''
+    select.dispatchEvent(new Event('change'))
+    await Promise.resolve()
+    expect(store.snapshot().processes[0].sequences[0].phases[0].tankId).toBeUndefined()
+  })
+
+  it('reveals matching Phases in inactive sequences and handles empty Tanks without a drawable entity', () => {
+    const { store, panel, tanks } = createHarness('en', [5], true)
+    const process = store.createProcess('CIP')
+    const first = process.sequences[0]
+    const second = store.createSequence(process.id, 2, 'Wash')
+    const phase = store.createPhase({
+      processId: process.id, sequenceId: second.id, number: 1,
+      name: 'Wash Vessel', source: { kind: 'unassigned' }
+    })
+    store.assignPhaseTank(process.id, second.id, phase.id, 'file:5:E65')
+    store.activate(process.id, first.id)
+    panel.render()
+    const selectTank = (id: string) => {
+      const select = panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!
+      select.value = id
+      select.dispatchEvent(new Event('change'))
+    }
+    selectTank('file:5:E65')
+    const tree = panel.element.querySelector<HTMLElement>('[aria-label="Wash Phases"]')!
+    expect(tree.hidden).toBe(false)
+    expect(tree.textContent).toContain('Wash Vessel')
+    jest.mocked(tanks.locateTank).mockReturnValue(false)
+    selectTank('file:5:1B3C')
+    expect(panel.element.querySelectorAll('[role="treeitem"]')).toHaveLength(0)
+    expect(panel.element.textContent).toContain('No Phases for this Tank.')
+    expect(panel.element.querySelector('.phase-tank-selector button')?.getAttribute('aria-pressed')).toBe('false')
+  })
 
   it('starts empty and allows creating the first process', () => {
     const { store, panel } = createHarness()

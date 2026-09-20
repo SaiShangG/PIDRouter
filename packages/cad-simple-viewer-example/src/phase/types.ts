@@ -119,6 +119,7 @@ export interface PhaseSnapshot {
   id: string
   number: number
   name: string
+  tankId?: string
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
   flowState: FlowStateSnapshot

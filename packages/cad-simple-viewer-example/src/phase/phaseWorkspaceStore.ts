@@ -195,6 +195,7 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   id: phase.id,
   number: phase.number,
   name: phase.name,
+  tankId: phase.tankId,
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
   flowState: cloneFlowState(phase.flowState),
@@ -806,6 +807,7 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
           id: phase.id,
           number: phase.number,
           name: phase.name,
+          tankId: typeof phase.tankId === 'string' ? phase.tankId.trim() || undefined : undefined,
           flowState: {
             flowPaths: normalizeFlowPaths(
               phase.flowState.flowPaths,
@@ -1077,6 +1079,7 @@ export class PhaseWorkspaceStore {
       number: input.number,
       name: normalizedName,
       drawing: phaseDrawing,
+      tankId: sourcePhase?.tankId,
       sourcePhaseId: sourcePhase?.id,
       flowState: sourcePhase
         ? cloneFlowState(sourcePhase.flowState)
@@ -1247,6 +1250,17 @@ export class PhaseWorkspaceStore {
     return previousAssetId
       ? this.removeUnusedDrawing(previousAssetId)
       : undefined
+  }
+
+  assignPhaseTank(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    tankId?: string
+  ) {
+    const phase = this.requirePhase(processId, sequenceId, phaseId)
+    phase.tankId = tankId?.trim() || undefined
+    phase.updatedAt = this.now()
   }
 
   renamePhase(

@@ -432,6 +432,7 @@ export class PhaseWorkspaceRepository {
       id: String(phase.id),
       number: toNumber(phase.index, position + 1),
       name: phase.name?.trim() || `Phase ${phase.id}`,
+      tankId: overlay?.tankId,
       drawing: this.readDrawing(overlay?.drawing, drawingAssets),
       flowState: overlay ? this.readFlowState(overlay) : { flowPaths: [] },
       textNotes: overlay ? this.readTextNotes(overlay) : [],
@@ -615,6 +616,7 @@ export class PhaseWorkspaceRepository {
       OrderId: orderIndex,
       Name: phase.name,
       Comment: null,
+      ...(phase.tankId ? { tankId: phase.tankId } : {}),
       drawing:
         fileId !== undefined && phase.drawing.kind === 'assigned'
           ? {

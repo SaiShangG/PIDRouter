@@ -36,6 +36,9 @@ export interface DocumentGraphEdgeInput {
 export interface FlowConnectionDocumentInput {
   Areas?: DocumentAreaInput[]
   Map?: {
+    Data?: {
+      Tanks?: number[]
+    }
     Graph?: {
       Vertices?: number[]
       Edges?: DocumentGraphEdgeInput[]

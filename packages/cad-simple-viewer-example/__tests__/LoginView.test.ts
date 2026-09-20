@@ -37,21 +37,34 @@ describe('LoginView', () => {
     setup()
     const image = document.querySelector<HTMLImageElement>('.login-media img')!
     expect(image.getAttribute('src')).toBe('./biopharma-login.jpg')
-    expect(image.alt).toBe('生物医药实验室中的研究人员与实验设备')
+    expect(image.alt).toBe('工业车间中的不锈钢罐体与工艺管道')
     expect(document.querySelector('.login-panel form')).not.toBeNull()
+    expect(document.querySelector('.login-footer')).toBeNull()
     document.querySelector<HTMLButtonElement>('header button')!.click()
-    expect(image.alt).toBe('Researchers and laboratory equipment in a biomedical laboratory')
+    expect(image.alt).toBe('Stainless steel tanks and process piping in an industrial facility')
   })
 
   it('switches language without clearing values and toggles password visibility', () => {
     const { username, password } = setup()
+    const language = document.querySelector<HTMLButtonElement>('.login-language')!
+    expect(language.textContent).toBe('EN')
+    expect(language.getAttribute('aria-label')).toContain('EN')
     username.value = 'operator'
     password.value = ' demo '
     document.querySelector<HTMLButtonElement>('.login-visibility')!.click()
     expect(password.type).toBe('text')
+    expect(document.querySelector('.login-visibility')!.getAttribute('aria-label')).toBe('隐藏密码')
     document.querySelector<HTMLButtonElement>('header button')!.click()
     expect(document.documentElement.lang).toBe('en')
     expect(document.querySelector('h1')!.textContent).toBe('Sign in')
+    expect(language.textContent).toBe('中文')
+    expect(language.getAttribute('aria-label')).toContain('中文')
+    expect(document.querySelector('.login-visibility')!.getAttribute('aria-label')).toBe('Hide password')
+    expect(username.value).toBe('operator')
+    expect(password.value).toBe(' demo ')
+    language.click()
+    expect(document.documentElement.lang).toBe('zh-CN')
+    expect(language.textContent).toBe('EN')
     expect(username.value).toBe('operator')
     expect(password.value).toBe(' demo ')
   })

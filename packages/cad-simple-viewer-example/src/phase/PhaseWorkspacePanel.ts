@@ -4,8 +4,10 @@ import {
   ChevronDown,
   Copy,
   GripVertical,
+  LocateFixed,
   Pencil,
   Plus,
+  Square,
   Trash2,
   TriangleAlert,
   X
@@ -14,7 +16,15 @@ import {
 import type { AppLocale } from '../locale'
 import { localizeDom, translateUiText } from '../uiTranslations'
 import { createPhaseIcon } from './phaseIcons'
+import type { TankOption } from './tankSelection'
 import type { PhaseWorkspaceState } from './types'
+
+export interface TankWorkspaceBindings {
+  getTanks(): readonly TankOption[]
+  locateTank(tankId: string): boolean
+  stopLocatingTank(): void
+  assignPhaseTank(processId: string, sequenceId: string, phaseId: string, tankId?: string): Promise<void>
+}
 
 export interface NewPhaseRequest {
   processId: string
@@ -98,12 +108,15 @@ export class PhaseWorkspacePanel {
   private readonly initializedSequenceIds = new Set<string>()
   private readonly drawingAssociationModals = new Set<HTMLElement>()
   private processCreatorExpanded = false
+  private tankFilter = ''
+  private tankBlinking = false
 
   constructor(
     private readonly getState: () => PhaseWorkspaceState,
     private readonly actions: PhaseWorkspacePanelActions,
     private readonly getLocale: () => AppLocale = () => 'zh',
-    private readonly getProjectFileIds: () => readonly number[] = () => []
+    private readonly getProjectFileIds: () => readonly number[] = () => [],
+    private readonly tanks?: TankWorkspaceBindings
   ) {
     this.element.className = 'phase-workspace'
     this.render()
@@ -139,9 +152,10 @@ export class PhaseWorkspacePanel {
     content.append(
       this.createHeader(state, activeProcess.id)
     )
+    if (this.tanks) content.append(this.createTankSelector())
     content.append(this.createSequenceNavigation(activeProcess))
     if (activeSequence) {
-      if (activePhase) {
+      if (activePhase && this.matchesTank(activePhase)) {
         content.append(
           this.createOverview(activeProcess.id, activeSequence, activePhase)
         )
@@ -159,6 +173,61 @@ export class PhaseWorkspacePanel {
 
   private localize() {
     localizeDom(this.element, this.getLocale())
+  }
+
+  resetTankSelection() {
+    this.tankFilter = ''
+    this.tankBlinking = false
+    this.tanks?.stopLocatingTank()
+  }
+
+  private matchesTank(phase: { tankId?: string }) {
+    return !this.tankFilter || (this.tankFilter === 'unassigned'
+      ? !phase.tankId
+      : phase.tankId === this.tankFilter)
+  }
+
+  private createTankSelector() {
+    const block = this.createBlock('Tank')
+    block.classList.add('phase-tank-section')
+    const row = document.createElement('div')
+    row.className = 'phase-tank-selector'
+    const select = document.createElement('select')
+    select.setAttribute('aria-label', '当前 Tank')
+    select.add(new Option('全部 Tank', ''))
+    select.add(new Option('未分配 Tank', 'unassigned'))
+    this.tanks!.getTanks().forEach(tank => select.add(new Option(tank.name, tank.id)))
+    select.value = this.tankFilter
+    select.addEventListener('change', () => {
+      this.tanks!.stopLocatingTank()
+      this.tankFilter = select.value
+      if (this.tankFilter) {
+        const state = this.getState()
+        state.processes.find(process => process.id === state.activeProcessId)?.sequences
+          .filter(sequence => sequence.phases.some(phase => this.matchesTank(phase)))
+          .forEach(sequence => this.expandedSequenceIds.add(sequence.id))
+      }
+      this.tankBlinking = Boolean(this.tankFilter && this.tankFilter !== 'unassigned' && this.tanks!.locateTank(this.tankFilter))
+      this.render()
+    })
+    const locate = this.createIconButton(
+      this.tankBlinking ? '停止 Tank 闪烁' : '定位 Tank',
+      this.tankBlinking ? Square : LocateFixed,
+      () => {
+        if (this.tankBlinking) {
+          this.tanks!.stopLocatingTank()
+          this.tankBlinking = false
+        } else {
+          this.tankBlinking = this.tanks!.locateTank(this.tankFilter)
+        }
+        this.render()
+      },
+      !this.tankFilter || this.tankFilter === 'unassigned'
+    )
+    locate.setAttribute('aria-pressed', String(this.tankBlinking))
+    row.append(select, locate)
+    block.append(row)
+    return block
   }
 
   private t(text: string) {
@@ -202,6 +271,7 @@ export class PhaseWorkspacePanel {
     })
     select.value = activeProcessId
     select.addEventListener('change', async () => {
+      this.resetTankSelection()
       await this.actions.activateProcess(select.value)
       this.render()
     })
@@ -351,7 +421,7 @@ export class PhaseWorkspacePanel {
     name.title = sequence.name
     const count = document.createElement('span')
     count.className = 'phase-count-badge'
-    count.textContent = String(sequence.phases.length)
+    count.textContent = String(sequence.phases.filter(phase => this.matchesTank(phase)).length)
     const status = document.createElement('span')
     status.className = 'phase-sequence-status'
     const complete =
@@ -398,7 +468,13 @@ export class PhaseWorkspacePanel {
         : '此序列尚无阶段。'
       list.append(empty)
     }
+    if (sequence.phases.length > 0 && !sequence.phases.some(phase => this.matchesTank(phase))) {
+      const empty = document.createElement('p')
+      empty.textContent = '此 Tank 下暂无 Phase。'
+      list.append(empty)
+    }
     sequence.phases.forEach((phase, index) => {
+      if (!this.matchesTank(phase)) return
       const item = document.createElement('div')
       item.className = 'phase-tree-item'
       item.draggable = true
@@ -914,6 +990,27 @@ export class PhaseWorkspacePanel {
         ? `Phase ${String(source.number).padStart(2, '0')} · ${source.name}`
         : '新图纸'
     )
+    if (this.tanks) {
+      const tank = document.createElement('select')
+      tank.className = 'phase-tank-assignment'
+      tank.setAttribute('aria-label', 'Phase 所属 Tank')
+      tank.add(new Option('未分配 Tank', ''))
+      const options = this.tanks.getTanks()
+      options.forEach(option => tank.add(new Option(option.name, option.id)))
+      if (phase.tankId && !options.some(option => option.id === phase.tankId)) {
+        tank.add(new Option('不可用 Tank', phase.tankId))
+      }
+      tank.value = phase.tankId ?? ''
+      tank.addEventListener('change', async () => {
+        tank.disabled = true
+        try {
+          await this.tanks!.assignPhaseTank(processId, sequence.id, phase.id, tank.value || undefined)
+        } finally {
+          this.render()
+        }
+      })
+      this.addDetail(details, '所属 Tank', tank)
+    }
     edit.addEventListener('click', () => {
       const editor = document.createElement('div')
       editor.className = 'phase-overview-rename'

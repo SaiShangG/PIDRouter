@@ -508,6 +508,34 @@ describe('ReportWorkspaceModal', () => {
     expect(document.querySelector('[aria-label="下载 Matrix"]')).not.toBeNull()
   })
 
+  it.each([undefined, { fileName: 'empty.xlsx', bytes: new Uint8Array() }])(
+    'shows an error in generated records when Matrix returns no file', async result => {
+      const exportMatrix = jest.fn().mockResolvedValue(result)
+      createHarness('en', workspace, undefined, exportMatrix)
+      document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+      document.querySelector<HTMLButtonElement>('#matrixExportPanel .report-primary-button')?.click()
+      const generatedTab = document.querySelectorAll<HTMLButtonElement>('.report-matrix-detail-panel [role="tab"]')[1]
+      generatedTab.click()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(document.querySelector('.report-generated-files')?.textContent).toContain('The service returned no Matrix file')
+      expect(document.querySelector('.report-generated-item')).toBeNull()
+      expect(document.querySelector('.report-export-status')).toBeNull()
+    }
+  )
+
+  it('shows Matrix request failures even when generated records are selected', async () => {
+    const exportMatrix = jest.fn().mockRejectedValue(new Error('download failed'))
+    createHarness('en', workspace, undefined, exportMatrix)
+    document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
+    document.querySelector<HTMLButtonElement>('#matrixExportPanel .report-primary-button')?.click()
+    document.querySelectorAll<HTMLButtonElement>('.report-matrix-detail-panel [role="tab"]')[1].click()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(document.querySelector('.report-generated-files')?.textContent).toContain('download failed')
+    expect(document.querySelector('.report-generated-item')).toBeNull()
+  })
+
   it('supports Matrix Sequence shortcuts and partial selection', () => {
     const state = JSON.parse(JSON.stringify(workspace)) as PhaseWorkspaceState
     state.processes[0].activeSequenceId = 'sequence-2'
@@ -748,9 +776,9 @@ describe('ReportWorkspaceModal', () => {
     expect(exportReport).toHaveBeenCalledTimes(1)
   })
 
-  it('locks state-changing controls while export is running', async () => {
+  it('locks export settings but allows closing and reopening during PDF generation', async () => {
     let finishExport: (() => void) | undefined
-    const exportReport = jest.fn(
+    const exportReport = jest.fn<ReturnType<ExportReport>, Parameters<ExportReport>>(
       () =>
         new Promise<{ status: 'completed'; fileName: string; bytes: Uint8Array }>(
           resolve => {
@@ -781,17 +809,28 @@ describe('ReportWorkspaceModal', () => {
     expect(document.body.classList.contains('report-pdf-exporting')).toBe(true)
     expect(
       document.querySelector<HTMLButtonElement>('.report-icon-button')?.disabled
-    ).toBe(true)
+    ).toBe(false)
     buttonByText('页面设置&导出')?.click()
     expect(buttonByText('从报告排除')?.disabled).toBe(true)
     modal.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(modal.element.hidden).toBe(true)
+    expect(document.body.classList.contains('report-workspace-open')).toBe(false)
+    expect(exportReport.mock.calls[0][1].aborted).toBe(false)
+    modal.open()
     expect(modal.element.hidden).toBe(false)
+    expect(document.querySelector('.report-export-status')).not.toBeNull()
+    expect(exportReport).toHaveBeenCalledTimes(1)
+    document.querySelector<HTMLButtonElement>('.report-icon-button')?.click()
+    expect(modal.element.hidden).toBe(true)
 
     finishExport?.()
     await Promise.resolve()
     await Promise.resolve()
     expect(document.querySelector('.report-export-status')).toBeNull()
     expect(document.body.classList.contains('report-pdf-exporting')).toBe(false)
+    expect(modal.element.hidden).toBe(true)
+    modal.open()
+    expect(modal.element.textContent).toContain('report.pdf')
   })
 
   it('localizes the status bar and aborts export when cancellation is requested', async () => {

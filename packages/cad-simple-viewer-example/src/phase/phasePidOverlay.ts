@@ -55,6 +55,7 @@ export interface PhasePidOverlay {
   OrderId: number
   Name: string
   Comment: string | null
+  tankId?: string
   drawing?: PhasePidOverlayDrawing
   flowPaths: PhasePidOverlayFlowPath[]
   deviceStates: PhasePidOverlayDeviceState[]
@@ -321,6 +322,7 @@ export const parsePhasePidOverlay = (
   return {
     status: 'valid',
     overlay: {
+      ...(isNonEmptyString(value.tankId) ? { tankId: value.tankId.trim() } : {}),
       Index: Number(value.Index),
       OrderId: Number(value.OrderId),
       Name: value.Name.trim(),

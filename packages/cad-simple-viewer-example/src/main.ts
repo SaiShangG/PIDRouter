@@ -131,6 +131,7 @@ import {
   PhaseWorkspaceStore
 } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
+import { readDocumentTanks, TankLocator, type TankOption } from './phase/tankSelection'
 import type {
   DeviceState,
   DeviceStateStyleDefinition,
@@ -471,6 +472,11 @@ class CadViewerApp {
     new ProcessAssistantDrawingRepository(this.processAssistantFileApi)
   private readonly phaseConfigImportModal = new PhaseConfigImportModal()
   private phasePanel?: PhaseWorkspacePanel
+  private tankOptions: TankOption[] = []
+  private readonly tankLocator = new TankLocator(handleKey => {
+    const objectId = this.resolveObjectIdByHandleKey(handleKey)
+    return objectId == null ? undefined : this.createValveDebugOverlay([objectId], 'locator') ?? undefined
+  })
   private drawingLibrary?: DrawingLibraryModal
   private projectManagement?: ProjectManagementModal
   private reportWorkspace?: ReportWorkspaceModal
@@ -1722,7 +1728,19 @@ class CadViewerApp {
         }
       },
       () => this.appLocale,
-      () => this.activeProject?.fileIds ?? []
+      () => this.activeProject?.fileIds ?? [],
+      {
+        getTanks: () => this.tankOptions,
+        locateTank: tankId => {
+          const tank = this.tankOptions.find(option => option.id === tankId)
+          const located = Boolean(tank && this.tankLocator.start(tank.handleKey))
+          if (!located) this.showMessage('无法定位所选 Tank', 'error')
+          return located
+        },
+        stopLocatingTank: () => this.tankLocator.stop(),
+        assignPhaseTank: (processId, sequenceId, phaseId, tankId) =>
+          this.assignWorkspacePhaseTank(processId, sequenceId, phaseId, tankId)
+      }
     )
     const mount = document.getElementById('phaseWorkspaceMount')
     if (!mount) throw new Error('Phase workspace mount was not found')
@@ -1753,6 +1771,37 @@ class CadViewerApp {
     )
     this.setupPhaseContextBar()
     this.syncPhaseContextBar()
+  }
+
+  private async assignWorkspacePhaseTank(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    tankId?: string
+  ) {
+    const store = this.phaseStore
+    const repository = this.phaseRepository
+    try {
+      if (tankId && !this.tankOptions.some(tank => tank.id === tankId)) {
+        throw new Error('Tank was not found')
+      }
+      this.captureLoadedPhaseState()
+      const sequence = store.snapshot().processes.find(process => process.id === processId)
+        ?.sequences.find(item => item.id === sequenceId)
+      const index = sequence?.phases.findIndex(phase => phase.id === phaseId) ?? -1
+      const phase = sequence?.phases[index]
+      if (!phase) throw new Error('Phase was not found')
+      if (repository) {
+        this.cancelBackendPhaseSave(phaseId)
+        await repository.updatePhase(sequenceId, { ...phase, tankId }, index + 1)
+      }
+      if (this.phaseStore !== store || this.phaseRepository !== repository) return
+      store.assignPhaseTank(processId, sequenceId, phaseId, tankId)
+      store.persist()
+    } catch (error) {
+      log.error('Failed to assign Phase Tank:', error)
+      this.showMessage('Tank 归属保存失败', 'error')
+    }
   }
 
   private setupValveDebugFeature() {
@@ -3442,6 +3491,8 @@ class CadViewerApp {
             selectFlowConnectionDocumentAndView(
               extracted.flowConnectionJsonText
             )
+            this.tankOptions = readDocumentTanks(flowConnectionDocument, drawing.id)
+            this.phasePanel?.render()
           }
           return success
         } catch (error) {
@@ -4525,6 +4576,10 @@ class CadViewerApp {
   }
 
   private onFileOpened() {
+    this.tankLocator.stop()
+    this.tankOptions = []
+    this.phasePanel?.resetTankSelection()
+    this.phasePanel?.render()
     this.hasOpenedFile = true
     this.resetPhaseRuntimeState()
     this.hideDisplayRasterLayer()
@@ -4558,6 +4613,9 @@ class CadViewerApp {
   }
 
   private invalidateLoadedPhaseBinding() {
+    this.tankLocator.stop()
+    this.tankOptions = []
+    this.phasePanel?.resetTankSelection()
     this.loadedPhase = undefined
     this.loadedDrawingAssetId = undefined
     this.pendingPhase = undefined

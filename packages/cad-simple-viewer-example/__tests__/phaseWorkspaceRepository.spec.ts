@@ -2,6 +2,32 @@ import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
+  it('round-trips Tank ownership through backend Phase JSON', async () => {
+    const phases = {
+      list: jest.fn(), get: jest.fn(), create: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined), delete: jest.fn()
+    }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '', projectId: 1,
+      files: { list: jest.fn(), upload: jest.fn() },
+      procedures: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      operations: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      phases
+    })
+    const phase = {
+      id: '20', number: 1, name: 'Rinse', tankId: 'file:5:E65',
+      drawing: { kind: 'unassigned' as const }, flowState: { flowPaths: [] },
+      createdAt: '', updatedAt: ''
+    }
+    await repository.updatePhase('10', phase, 1)
+    const payload = phases.update.mock.calls[0][1]
+    expect(JSON.parse(payload.jsonData).tankId).toBe(phase.tankId)
+    phases.get.mockResolvedValue({ ...payload, id: 20 })
+    expect((await repository.loadPhase('20', {}, 0)).tankId).toBe(phase.tankId)
+    await repository.updatePhase('10', { ...phase, tankId: undefined }, 1)
+    expect(JSON.parse(phases.update.mock.calls[1][1].jsonData)).not.toHaveProperty('tankId')
+  })
+
   it('persists the drawing with PUT after creating a Phase', async () => {
     const phases = {
       list: jest.fn(),

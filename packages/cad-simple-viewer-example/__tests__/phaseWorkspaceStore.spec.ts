@@ -56,6 +56,25 @@ const legacyPhase = {
 }
 
 describe('PhaseWorkspaceStore', () => {
+  it('retains Tank assignments through snapshots, reload and copying', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const phase = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Rinse',
+      source: { kind: 'unassigned' }
+    })
+    store.assignPhaseTank(process.id, sequence.id, phase.id, 'file:5:E65')
+    const restored = new PhaseWorkspaceStore(store.snapshot())
+    expect(restored.snapshot().processes[0].sequences[0].phases[0].tankId).toBe('file:5:E65')
+    const copy = store.copyPhase(process.id, sequence.id, phase.id, sequence.id, 2, 'Rinse copy')
+    expect(copy.tankId).toBe('file:5:E65')
+    store.assignPhaseTank(process.id, sequence.id, phase.id)
+    expect(store.snapshot().processes[0].sequences[0].phases[0].tankId).toBeUndefined()
+  })
+
   it('creates a process with an active default sequence and a phase', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)

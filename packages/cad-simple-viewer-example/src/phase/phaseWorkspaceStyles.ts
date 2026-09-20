@@ -20,6 +20,10 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .phase-workspace-primary:hover:not(:disabled), .phase-workspace-modal .phase-workspace-primary:hover:not(:disabled) { border-color: var(--app-accent-hover, #075f46); background: var(--app-accent-hover, #075f46); color: #fff; }
     .phase-ui-icon { display: block; flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; }
     .phase-process-selector { display: grid; grid-template-columns: minmax(0, 1fr) 34px 34px; gap: 7px; }
+    .phase-tank-selector { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 7px; align-items: center; }
+    .phase-tank-selector select, .phase-tank-assignment { min-width: 0; width: 100%; }
+    .phase-workspace .phase-tank-selector .phase-icon-button { width: 34px; height: 34px; }
+    .phase-workspace .phase-tank-selector [aria-pressed='true'] { border-color: var(--app-accent, #087b58); background: var(--app-success-surface, #e1f5ed); }
     .phase-process-creator { display: grid; grid-template-columns: minmax(0, 1fr) auto 34px; gap: 7px; padding: 9px; border: 1px solid var(--app-border-subtle, #d8e2e4); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface-elevated, #fff); }
     .phase-workspace .phase-icon-button, .phase-workspace-modal .phase-icon-button { display: inline-grid; place-items: center; min-width: 28px; width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: var(--app-border-strong, #c4cfd2); color: var(--app-accent, #087b58); background: var(--app-surface-elevated, #fff); }
     .phase-process-selector > .phase-icon-button, .phase-workspace .phase-process-cancel { min-width: 34px; width: 34px; min-height: 34px; height: 34px; }

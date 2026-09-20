@@ -194,6 +194,16 @@ export class ReportWorkspaceModal {
   }
 
   open() {
+    if (!this.element.hidden) return
+    if (this.exportController) {
+      this.element.hidden = false
+      document.body.classList.add('report-workspace-open')
+      this.render()
+      this.focusController.activate(
+        this.element.querySelector<HTMLButtonElement>('.report-icon-button')
+      )
+      return
+    }
     const workspace = this.getWorkspace()
     if (
       this.pdfProcessId !== ALL_REPORT_PROCESSES_ID &&
@@ -215,7 +225,6 @@ export class ReportWorkspaceModal {
   }
 
   close() {
-    if (this.exportController) return
     this.element.hidden = true
     document.body.classList.remove('report-workspace-open')
     this.focusController.deactivate()
@@ -257,7 +266,6 @@ export class ReportWorkspaceModal {
     close.className = 'report-icon-button'
     close.title = '关闭报告工作区'
     close.setAttribute('aria-label', '关闭报告工作区')
-    close.disabled = Boolean(this.exportController)
     close.append(createPhaseIcon(X))
     close.addEventListener('click', () => this.close())
     header.append(heading, tabs, summary, close)
@@ -1091,6 +1099,13 @@ export class ReportWorkspaceModal {
     const title = document.createElement('h3')
     title.textContent = '已生成 Matrix'
     section.append(title)
+    if (this.matrixMessage) {
+      const status = document.createElement('p')
+      status.className = 'report-matrix-summary'
+      status.setAttribute('role', 'status')
+      status.textContent = this.matrixMessage
+      section.append(status)
+    }
     if (this.generatedMatrices.length === 0) {
       const empty = document.createElement('p')
       empty.className = 'report-generated-empty'
@@ -1468,8 +1483,8 @@ export class ReportWorkspaceModal {
       item => item.id === this.matrixProcessId
     )
     this.matrixFileName = `${this.matrixProcessId === ALL_REPORT_PROCESSES_ID
-        ? 'all-processes'
-        : process?.name ?? 'process'
+      ? 'all-processes'
+      : process?.name ?? 'process'
       }-matrix`
   }
 
@@ -1535,6 +1550,11 @@ export class ReportWorkspaceModal {
         includeInactiveDevices: this.matrixIncludeInactiveDevices,
         includeTransitions: this.matrixIncludeTransitions
       }, controller.signal)
+      if (!controller.signal.aborted && (!result || result.bytes.byteLength === 0)) {
+        throw new Error(this.getLocale() === 'zh'
+          ? '生成服务未返回有效的 Matrix 文件，请重试。'
+          : 'The service returned no Matrix file. Please try again.')
+      }
       if (!controller.signal.aborted && result) {
         this.generatedMatrices = [{
           id: `generated-matrix-${++this.generatedReportSequence}`,

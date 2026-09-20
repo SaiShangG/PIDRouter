@@ -18,6 +18,7 @@ export class LoginView {
   private readonly submitLabel = document.createElement('span')
   private readonly status = document.createElement('p')
   private readonly language = document.createElement('button')
+  private readonly languageLabel = document.createElement('span')
   private readonly title = document.createElement('h1')
   private readonly usernameLabel = document.createElement('label')
   private readonly passwordLabel = document.createElement('label')
@@ -28,10 +29,10 @@ export class LoginView {
   ) {
     this.element.className = 'login-page'
     this.element.setAttribute('aria-labelledby', 'login-title')
-    this.element.innerHTML = '<aside class="login-media"><img class="login-photo" src="./biopharma-login.jpg" alt="" fetchpriority="high" /></aside><div class="login-panel"><header class="login-header"><div class="login-brand"><span class="login-mark" aria-hidden="true">PID</span><strong>PID Viewer Lite</strong></div></header><section class="login-content"><div class="login-form-wrap"></div></section><footer class="login-footer"><span>PID Viewer Lite</span></footer></div>'
+    this.element.innerHTML = '<aside class="login-media"><img class="login-photo" src="./biopharma-login.jpg" alt="" fetchpriority="high" /></aside><div class="login-panel"><header class="login-header"><div class="login-brand"><span class="login-mark" aria-hidden="true">PID</span><strong>PID Viewer Lite</strong></div></header><section class="login-content"><div class="login-form-wrap"></div></section></div>'
     this.language.type = 'button'
-    this.language.className = 'login-icon-button'
-    this.language.append(createPhaseIcon(Languages))
+    this.language.className = 'login-icon-button login-language'
+    this.language.append(createPhaseIcon(Languages), this.languageLabel)
     this.language.addEventListener('click', () => {
       this.locale = toggleAppLocale(this.locale)
       saveAppLocale(this.locale)
@@ -102,8 +103,10 @@ export class LoginView {
     this.element.querySelector<HTMLImageElement>('.login-photo')!.alt = text('loginPhotoAlt')
     this.usernameLabel.textContent = text('loginUsername')
     this.passwordLabel.textContent = text('loginPassword')
+    this.languageLabel.textContent = text('loginLanguageTarget')
+    this.languageLabel.lang = this.locale === 'zh' ? 'en' : 'zh-CN'
     this.language.title = text('languageButton')
-    this.language.setAttribute('aria-label', this.language.title)
+    this.language.setAttribute('aria-label', `${this.languageLabel.textContent}: ${this.language.title}`)
     const visible = this.password.type === 'text'
     this.visibility.title = text(visible ? 'loginHidePassword' : 'loginShowPassword')
     this.visibility.setAttribute('aria-label', this.visibility.title)
