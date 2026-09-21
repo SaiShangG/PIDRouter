@@ -12,7 +12,7 @@ import { toPersistedPresentationProfile } from '../phase/phaseWorkspaceRepositor
 import { normalizePresentationProfile } from '../phase/phaseWorkspaceStore'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
-import { localizeDom } from '../uiTranslations'
+import { localizeDom, translateUiText } from '../uiTranslations'
 import {
   HighlightStyleImportPreviewModal,
   type HighlightStyleImportAnalysis,
@@ -27,7 +27,7 @@ export interface HighlightStyleDialogOptions {
   value: HighlightStyleDraft
   getLocale?: () => AppLocale
   createId?: () => string
-  onApply?(value: HighlightStyleDraft): void
+  onApply?(value: HighlightStyleDraft): void | Promise<void>
   onClose(): void
 }
 
@@ -47,6 +47,8 @@ export class HighlightStyleDialog {
   readonly element = document.createElement('div')
   private draft: HighlightStyleDraft
   private activeTab: 'device' | 'utility' = 'device'
+  private saving = false
+  private readonly saveStatus = document.createElement('p')
   private readonly focusController = createModalFocusController(this.element)
   private readonly confirmationModal: ConfirmationModal
 
@@ -64,7 +66,9 @@ export class HighlightStyleDialog {
     this.render()
   }
 
-  private emitPreview() { }
+  private emitPreview() {
+    this.saveStatus.hidden = true
+  }
 
   open() {
     if (!this.element.isConnected) document.body.append(this.element)
@@ -76,7 +80,7 @@ export class HighlightStyleDialog {
   }
 
   private close() {
-    if (this.element.hidden) return
+    if (this.element.hidden || this.saving) return
     this.element.hidden = true
     document.body.classList.remove('highlight-style-open')
     this.focusController.deactivate()
@@ -85,7 +89,45 @@ export class HighlightStyleDialog {
   }
 
   private canApply() {
-    return this.validateDeviceStateKeys()
+    if (this.validateDeviceStateKeys()) return true
+    if (this.activeTab !== 'device') {
+      this.activeTab = 'device'
+      this.render()
+      this.validateDeviceStateKeys()
+    }
+    this.setSaveStatus('状态 key 不能为空，且同一设备内不能重复', true)
+    this.element.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus()
+    return false
+  }
+
+  private setSaveStatus(message: string, error = false) {
+    this.saveStatus.hidden = false
+    this.saveStatus.setAttribute('role', error ? 'alert' : 'status')
+    this.saveStatus.textContent = translateUiText(this.options.getLocale?.() ?? 'zh', message)
+  }
+
+  private async applyDraft(closeAfterSave: boolean) {
+    if (this.saving || !this.canApply()) return
+    this.saving = true
+    this.element.setAttribute('aria-busy', 'true')
+    this.setSaveStatus('正在保存高亮样式...')
+    const controls = [...this.element.querySelectorAll<
+      HTMLButtonElement | HTMLInputElement | HTMLSelectElement
+    >('button, input, select')].map(control => ({ control, disabled: control.disabled }))
+    controls.forEach(({ control }) => { control.disabled = true })
+    let saved = false
+    try {
+      await this.options.onApply?.(cloneDraft(this.draft))
+      saved = true
+      this.setSaveStatus('高亮样式已保存')
+    } catch {
+      this.setSaveStatus('高亮样式保存失败，请重试。', true)
+    } finally {
+      this.saving = false
+      this.element.setAttribute('aria-busy', 'false')
+      controls.forEach(({ control, disabled }) => { control.disabled = disabled })
+    }
+    if (saved && closeAfterSave) this.close()
   }
 
   private validateDeviceStateKeys() {
@@ -102,7 +144,7 @@ export class HighlightStyleDialog {
           stateInput.setAttribute('aria-invalid', String(!stateValid))
           stateInput.title = stateValid
             ? ''
-            : '状态 key 不能为空，且同一设备内不能重复'
+            : translateUiText(this.options.getLocale?.() ?? 'zh', '状态 key 不能为空，且同一设备内不能重复')
         }
         keys.add(key)
       })
@@ -159,17 +201,18 @@ export class HighlightStyleDialog {
     footer.className = 'phase-workspace-modal-actions highlight-style-actions'
     const cancel = this.button('取消', () => this.close())
     const apply = this.button('应用', () => {
-      if (this.canApply()) this.options.onApply?.(cloneDraft(this.draft))
+      void this.applyDraft(false)
     })
     const applyClose = this.button('应用并关闭', () => {
-      if (!this.canApply()) return
-      this.options.onApply?.(cloneDraft(this.draft))
-      this.close()
+      void this.applyDraft(true)
     })
     apply.classList.add('phase-workspace-primary')
     applyClose.classList.add('phase-workspace-primary')
     footer.append(cancel, apply, applyClose)
-    dialog.append(header, tabs, content, footer)
+    this.saveStatus.className = 'highlight-style-save-status'
+    this.saveStatus.hidden = true
+    this.saveStatus.setAttribute('aria-live', 'polite')
+    dialog.append(header, tabs, content, this.saveStatus, footer)
     this.element.append(dialog)
     localizeDom(this.element, this.options.getLocale?.() ?? 'zh')
   }

@@ -9,6 +9,92 @@ const value = () => ({
 })
 
 describe('HighlightStyleDialog', () => {
+  it('waits for saving before closing and prevents duplicate submissions', async () => {
+    let finishSave!: () => void
+    const onApply = jest.fn(() => new Promise<void>(resolve => { finishSave = resolve }))
+    const onClose = jest.fn()
+    const dialog = new HighlightStyleDialog({ value: value(), onApply, onClose })
+    dialog.open()
+    const applyClose = [...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent === '应用并关闭')!
+
+    applyClose.click()
+    expect(onApply).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(dialog.element.textContent).toContain('正在保存高亮样式')
+    applyClose.click()
+    expect(onApply).toHaveBeenCalledTimes(1)
+
+    finishSave()
+    await Promise.resolve()
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['zh', 'en'] as const)('shows save failures and allows retry in %s', async locale => {
+    const onApply = jest.fn()
+      .mockRejectedValueOnce(new Error('Save failed'))
+      .mockResolvedValueOnce(undefined)
+    const onClose = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: value(), onApply, onClose, getLocale: () => locale
+    })
+    dialog.open()
+    const applyClose = [...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent === (locale === 'en' ? 'Apply and close' : '应用并关闭'))!
+    applyClose.click()
+    await Promise.resolve()
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(dialog.element.isConnected).toBe(true)
+    expect(dialog.element.querySelector('[role="alert"]')?.textContent)
+      .toBe(locale === 'en' ? 'Failed to save highlight styles. Please try again.' : '高亮样式保存失败，请重试。')
+    expect(applyClose.disabled).toBe(false)
+
+    applyClose.click()
+    await Promise.resolve()
+    expect(onApply).toHaveBeenCalledTimes(2)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports success without closing when applying styles', async () => {
+    const onClose = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: value(), onApply: jest.fn(), onClose, getLocale: () => 'en'
+    })
+    dialog.open()
+    const apply = [...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent === 'Apply')!
+    apply.click()
+    expect(dialog.element.querySelector('[role="status"]')?.textContent)
+      .toBe('Saving highlight styles...')
+    await Promise.resolve()
+    expect(dialog.element.querySelector('[role="status"]')?.textContent)
+      .toBe('Highlight styles saved')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(apply.disabled).toBe(false)
+  })
+
+  it.each(['', 'OPEN'])('reveals and focuses invalid state keys from the Utility tab: %s', invalidKey => {
+    const onApply = jest.fn()
+    const dialog = new HighlightStyleDialog({ value: value(), onApply, onClose: jest.fn() })
+    dialog.open()
+    const clickButton = (label: string) => [...dialog.element.querySelectorAll('button')]
+      .find(button => button.textContent === label)!.click()
+    clickButton('新增设备')
+    const key = dialog.element.querySelectorAll<HTMLInputElement>('[data-state-id]')[1]
+    key.value = invalidKey
+    key.dispatchEvent(new Event('input'))
+    clickButton('Utility')
+    clickButton('应用')
+
+    expect(onApply).not.toHaveBeenCalled()
+    expect(dialog.element.querySelector('[role="alert"]')?.textContent)
+      .toBe('状态 key 不能为空，且同一设备内不能重复')
+    expect(document.activeElement?.getAttribute('aria-invalid')).toBe('true')
+    expect(dialog.element.querySelector('[role="tab"][aria-selected="true"]')?.textContent)
+      .toBe('设备')
+  })
+
   afterEach(() => {
     document.body.replaceChildren()
     document.body.classList.remove('highlight-style-open')

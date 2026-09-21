@@ -3824,9 +3824,7 @@ class CadViewerApp {
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
-      onApply: draft => {
-        void this.savePresentationProfile(draft.presentationProfile)
-      },
+      onApply: draft => this.savePresentationProfile(draft.presentationProfile),
       onClose: () => undefined
     })
     dialog.open()
@@ -3863,6 +3861,7 @@ class CadViewerApp {
     } catch (error) {
       log.error('Failed to save highlight styles:', error)
       this.showMessage('高亮样式保存失败', 'error')
+      throw error
     }
   }
 

@@ -149,6 +149,8 @@ export function injectPhaseWorkspaceStyles() {
     .highlight-device-creator { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 8px; padding-top: 8px; }
     .highlight-default-field { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.2fr); align-items: center; gap: 12px; padding: 9px; border: 1px solid #dbe3e5; border-radius: 6px; background: #f8fafa; color: #53676e; font-size: 11px; font-weight: 650; }
     .highlight-style-actions { padding: 10px 16px 16px; border-top: 1px solid #dbe3e5; }
+    .highlight-style-save-status { margin: 0; padding: 8px 16px; color: var(--app-success-text, #075d43); font-size: 12px; overflow-wrap: anywhere; }
+    .highlight-style-save-status[role='alert'] { color: var(--app-danger, #9f352c); }
     .highlight-import-preview-dialog { width: min(560px, 100%); }
     .highlight-import-preview-dialog h2 { display: flex; align-items: center; gap: 8px; }
     .highlight-import-preview-body { display: grid; gap: 14px; padding: 16px; }
