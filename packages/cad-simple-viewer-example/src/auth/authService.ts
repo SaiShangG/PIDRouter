@@ -33,11 +33,14 @@ export function createDemoAuthService(options: {
     mode: 'demo',
     async login(credentials) {
       if (!options.enabled) throw new AuthError('unavailable')
-      const username = credentials.username.trim()
-      if (!username || !credentials.password) throw new AuthError('required')
+      const username = credentials.username
+      if (!username.trim() || !credentials.password) throw new AuthError('required')
       await new Promise(resolve => setTimeout(resolve, options.delayMs ?? 350))
       if (options.outcome && options.outcome !== 'success') {
         throw new AuthError(options.outcome)
+      }
+      if (username !== 'Admin' || credentials.password !== 'Admin') {
+        throw new AuthError('invalid')
       }
       user = { id: 'demo', name: username }
       return { ...user }

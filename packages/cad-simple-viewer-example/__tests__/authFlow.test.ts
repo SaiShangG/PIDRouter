@@ -19,8 +19,8 @@ describe('authentication flow', () => {
     startLogin(service, startWorkspace)
     expect(startWorkspace).not.toHaveBeenCalled()
     expect(document.body.classList.contains('login-active')).toBe(true)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     expect(startWorkspace).not.toHaveBeenCalled()
     await jest.runAllTimersAsync()
@@ -35,8 +35,8 @@ describe('authentication flow', () => {
     const startup = new Promise<void>(resolve => { finishStartup = resolve })
     const startWorkspace = jest.fn(() => startup)
     startLogin(createDemoAuthService({ enabled: true, delayMs: 0 }), startWorkspace)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     await jest.runAllTimersAsync()
     expect(startWorkspace).toHaveBeenCalledTimes(1)
@@ -58,8 +58,8 @@ describe('authentication flow', () => {
     const prepareWorkspace = jest.fn(() => preparation)
     const startWorkspace = jest.fn(() => startup)
     startLogin(createDemoAuthService({ enabled: true, delayMs: 0 }), startWorkspace, prepareWorkspace)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     await jest.runAllTimersAsync()
     expect(prepareWorkspace).toHaveBeenCalledTimes(1)
@@ -81,8 +81,8 @@ describe('authentication flow', () => {
     const startWorkspace = jest.fn()
     const prepareWorkspace = jest.fn().mockRejectedValue(new Error('module load failed'))
     startLogin(createDemoAuthService({ enabled: true, delayMs: 0 }), startWorkspace, prepareWorkspace)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     await jest.runAllTimersAsync()
     expect(startWorkspace).not.toHaveBeenCalled()
@@ -94,8 +94,8 @@ describe('authentication flow', () => {
   it('restores an actionable error if workspace initialization fails', async () => {
     const startWorkspace = jest.fn().mockRejectedValue(new Error('startup failed'))
     startLogin(createDemoAuthService({ enabled: true, delayMs: 0 }), startWorkspace)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     await jest.runAllTimersAsync()
     expect(document.body.classList.contains('login-active')).toBe(true)
@@ -107,8 +107,8 @@ describe('authentication flow', () => {
   it('keeps the workspace hidden when demo authentication is disabled', async () => {
     const startWorkspace = jest.fn()
     startLogin(createDemoAuthService({ enabled: false }), startWorkspace)
-    document.querySelector<HTMLInputElement>('#login-username')!.value = 'operator'
-    document.querySelector<HTMLInputElement>('#login-password')!.value = 'demo'
+    document.querySelector<HTMLInputElement>('#login-username')!.value = 'Admin'
+    document.querySelector<HTMLInputElement>('#login-password')!.value = 'Admin'
     document.querySelector('form')!.dispatchEvent(new Event('submit'))
     await jest.runAllTimersAsync()
     expect(startWorkspace).not.toHaveBeenCalled()
@@ -118,11 +118,11 @@ describe('authentication flow', () => {
 
   it('cancels logout or clears the session and reloads after confirmation', async () => {
     const service = createDemoAuthService({ enabled: true, delayMs: 0 })
-    const login = service.login({ username: '<operator>', password: 'demo' })
+    const login = service.login({ username: 'Admin', password: 'Admin' })
     await jest.runAllTimersAsync()
     const user = await login
     const reload = jest.fn()
-    const controls = new AccountControls(service, user, reload)
+    const controls = new AccountControls(service, { ...user, name: '<operator>' }, reload)
     document.body.append(controls.element)
     expect(controls.element.querySelector('operator')).toBeNull()
     expect(controls.element.textContent).toBe('<operator>')

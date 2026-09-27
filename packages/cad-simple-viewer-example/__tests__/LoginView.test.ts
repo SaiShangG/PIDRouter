@@ -71,32 +71,51 @@ describe('LoginView', () => {
 
   it('blocks duplicate submissions and opens the workspace only after login', async () => {
     const { username, password, submit, login, onAuthenticated, view } = setup()
-    username.value = ' operator '
-    password.value = ' demo '
+    username.value = 'Admin'
+    password.value = 'Admin'
     submit()
     submit()
     expect(login).toHaveBeenCalledTimes(1)
-    expect(login).toHaveBeenCalledWith({ username: 'operator', password: ' demo ' })
+    expect(login).toHaveBeenCalledWith({ username: 'Admin', password: 'Admin' })
     expect(onAuthenticated).not.toHaveBeenCalled()
     expect(document.querySelector<HTMLButtonElement>('[type="submit"]')!.disabled).toBe(true)
     await jest.runAllTimersAsync()
-    expect(onAuthenticated).toHaveBeenCalledWith({ id: 'demo', name: 'operator' })
+    expect(onAuthenticated).toHaveBeenCalledWith({ id: 'demo', name: 'Admin' })
     expect(password.value).toBe('')
     expect(view.element.isConnected).toBe(false)
+  })
+
+  it.each([
+    { username: 'operator', password: 'Admin' },
+    { username: 'admin', password: 'Admin' },
+    { username: ' Admin ', password: 'Admin' },
+    { username: 'Admin', password: 'admin' },
+    { username: 'Admin', password: ' Admin ' }
+  ])('rejects invalid credentials without opening the workspace: %j', async credentials => {
+    saveAppLocale('en')
+    const { username, password, submit, login, onAuthenticated, view } = setup()
+    username.value = credentials.username
+    password.value = credentials.password
+    submit()
+    await jest.runAllTimersAsync()
+    expect(login).toHaveBeenCalledWith(credentials)
+    expect(onAuthenticated).not.toHaveBeenCalled()
+    expect(view.element.isConnected).toBe(true)
+    expect(document.querySelector('.login-status.is-error')!.textContent).toMatch(/Incorrect/)
   })
 
   it.each(['invalid', 'network'] as const)('retains username and allows retry after %s', async outcome => {
     saveAppLocale('en')
     const { username, password, submit, login, onAuthenticated } = setup(outcome)
-    username.value = 'operator'
-    password.value = 'demo'
+    username.value = 'Admin'
+    password.value = 'Admin'
     submit()
     await jest.runAllTimersAsync()
     expect(onAuthenticated).not.toHaveBeenCalled()
-    expect(username.value).toBe('operator')
+    expect(username.value).toBe('Admin')
     expect(password.value).toBe('')
     expect(document.querySelector('.login-status.is-error')!.textContent).toMatch(/Incorrect|Cannot connect/)
-    password.value = 'demo'
+    password.value = 'Admin'
     submit()
     await jest.runAllTimersAsync()
     expect(login).toHaveBeenCalledTimes(2)
@@ -106,8 +125,8 @@ describe('LoginView', () => {
     saveAppLocale('en')
     const { username, password, submit, onAuthenticated } = setup()
     onAuthenticated.mockRejectedValue(new Error('startup failed'))
-    username.value = 'operator'
-    password.value = 'demo'
+    username.value = 'Admin'
+    password.value = 'Admin'
     submit()
     await jest.runAllTimersAsync()
     expect(document.querySelector('[type="submit"]')!.textContent).toBe('Reload')

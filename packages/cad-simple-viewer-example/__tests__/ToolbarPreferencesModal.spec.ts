@@ -10,6 +10,7 @@ describe('ToolbarPreferencesModal', () => {
     const modal = new ToolbarPreferencesModal(() => locale, item => item.label ?? item.id, save)
     const preferences = { ...defaultToolbarPreferences(), hiddenIds: [] }
     modal.open(preferences, [
+      { id: 'layer', label: 'Layers' },
       { id: 'annotation', label: 'Annotation', children: [{ id: 'rev-cloud', label: 'Cloud' }] },
       { id: 'export', label: 'Export', children: [{ id: 'export-pdf', label: 'PDF' }] },
       { id: 'export-svg', label: 'SVG' }
@@ -17,6 +18,8 @@ describe('ToolbarPreferencesModal', () => {
     expect(modal.element.parentElement).toBe(document.body)
     expect(modal.element.querySelector('h2')?.textContent).toBe(locale === 'zh' ? '功能配置' : 'Feature settings')
     expect(modal.element.querySelector('h3')?.textContent).toBe(locale === 'zh' ? '图纸 Viewer 功能配置' : 'Drawing Viewer feature settings')
+    expect(modal.element.querySelector('input[name="layer"]')?.closest('details')?.querySelector('h4')?.textContent)
+      .toBe(locale === 'zh' ? '图层' : 'Layers')
     expect(modal.element.textContent).toContain(locale === 'zh' ? '开发' : 'Development')
     expect(modal.element.textContent).toContain(locale === 'zh' ? '阀门调试' : 'Valve debug')
     expect(modal.element.querySelector('input[name^="export"]')).toBeNull()

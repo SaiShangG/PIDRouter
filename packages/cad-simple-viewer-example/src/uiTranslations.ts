@@ -307,7 +307,7 @@ const pairs: TranslationPair[] = [
   ['高亮样式已保存', 'Highlight styles saved'], ['高亮样式保存失败', 'Failed to save highlight styles'],
   ['正在保存高亮样式...', 'Saving highlight styles...'],
   ['高亮样式保存失败，请重试。', 'Failed to save highlight styles. Please try again.'],
-  ['Measure', '测量'], ['Mode', '模式'], ['Opacity', '不透明度'], ['Optional notes for this panel…', '此面板的可选备注…'],
+  ['Layers', '图层'], ['Measure', '测量'], ['Mode', '模式'], ['Opacity', '不透明度'], ['Optional notes for this panel…', '此面板的可选备注…'],
   ['Replace this block with your own form or tool UI.', '用您自己的表单或工具界面替换此区域。'],
   ['Notes', '备注'], ['Apply', '应用'], ['Reset', '重置'], ['Change controls above, then click Apply.', '更改上方控件，然后点击“应用”。'],
   ['Panel values reset.', '面板值已重置。'], ['Line', '直线'], ['Circle', '圆'], ['Demo Info', '演示信息'],

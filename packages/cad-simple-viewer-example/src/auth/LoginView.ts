@@ -147,7 +147,7 @@ export class LoginView {
     this.setPending(true)
     let authenticated = false
     try {
-      const user = await this.service.login({ username, password: this.password.value })
+      const user = await this.service.login({ username: this.username.value, password: this.password.value })
       authenticated = true
       this.password.value = ''
       this.statusKey = 'loginStarting'
