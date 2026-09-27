@@ -256,9 +256,7 @@ describe('PhaseWorkspacePanel', () => {
     ).not.toBeNull()
   })
 
-  it.each([
-    ['zh', 'phase'], ['en', 'phase'], ['zh', 'drawing'], ['en', 'drawing']
-  ] as const)('localizes dynamically opened %s %s rename controls', (locale, target) => {
+  it.each(['zh', 'en'] as const)('allows Phase renaming but keeps the drawing name read-only in %s', locale => {
     const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
@@ -271,18 +269,22 @@ describe('PhaseWorkspacePanel', () => {
       }
     })
     panel.render()
+    const drawing = panel.element.querySelector('.phase-overview-drawing')!
+    expect(drawing.querySelector('.phase-overview-drawing-name')?.textContent).toBe('Phase11.dwg')
+    expect(drawing.querySelector('.phase-overview-edit')).toBeNull()
+    expect(drawing.querySelector('input')).toBeNull()
+    expect(drawing.querySelectorAll('button')).toHaveLength(1)
+    expect(drawing.querySelector('button')?.textContent).toBe(locale === 'zh' ? '更换图纸' : 'Replace drawing')
     const openEditor = () => panel.element.querySelector<HTMLButtonElement>(
-      target === 'phase' ? '.phase-overview-identity-actions button' : '.phase-overview-drawing .phase-overview-edit'
+      '.phase-overview-identity-actions button'
     )!.click()
     openEditor()
     let editor = panel.element.querySelector('.phase-overview-rename')!
     expect([...editor.querySelectorAll('button')].map(button => button.textContent))
       .toEqual(locale === 'en' ? ['Cancel', 'Save'] : ['取消', '保存'])
     expect(editor.querySelector('input')?.getAttribute('aria-label'))
-      .toBe(target === 'phase'
-        ? locale === 'en' ? 'Phase name' : '阶段名称'
-        : locale === 'en' ? 'Drawing display name' : '图纸显示名')
-    expect(editor.querySelector('input')?.value).toBe(target === 'phase' ? 'Phase11' : 'Phase11.dwg')
+      .toBe(locale === 'en' ? 'Phase name' : '阶段名称')
+    expect(editor.querySelector('input')?.value).toBe('Phase11')
     editor.querySelector('button')!.click()
     expect(actions.renamePhase).not.toHaveBeenCalled()
     expect(actions.renameDrawing).not.toHaveBeenCalled()
@@ -299,8 +301,9 @@ describe('PhaseWorkspacePanel', () => {
     rename.dispatchEvent(new Event('input'))
     expect(rename.hasAttribute('aria-invalid')).toBe(false)
     editor.querySelectorAll('button')[1].click()
-    expect(target === 'phase' ? actions.renamePhase : actions.renameDrawing)
+    expect(actions.renamePhase)
       .toHaveBeenCalledWith(process.id, sequence.id, phase.id, '清洗 Phase11')
+    expect(actions.renameDrawing).not.toHaveBeenCalled()
   })
 
   it.each(['zh', 'en'] as const)('preserves business names that match UI translations in %s', locale => {
@@ -578,6 +581,28 @@ describe('PhaseWorkspacePanel', () => {
     expect(
       panel.element.querySelector(`[aria-label="${second.name} 的阶段"]`)?.hasAttribute('hidden')
     ).toBe(false)
+  })
+
+  it.each(['zh', 'en'] as const)('keeps Sequence actions beside its name and outside the Phase list in %s', locale => {
+    injectPhaseWorkspaceStyles()
+    const { store, panel } = createHarness(locale)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Rinse', source: { kind: 'unassigned' }
+    })
+    panel.render()
+    const row = panel.element.querySelector<HTMLElement>('.phase-sequence-row')!
+    const toggle = row.querySelector<HTMLElement>('.phase-sequence-toggle')!
+    const controls = row.querySelector<HTMLElement>('.phase-sequence-controls')!
+    expect(toggle.parentElement).toBe(controls.parentElement)
+    expect(getComputedStyle(row).gridTemplateColumns).toBe('minmax(0, 1fr) auto')
+    expect(getComputedStyle(toggle).gridTemplateColumns).toBe('12px minmax(0, 1fr)')
+    expect(getComputedStyle(controls).flexWrap).toBe('nowrap')
+    expect(controls.querySelectorAll('button')).toHaveLength(5)
+    expect(row.nextElementSibling?.classList.contains('phase-tree-list')).toBe(true)
+    expect(controls.closest('.phase-tree-list')).toBeNull()
   })
 
   it('emits sequence action payloads', async () => {
@@ -1035,8 +1060,9 @@ describe('PhaseWorkspacePanel', () => {
     ])
   })
 
-  it('deletes a Phase only through the dedicated confirmation dialog', async () => {
-    const { store, panel, actions } = createHarness()
+  it.each(['zh', 'en'] as const)('deletes the Phase from its row only after confirmation in %s', async locale => {
+    injectPhaseWorkspaceStyles()
+    const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
     const phase = store.createPhase({
@@ -1052,27 +1078,38 @@ describe('PhaseWorkspacePanel', () => {
     })
     panel.render()
     const deleteButton = panel.element.querySelector<HTMLButtonElement>(
-      '[aria-label="删除 Phase"]'
+      '.phase-tree-delete'
     )!
     expect(deleteButton.textContent).toBe('')
-    expect(deleteButton.querySelector('.phase-delete-icon')).not.toBeNull()
-    expect(deleteButton.closest('.phase-overview-identity-header')).not.toBeNull()
-    const modal = panel.element.querySelector<HTMLElement>('[role="alertdialog"]')!
+    expect(deleteButton.getAttribute('aria-label')).toBe(locale === 'zh' ? '删除 Phase' : 'Delete Phase')
+    expect(deleteButton.querySelector('svg')).not.toBeNull()
+    const controls = deleteButton.closest('.phase-tree-order-controls')!
+    expect(controls.children).toHaveLength(4)
+    expect(getComputedStyle(controls).gridTemplateColumns).toBe('repeat(4, 28px)')
+    expect(controls.lastElementChild).toBe(deleteButton)
+    const processDelete = panel.element.querySelector<HTMLElement>('.phase-process-delete')!
+    const sequenceDelete = panel.element.querySelector<HTMLElement>('.phase-sequence-controls .phase-delete-button')!
+    for (const remove of [sequenceDelete, deleteButton]) {
+      expect(remove.classList.contains('phase-delete-button')).toBe(true)
+      expect(getComputedStyle(remove).color).toBe(getComputedStyle(processDelete).color)
+      expect(getComputedStyle(remove).borderColor).toBe(getComputedStyle(processDelete).borderColor)
+      expect(getComputedStyle(remove).backgroundColor).toBe(getComputedStyle(processDelete).backgroundColor)
+    }
+    expect(panel.element.querySelector('.phase-overview-identity-header .phase-tree-delete')).toBeNull()
+    const modal = document.body.querySelector<HTMLElement>('.confirmation-modal')!
+    expect(modal.parentElement).toBe(document.body)
     expect(modal.hidden).toBe(true)
 
     deleteButton.click()
     expect(modal.hidden).toBe(false)
     expect(modal.textContent).toContain('Phase 01 · 清洗准备')
-      ;[...modal.querySelectorAll('button')]
-        .find(button => button.textContent === '取消')!
-        .click()
+    modal.querySelector<HTMLButtonElement>('.confirmation-modal-cancel')!.click()
+    await Promise.resolve()
     expect(actions.deletePhase).not.toHaveBeenCalled()
     expect(modal.hidden).toBe(true)
 
     deleteButton.click()
-      ;[...modal.querySelectorAll('button')]
-        .find(button => button.textContent === '确认删除')!
-        .click()
+    modal.querySelector<HTMLButtonElement>('.confirmation-modal-confirm')!.click()
     await Promise.resolve()
 
     expect(actions.deletePhase).toHaveBeenCalledWith(
@@ -1080,5 +1117,7 @@ describe('PhaseWorkspacePanel', () => {
       sequence.id,
       phase.id
     )
+    expect(actions.activatePhase).not.toHaveBeenCalled()
+    expect(actions.deleteSequence).not.toHaveBeenCalled()
   })
 })

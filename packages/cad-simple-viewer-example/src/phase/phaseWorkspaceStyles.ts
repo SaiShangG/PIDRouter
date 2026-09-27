@@ -28,26 +28,27 @@ export function injectPhaseWorkspaceStyles() {
     .phase-process-creator { display: grid; grid-template-columns: minmax(0, 1fr) auto 34px; gap: 7px; padding: 9px; border: 1px solid var(--app-border-subtle, #d8e2e4); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface-elevated, #fff); }
     .phase-workspace .phase-icon-button, .phase-workspace-modal .phase-icon-button { display: inline-grid; place-items: center; min-width: 28px; width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: var(--app-border-strong, #c4cfd2); color: var(--app-accent, #087b58); background: var(--app-surface-elevated, #fff); }
     .phase-process-selector > .phase-icon-button, .phase-workspace .phase-process-cancel { min-width: 34px; width: 34px; min-height: 34px; height: 34px; }
-    .phase-workspace .phase-process-delete { border-color: var(--app-danger-border, #cf7d75); color: var(--app-danger-text, #a7352d); background: var(--app-danger-surface, #fff8f7); }
-    .phase-workspace .phase-process-delete:hover { border-color: var(--app-danger, #a7352d); color: var(--app-danger-hover, #8f2d26); background: var(--app-danger-surface, #fdecea); }
+    .phase-workspace .phase-process-delete, .phase-workspace .phase-delete-button { border-color: var(--app-danger-border, #cf7d75); color: var(--app-danger-text, #a7352d); background: var(--app-danger-surface, #fff8f7); }
+    .phase-workspace .phase-process-delete:hover:not(:disabled), .phase-workspace .phase-delete-button:hover:not(:disabled) { border-color: var(--app-danger, #a7352d); color: var(--app-danger-hover, #8f2d26); background: var(--app-danger-surface, #fdecea); }
     .phase-workspace-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; }
     .phase-tree-section { gap: 5px; }
     .phase-tree-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .phase-sequence-tree { display: grid; gap: 7px; }
     .phase-sequence-group { display: grid; gap: 4px; padding: 5px; border: 1px solid var(--app-border-subtle, #d8e2e4); border-radius: var(--app-radius-panel, 6px); background: var(--app-surface-elevated, #fff); }
     .phase-sequence-group.is-active { border-color: var(--app-success-border, #87c8b3); box-shadow: inset 3px 0 var(--app-accent, #087b58); }
-    .phase-sequence-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
-    .phase-workspace .phase-sequence-toggle { display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: center; gap: 6px; width: 100%; min-height: 35px; padding: 4px 6px; border: 0; background: transparent; text-align: left; }
+    .phase-sequence-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
     .phase-workspace .phase-sequence-toggle:hover:not(:disabled) { border-color: transparent; background: var(--app-success-surface, #edf8f4); }
-    .phase-sequence-identity { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; align-items: center; gap: 6px; min-width: 0; }
+    .phase-sequence-identity { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; align-items: center; gap: 4px; min-width: 0; }
     .phase-sequence-identity strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     .phase-sequence-number { color: #60747b; font-size: 11px; font-variant-numeric: tabular-nums; }
     .phase-sequence-status { color: #467067; font-size: 9px; font-weight: 750; }
-    .phase-sequence-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; padding: 0 3px 3px; opacity: .48; transition: opacity .15s ease; }
+    .phase-sequence-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; opacity: .7; transition: opacity .15s ease; }
+    .phase-workspace .phase-sequence-controls .phase-icon-button { flex: 0 0 24px; width: 24px; min-width: 24px; height: 28px; }
     .phase-sequence-group:hover .phase-sequence-controls, .phase-sequence-group:focus-within .phase-sequence-controls { opacity: 1; }
     .phase-sequence-editor { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 6px; padding: 7px; border: 1px solid var(--app-border-subtle, #d8e2e4); border-radius: var(--app-radius-control, 4px); background: var(--app-surface-elevated, #fff); }
     .phase-workspace .phase-tree-header { display: grid; grid-template-columns: 16px auto auto 1fr; align-items: center; gap: 6px; min-height: 32px; padding: 2px 0; border: 0; background: transparent; text-align: left; }
     .phase-workspace .phase-tree-header:hover:not(:disabled) { border-color: transparent; background: transparent; }
+    .phase-workspace .phase-sequence-row .phase-sequence-toggle { display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; gap: 4px; width: 100%; min-width: 0; min-height: 35px; padding: 4px; border: 0; background: transparent; text-align: left; }
     .phase-tree-header-title { color: #34474e; font-size: 11px; font-weight: 750; text-transform: uppercase; }
     .phase-count-badge { display: inline-grid; place-items: center; min-width: 21px; height: 20px; padding: 0 6px; border-radius: 10px; color: var(--app-text-muted, #53666d); background: var(--app-surface, #e3eaec); font-size: 10px; font-weight: 750; }
     .phase-tree-chevron { width: 14px; height: 14px; color: #60747b; transition: transform .16s ease; }
@@ -64,7 +65,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-tree-node-label span { display: block; overflow: hidden; color: inherit; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
     .phase-tree-node-label .phase-tree-node-number { color: #718288; font-size: 10px; font-variant-numeric: tabular-nums; }
     .phase-tree-node-label .phase-tree-drawing-status { color: #60747b; font-size: 9px; font-weight: 600; }
-    .phase-tree-order-controls { display: grid; grid-template-columns: repeat(3, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
+    .phase-tree-order-controls { display: grid; grid-template-columns: repeat(4, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
     .phase-tree-item:hover .phase-tree-order-controls, .phase-tree-item:focus-within .phase-tree-order-controls { opacity: 1; }
     .phase-workspace .phase-tree-order-button { color: var(--app-accent, #087b58); }
     .phase-workspace .phase-tree-order-button:disabled { cursor: not-allowed; opacity: .3; }
@@ -79,7 +80,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-overview-row:last-child { border-bottom: 0; }
     .phase-workspace-overview dt { color: #718288; font-size: 11px; font-weight: 650; }
     .phase-workspace-overview dd { min-width: 0; margin: 0; color: #273b42; overflow-wrap: anywhere; }
-    .phase-overview-drawing { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+    .phase-overview-drawing { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 6px; }
     .phase-overview-drawing-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .phase-workspace .phase-overview-edit { min-width: 28px; width: 28px; min-height: 28px; height: 28px; }
     .phase-workspace .phase-overview-delete { justify-self: end; min-width: 28px; width: 28px; min-height: 28px; height: 28px; padding: 0; border-color: var(--app-danger-border, #cf7d75); color: var(--app-danger-text, #a7352d); background: var(--app-danger-surface, #fff8f7); }

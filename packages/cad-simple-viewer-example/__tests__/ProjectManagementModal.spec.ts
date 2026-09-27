@@ -388,9 +388,9 @@ describe('ProjectManagementModal', () => {
     document
       .querySelectorAll<HTMLInputElement>('.project-drawing-option input')[1]
       .click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '创建 Project')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '创建 Project')
+        ?.click()
     await flushPromises()
 
     expect(repository.create).toHaveBeenCalledWith({
@@ -412,15 +412,15 @@ describe('ProjectManagementModal', () => {
     await modal.open()
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
     await flushPromises()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '编辑')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '编辑')
+        ?.click()
     document
       .querySelectorAll<HTMLInputElement>('.project-drawing-option input')[1]
       .click()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '保存更改')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '保存更改')
+        ?.click()
     await flushPromises()
 
     expect(repository.update).toHaveBeenCalledWith(1, {
@@ -442,17 +442,17 @@ describe('ProjectManagementModal', () => {
     await modal.open()
     document.querySelector<HTMLButtonElement>('.project-list-item')?.click()
     await flushPromises()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(button => button.textContent === '删除')
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === '删除')
+        ?.click()
     await flushPromises()
-    ;[...document.querySelectorAll<HTMLButtonElement>('button')]
-      .find(
-        button =>
-          button.textContent === '删除' &&
-          button.classList.contains('confirmation-modal-confirm')
-      )
-      ?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(
+          button =>
+            button.textContent === '删除' &&
+            button.classList.contains('confirmation-modal-confirm')
+        )
+        ?.click()
     await flushPromises()
 
     expect(repository.delete).toHaveBeenCalledWith(1)

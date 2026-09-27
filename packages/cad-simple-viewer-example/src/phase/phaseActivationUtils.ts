@@ -27,8 +27,8 @@ export const shouldHotSwitchPhase = ({
 }: PhaseHotSwitchContext) =>
   Boolean(
     loadedAssetId &&
-      targetAssetId &&
-      loadedAssetId === targetAssetId &&
-      !isLoading &&
-      !hasPendingActivation
+    targetAssetId &&
+    loadedAssetId === targetAssetId &&
+    !isLoading &&
+    !hasPendingActivation
   )

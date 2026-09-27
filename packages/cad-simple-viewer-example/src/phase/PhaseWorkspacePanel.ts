@@ -14,6 +14,7 @@ import {
 } from 'lucide'
 
 import type { AppLocale } from '../locale'
+import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createFormValidator } from '../ui/formValidation'
 import { localizeDom, translateUiText } from '../uiTranslations'
 import { createPhaseIcon } from './phaseIcons'
@@ -108,6 +109,7 @@ export class PhaseWorkspacePanel {
   private readonly expandedSequenceIds = new Set<string>()
   private readonly initializedSequenceIds = new Set<string>()
   private readonly drawingAssociationModals = new Set<HTMLElement>()
+  private readonly phaseDeleteConfirmation: ConfirmationModal
   private processCreatorExpanded = false
   private tankFilter = ''
   private tankBlinking = false
@@ -120,6 +122,7 @@ export class PhaseWorkspacePanel {
     private readonly tanks?: TankWorkspaceBindings
   ) {
     this.element.className = 'phase-workspace'
+    this.phaseDeleteConfirmation = new ConfirmationModal(getLocale)
     this.render()
   }
 
@@ -443,6 +446,8 @@ export class PhaseWorkspacePanel {
     })
     const controls = document.createElement('div')
     controls.className = 'phase-sequence-controls'
+    const deleteSequence = this.createIconButton('删除序列', Trash2, trigger => this.openSequenceDelete(process.id, sequence, trigger))
+    deleteSequence.classList.add('phase-delete-button')
     controls.append(
       this.createIconButton('复制序列', Copy, trigger => this.openSequenceEditorModal(process, 'copy', trigger, sequence)),
       this.createIconButton('重命名序列', Pencil, trigger => this.openSequenceEditorModal(process, 'rename', trigger, sequence)),
@@ -454,7 +459,7 @@ export class PhaseWorkspacePanel {
         this.actions.reorderSequence(process.id, sequence.id, sequenceIndex + 1)
         this.render()
       }, sequenceIndex === process.sequences.length - 1),
-      this.createIconButton('删除序列', Trash2, trigger => this.openSequenceDelete(process.id, sequence, trigger))
+      deleteSequence
     )
     row.append(toggle, controls)
     const list = document.createElement('div')
@@ -549,7 +554,25 @@ export class PhaseWorkspacePanel {
         this.actions.reorderPhase(process.id, sequence.id, phase.id, index + 1)
         this.render()
       })
-      controls.append(copy, moveUp, moveDown)
+      const remove = this.createIconButton('删除 Phase', Trash2, async trigger => {
+        const confirmed = await this.phaseDeleteConfirmation.confirm({
+          title: '删除 Phase？',
+          message: `${this.t('此操作将永久删除该 Phase 及其已保存状态，无法撤销。')}\n\nPhase ${String(phase.number).padStart(2, '0')} · ${phase.name}`,
+          confirmLabel: '确认删除',
+          tone: 'danger'
+        })
+        if (!confirmed) return
+        trigger.disabled = true
+        try {
+          await this.actions.deletePhase(process.id, sequence.id, phase.id)
+          this.render()
+        } finally {
+          trigger.disabled = false
+        }
+      })
+      remove.classList.add('phase-tree-delete', 'phase-delete-button')
+      remove.setAttribute('aria-haspopup', 'dialog')
+      controls.append(copy, moveUp, moveDown, remove)
       item.addEventListener('dragstart', event => {
         event.dataTransfer?.setData('text/plain', phase.id)
         if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
@@ -962,13 +985,6 @@ export class PhaseWorkspacePanel {
     identity.className = 'phase-overview-identity'
     const identityHeader = document.createElement('div')
     identityHeader.className = 'phase-overview-identity-header'
-    const deletePhase = this.createButton('', false)
-    deletePhase.className = 'phase-overview-delete phase-icon-button'
-    deletePhase.title = '删除 Phase'
-    deletePhase.setAttribute('aria-label', '删除 Phase')
-    deletePhase.setAttribute('aria-haspopup', 'dialog')
-    const deleteIcon = createPhaseIcon(Trash2, 'phase-delete-icon')
-    deletePhase.append(deleteIcon)
     const identityName = document.createElement('strong')
     identityName.translate = false
     identityName.textContent = phase.name
@@ -980,7 +996,7 @@ export class PhaseWorkspacePanel {
     editPhaseName.setAttribute('aria-label', '修改阶段名称')
     editPhaseName.append(this.createEditIcon())
     identityActions.append(identityName, editPhaseName)
-    identityHeader.append(identityActions, deletePhase)
+    identityHeader.append(identityActions)
     identity.append(identityHeader)
     const details = document.createElement('dl')
     details.className = 'phase-workspace-overview'
@@ -994,18 +1010,12 @@ export class PhaseWorkspacePanel {
         ? phase.drawing.displayName
         : '未关联图纸'
     drawingName.title = drawingName.textContent
-    const edit = this.createButton('', false)
-    edit.className = 'phase-overview-edit phase-icon-button'
-    edit.title = '重命名图纸'
-    edit.setAttribute('aria-label', '重命名图纸')
-    edit.hidden = phase.drawing.kind !== 'assigned'
-    edit.append(this.createEditIcon())
     const associate = this.createButton(
       phase.drawing.kind === 'assigned' ? '更换图纸' : '关联图纸',
       false
     )
     associate.setAttribute('aria-haspopup', 'dialog')
-    drawing.append(drawingName, edit, associate)
+    drawing.append(drawingName, associate)
     this.addDetail(details, '图纸', drawing)
     this.addDetail(
       details,
@@ -1035,28 +1045,6 @@ export class PhaseWorkspacePanel {
       })
       this.addDetail(details, '所属 Vessel', tank)
     }
-    edit.addEventListener('click', () => {
-      const editor = document.createElement('div')
-      editor.className = 'phase-overview-rename'
-      const rename = document.createElement('input')
-      if (phase.drawing.kind !== 'assigned') return
-      rename.value = phase.drawing.displayName
-      rename.setAttribute('aria-label', '图纸显示名')
-      const validate = createFormValidator(editor, [{ element: rename }])
-      const save = this.createButton('保存', true)
-      const cancel = this.createButton('取消', false)
-      save.addEventListener('click', () => {
-        if (!validate()) return
-        this.actions.renameDrawing(processId, sequence.id, phase.id, rename.value)
-        this.render()
-      })
-      cancel.addEventListener('click', () => editor.replaceWith(drawing))
-      editor.append(rename, cancel, save)
-      localizeDom(editor, this.getLocale())
-      drawing.replaceWith(editor)
-      rename.focus()
-      rename.select()
-    })
     editPhaseName.addEventListener('click', () => {
       const editor = document.createElement('div')
       editor.className = 'phase-overview-rename'
@@ -1078,75 +1066,6 @@ export class PhaseWorkspacePanel {
       rename.focus()
       rename.select()
     })
-    const deleteModal = document.createElement('div')
-    deleteModal.className = 'phase-workspace-modal phase-delete-modal'
-    deleteModal.hidden = true
-    deleteModal.setAttribute('role', 'alertdialog')
-    deleteModal.setAttribute('aria-modal', 'true')
-    deleteModal.setAttribute('aria-labelledby', 'phaseDeleteModalTitle')
-    deleteModal.setAttribute('aria-describedby', 'phaseDeleteModalDescription')
-    const deleteDialog = document.createElement('section')
-    deleteDialog.className = 'phase-workspace-modal-dialog phase-delete-dialog'
-    const deleteDialogHeader = document.createElement('header')
-    const deleteTitle = document.createElement('h2')
-    deleteTitle.id = 'phaseDeleteModalTitle'
-    deleteTitle.textContent = '删除 Phase？'
-    const closeDelete = this.createButton('', false)
-    closeDelete.className = 'phase-workspace-modal-close phase-icon-button'
-    closeDelete.setAttribute('aria-label', '关闭删除确认对话框')
-    closeDelete.title = '关闭'
-    closeDelete.append(createPhaseIcon(X))
-    deleteDialogHeader.append(deleteTitle, closeDelete)
-    const deleteBody = document.createElement('div')
-    deleteBody.className = 'phase-delete-dialog-body'
-    const warningIcon = createPhaseIcon(
-      TriangleAlert,
-      'phase-delete-warning-icon'
-    )
-    const deleteMessage = document.createElement('div')
-    const deleteDescription = document.createElement('p')
-    deleteDescription.id = 'phaseDeleteModalDescription'
-    deleteDescription.textContent = '此操作将永久删除该 Phase 及其已保存状态，无法撤销。'
-    const deleteTarget = document.createElement('strong')
-    deleteTarget.className = 'phase-delete-target'
-    deleteTarget.textContent = `Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`
-    deleteMessage.append(deleteDescription, deleteTarget)
-    deleteBody.append(warningIcon, deleteMessage)
-    const deleteActions = document.createElement('footer')
-    deleteActions.className = 'phase-workspace-modal-actions phase-delete-actions'
-    const cancelDelete = this.createButton('取消', false)
-    const confirmDelete = this.createButton('确认删除', false)
-    confirmDelete.className = 'phase-delete-confirm'
-    deleteActions.append(cancelDelete, confirmDelete)
-    deleteDialog.append(deleteDialogHeader, deleteBody, deleteActions)
-    deleteModal.append(deleteDialog)
-    const closeDeleteModal = () => {
-      deleteModal.hidden = true
-      deletePhase.focus()
-    }
-    deletePhase.addEventListener('click', () => {
-      deleteModal.hidden = false
-      confirmDelete.focus()
-    })
-    closeDelete.addEventListener('click', closeDeleteModal)
-    cancelDelete.addEventListener('click', closeDeleteModal)
-    deleteModal.addEventListener('click', event => {
-      if (event.target === deleteModal) closeDeleteModal()
-    })
-    deleteModal.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeDeleteModal()
-    })
-    confirmDelete.addEventListener('click', async () => {
-      confirmDelete.disabled = true
-      cancelDelete.disabled = true
-      try {
-        await this.actions.deletePhase(processId, sequence.id, phase.id)
-        this.render()
-      } finally {
-        confirmDelete.disabled = false
-        cancelDelete.disabled = false
-      }
-    })
     this.createDrawingAssociationModal(
       processId,
       sequence.id,
@@ -1154,7 +1073,7 @@ export class PhaseWorkspacePanel {
       phase.drawing.kind === 'assigned' ? phase.drawing.displayName : '',
       associate
     )
-    block.append(identity, details, deleteModal)
+    block.append(identity, details)
     return block
   }
 

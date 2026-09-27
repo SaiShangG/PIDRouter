@@ -1334,9 +1334,9 @@ export class AcApDocManager {
       doc: this.context.doc,
       mode: this.getDocumentEventMode(options)
     })
-    ;(this.curView as AcTrView2d).bindDrawDatabase(this.context.doc.database)
-    ;(this.curView as AcTrView2d).progressiveRendering =
-      options?.progressiveRendering ?? false
+      ; (this.curView as AcTrView2d).bindDrawDatabase(this.context.doc.database)
+      ; (this.curView as AcTrView2d).progressiveRendering =
+        options?.progressiveRendering ?? false
     this.curView.clear()
   }
 
@@ -1371,7 +1371,7 @@ export class AcApDocManager {
         mode: this.getDocumentEventMode(options)
       })
       this.setActiveLayout()
-      ;(this.curView as AcTrView2d).syncDisplaySysVars(doc.database)
+        ; (this.curView as AcTrView2d).syncDisplaySysVars(doc.database)
       const db = doc.database
 
       // View framing at document open time (see `openViewMode`):
@@ -1447,7 +1447,7 @@ export class AcApDocManager {
       // state on this layout. Cast is intentional: `setActiveLayout`
       // above relies on `curView` being an `AcTrView2d`, and the
       // markLayoutAsInitialized method is part of that contract.
-      ;(this.curView as AcTrView2d).markLayoutAsInitialized(db.currentSpaceId)
+      ; (this.curView as AcTrView2d).markLayoutAsInitialized(db.currentSpaceId)
     } else {
       this.regen()
     }

@@ -45,7 +45,7 @@ describe('AcApOpenFileProgressController', () => {
   beforeEach(() => {
     mockProgressInstances.length = 0
     mockEventBusEmit.mockClear()
-    ;(AcApProgress as jest.Mock).mockClear()
+      ; (AcApProgress as jest.Mock).mockClear()
     controller = new AcApOpenFileProgressController({} as HTMLElement)
     progress = mockProgressInstances[0]
     progress.hide.mockClear()
