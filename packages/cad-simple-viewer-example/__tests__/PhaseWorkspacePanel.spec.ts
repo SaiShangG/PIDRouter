@@ -6,6 +6,7 @@ import {
   type TankWorkspaceBindings
 } from '../src/phase/PhaseWorkspacePanel'
 import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
+import { injectPhaseWorkspaceStyles } from '../src/phase/phaseWorkspaceStyles'
 
 const createHarness = (
   locale: 'en' | 'zh' = 'zh',
@@ -83,7 +84,10 @@ const createHarness = (
 }
 
 describe('PhaseWorkspacePanel', () => {
-  afterEach(() => document.body.replaceChildren())
+  afterEach(() => {
+    document.body.replaceChildren()
+    document.getElementById('phase-workspace-styles')?.remove()
+  })
 
   it.each(['zh', 'en'] as const)('filters Phases by Vessel and cancels blinking without clearing the filter in %s', locale => {
     const { store, panel, tanks } = createHarness(locale, [5], true)
@@ -180,6 +184,7 @@ describe('PhaseWorkspacePanel', () => {
   })
 
   it('starts empty and allows creating the first process', () => {
+    injectPhaseWorkspaceStyles()
     const { store, panel } = createHarness()
     const name = panel.element.querySelector<HTMLInputElement>(
       '[aria-label="工艺名称"]'
@@ -188,19 +193,54 @@ describe('PhaseWorkspacePanel', () => {
       item => item.textContent === '创建工艺'
     ) as HTMLButtonElement
     expect(panel.element.textContent).toContain('工作区当前为空')
-    expect(button.disabled).toBe(true)
+    expect(button.disabled).toBe(false)
+    expect(getComputedStyle(button).cursor).toBe('pointer')
+    button.click()
+    expect(store.snapshot().processes).toHaveLength(0)
+    expect(name!.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(name)
 
     name!.value = '   '
     name!.dispatchEvent(new Event('input'))
-    expect(button.disabled).toBe(true)
+    expect(button.disabled).toBe(false)
+    expect(name!.getAttribute('aria-invalid')).toBe('true')
 
     name!.value = 'CIP'
     name!.dispatchEvent(new Event('input'))
     expect(button.disabled).toBe(false)
+    expect(name!.hasAttribute('aria-invalid')).toBe(false)
+    expect(getComputedStyle(button).cursor).toBe('pointer')
     button.click()
 
     expect(store.snapshot().processes[0].name).toBe('CIP')
     expect(panel.element.textContent).toContain('此工艺尚无阶段')
+  })
+
+  it.each(['zh', 'en'] as const)('marks all missing sequence fields and focuses the first in %s', locale => {
+    const { store, panel, actions } = createHarness(locale)
+    store.createProcess('CIP')
+    panel.render()
+    panel.element.querySelector<HTMLButtonElement>(
+      `[aria-label="${locale === 'zh' ? '新增序列' : 'Add sequence'}"]`
+    )!.click()
+    const form = panel.element.querySelector<HTMLFormElement>('.phase-sequence-modal-form')!
+    const number = form.querySelector<HTMLInputElement>('input[type="number"]')!
+    const name = form.querySelector<HTMLInputElement>('input:not([type="number"])')!
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!
+    number.value = ''
+    submit.click()
+    expect(submit.disabled).toBe(false)
+    expect(number.getAttribute('aria-invalid')).toBe('true')
+    expect(name.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(number)
+    expect(actions.createSequence).not.toHaveBeenCalled()
+    number.value = '2'
+    number.dispatchEvent(new Event('input'))
+    name.value = 'Rinse'
+    name.dispatchEvent(new Event('input'))
+    expect(form.querySelector('[aria-invalid="true"]')).toBeNull()
+    submit.click()
+    expect(actions.createSequence).toHaveBeenCalledWith(expect.objectContaining({ number: 2, name: 'Rinse' }))
   })
 
   it('renders workspace controls in English without translating business names', () => {
@@ -248,7 +288,16 @@ describe('PhaseWorkspacePanel', () => {
     expect(actions.renameDrawing).not.toHaveBeenCalled()
     openEditor()
     editor = panel.element.querySelector('.phase-overview-rename')!
+    const rename = editor.querySelector('input')!
+    rename.value = '   '
+    editor.querySelectorAll('button')[1].click()
+    expect(rename.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(rename)
+    expect(actions.renamePhase).not.toHaveBeenCalled()
+    expect(actions.renameDrawing).not.toHaveBeenCalled()
     editor.querySelector('input')!.value = '清洗 Phase11'
+    rename.dispatchEvent(new Event('input'))
+    expect(rename.hasAttribute('aria-invalid')).toBe(false)
     editor.querySelectorAll('button')[1].click()
     expect(target === 'phase' ? actions.renamePhase : actions.renameDrawing)
       .toHaveBeenCalledWith(process.id, sequence.id, phase.id, '清洗 Phase11')
@@ -417,11 +466,16 @@ describe('PhaseWorkspacePanel', () => {
     source.value = 'project'
     source.dispatchEvent(new Event('change'))
     expect(projectDrawing.parentElement?.hidden).toBe(false)
-    expect(submit.disabled).toBe(true)
+    expect(submit.disabled).toBe(false)
+    submit.click()
+    expect(actions.createPhase).not.toHaveBeenCalled()
+    expect(projectDrawing.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(projectDrawing)
 
     projectDrawing.value = '5'
     projectDrawing.dispatchEvent(new Event('change'))
     expect(submit.disabled).toBe(false)
+    expect(projectDrawing.hasAttribute('aria-invalid')).toBe(false)
     form.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     )
@@ -766,10 +820,15 @@ describe('PhaseWorkspacePanel', () => {
     expect(markedPhase.parentElement!.hidden).toBe(false)
     source.value = 'project'
     source.dispatchEvent(new Event('change'))
-    expect(submit.disabled).toBe(true)
+    expect(submit.disabled).toBe(false)
+    submit.click()
+    expect(actions.associateDrawing).not.toHaveBeenCalled()
+    expect(projectDrawing.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(projectDrawing)
     projectDrawing.value = '5'
     projectDrawing.dispatchEvent(new Event('change'))
     expect(submit.disabled).toBe(false)
+    expect(projectDrawing.hasAttribute('aria-invalid')).toBe(false)
     modal.querySelector<HTMLFormElement>('form')!.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     )

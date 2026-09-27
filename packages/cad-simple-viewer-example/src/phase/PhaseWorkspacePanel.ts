@@ -14,6 +14,7 @@ import {
 } from 'lucide'
 
 import type { AppLocale } from '../locale'
+import { createFormValidator } from '../ui/formValidation'
 import { localizeDom, translateUiText } from '../uiTranslations'
 import { createPhaseIcon } from './phaseIcons'
 import type { TankOption } from './tankSelection'
@@ -243,13 +244,9 @@ export class PhaseWorkspacePanel {
     input.placeholder = '工艺名称，例如 CIP'
     input.setAttribute('aria-label', '工艺名称')
     const button = this.createButton('创建工艺', true)
-    const updateButtonState = () => {
-      button.disabled = !input.value.trim()
-    }
-    input.addEventListener('input', updateButtonState)
-    updateButtonState()
+    const validate = createFormValidator(empty, [{ element: input }])
     button.addEventListener('click', () => {
-      if (!input.value.trim()) return
+      if (!validate()) return
       this.actions.createProcess(input.value)
       this.render()
     })
@@ -325,6 +322,7 @@ export class PhaseWorkspacePanel {
       const input = document.createElement('input')
       input.placeholder = '输入新工艺名称'
       input.setAttribute('aria-label', '新工艺名称')
+      const validate = createFormValidator(creator, [{ element: input }])
       const add = this.createButton('创建', true)
       const cancel = this.createButton('', false)
       cancel.className = 'phase-process-cancel phase-icon-button'
@@ -341,7 +339,7 @@ export class PhaseWorkspacePanel {
           ?.focus()
       }
       const createProcess = () => {
-        if (!input.value.trim()) return
+        if (!validate()) return
         this.actions.createProcess(input.value)
         this.processCreatorExpanded = false
         this.render()
@@ -611,6 +609,7 @@ export class PhaseWorkspacePanel {
 
     const form = document.createElement('form')
     form.className = 'phase-workspace-modal-form phase-copy-modal-form'
+    form.noValidate = true
     const source = document.createElement('input')
     source.readOnly = true
     source.value = `Phase ${String(sourcePhase.number).padStart(2, '0')} · ${sourcePhase.name}`
@@ -675,20 +674,28 @@ export class PhaseWorkspacePanel {
     modal.addEventListener('keydown', event => {
       if (event.key === 'Escape') closeModal()
     })
+    const validate = createFormValidator(form, [
+      { element: target },
+      {
+        element: number,
+        isValid: () => {
+          const targetSequence = process.sequences.find(sequence => sequence.id === target.value)
+          const phaseNumber = Number(number.value)
+          return Number.isInteger(phaseNumber) && phaseNumber > 0 &&
+            !targetSequence?.phases.some(phase => phase.number === phaseNumber)
+        }
+      },
+      { element: name }
+    ])
     form.addEventListener('submit', async event => {
       event.preventDefault()
+      if (submit.disabled || !validate()) return
       const phaseNumber = Number(number.value)
       const phaseName = name.value.trim()
       const targetSequence = process.sequences.find(
         sequence => sequence.id === target.value
       )
-      if (
-        !targetSequence ||
-        !phaseName ||
-        !Number.isInteger(phaseNumber) ||
-        phaseNumber < 1 ||
-        targetSequence.phases.some(phase => phase.number === phaseNumber)
-      ) return
+      if (!targetSequence) return
       submit.disabled = true
       try {
         await this.actions.copyPhase({
@@ -740,6 +747,7 @@ export class PhaseWorkspacePanel {
     header.append(title, close)
     const form = document.createElement('form')
     form.className = 'phase-workspace-modal-form phase-sequence-modal-form'
+    form.noValidate = true
     const number = document.createElement('input')
     number.type = 'number'
     number.min = '1'
@@ -786,11 +794,21 @@ export class PhaseWorkspacePanel {
     modal.addEventListener('keydown', event => {
       if (event.key === 'Escape') closeModal()
     })
+    const validate = createFormValidator(form, [
+      {
+        element: number,
+        isValid: () => mode === 'rename' || (
+          Number.isInteger(Number(number.value)) && Number(number.value) > 0 &&
+          !process.sequences.some(item => item.number === Number(number.value))
+        )
+      },
+      { element: name }
+    ])
     form.addEventListener('submit', event => {
       event.preventDefault()
+      if (!validate()) return
       const sequenceNumber = Number(number.value)
       const sequenceName = name.value.trim()
-      if (!sequenceName || !Number.isInteger(sequenceNumber) || sequenceNumber < 1) return
       if (mode === 'create') {
         this.actions.createSequence({
           processId: process.id,
@@ -1024,10 +1042,11 @@ export class PhaseWorkspacePanel {
       if (phase.drawing.kind !== 'assigned') return
       rename.value = phase.drawing.displayName
       rename.setAttribute('aria-label', '图纸显示名')
+      const validate = createFormValidator(editor, [{ element: rename }])
       const save = this.createButton('保存', true)
       const cancel = this.createButton('取消', false)
       save.addEventListener('click', () => {
-        if (!rename.value.trim()) return
+        if (!validate()) return
         this.actions.renameDrawing(processId, sequence.id, phase.id, rename.value)
         this.render()
       })
@@ -1044,10 +1063,11 @@ export class PhaseWorkspacePanel {
       const rename = document.createElement('input')
       rename.value = phase.name
       rename.setAttribute('aria-label', '阶段名称')
+      const validate = createFormValidator(editor, [{ element: rename }])
       const save = this.createButton('保存', true)
       const cancel = this.createButton('取消', false)
       save.addEventListener('click', () => {
-        if (!rename.value.trim()) return
+        if (!validate()) return
         this.actions.renamePhase(processId, sequence.id, phase.id, rename.value)
         this.render()
       })
@@ -1167,6 +1187,7 @@ export class PhaseWorkspacePanel {
 
     const form = document.createElement('form')
     form.className = 'phase-workspace-modal-form phase-drawing-association-form'
+    form.noValidate = true
     const source = document.createElement('select')
     source.setAttribute('aria-label', '图纸关联方式')
     const state = this.getState()
@@ -1265,10 +1286,6 @@ export class PhaseWorkspacePanel {
           displayName.value = markedSource.phase.drawing.displayName
         }
       }
-      submit.disabled =
-        source.value === 'project'
-          ? !projectDrawing.value
-          : markedSources.length === 0
     }
     source.addEventListener('change', syncFields)
     projectDrawing.addEventListener('change', () => {
@@ -1279,10 +1296,21 @@ export class PhaseWorkspacePanel {
       syncFields()
     })
     markedPhase.addEventListener('change', syncFields)
+    const validate = createFormValidator(form, [
+      { element: source },
+      {
+        element: projectDrawing,
+        isValid: () => source.value !== 'project' || Boolean(projectDrawing.value)
+      },
+      {
+        element: markedPhase,
+        isValid: () => source.value !== 'marked' ||
+          Boolean(markedPhase.value && markedSources[Number(markedPhase.value)])
+      }
+    ])
     form.addEventListener('submit', async event => {
       event.preventDefault()
-      if (source.value === 'project' && !projectDrawing.value) return
-      if (source.value === 'marked' && markedSources.length === 0) return
+      if (submit.disabled || !validate()) return
       submit.disabled = true
       try {
         const markedSource =
@@ -1348,6 +1376,7 @@ export class PhaseWorkspacePanel {
 
     const form = document.createElement('form')
     form.className = 'phase-workspace-modal-form phase-create-form'
+    form.noValidate = true
     const number = document.createElement('input')
     number.type = 'number'
     number.min = '1'
@@ -1458,7 +1487,6 @@ export class PhaseWorkspacePanel {
       } else if (source.value === 'blank' && !displayName.value) {
         displayName.value = `Drawing-Phase-${number.value}.dwg`
       }
-      submit.disabled = source.value === 'project' && !projectDrawing.value
     }
     source.addEventListener('change', syncSourceFields)
     projectDrawing.addEventListener('change', () => {
@@ -1472,9 +1500,33 @@ export class PhaseWorkspacePanel {
     file.addEventListener('change', () => {
       if (file.files?.[0]) displayName.value = file.files[0].name
     })
+    const validate = createFormValidator(form, [
+      {
+        element: number,
+        isValid: () => Number.isInteger(Number(number.value)) && Number(number.value) > 0 &&
+          !sequence.phases.some(phase => phase.number === Number(number.value))
+      },
+      { element: source },
+      {
+        element: projectDrawing,
+        isValid: () => source.value !== 'project' || Boolean(projectDrawing.value)
+      },
+      {
+        element: history,
+        isValid: () => source.value !== 'history' || Boolean(history.value)
+      },
+      {
+        element: file,
+        isValid: () => source.value !== 'local' || Boolean(file.files?.length)
+      },
+      {
+        element: url,
+        isValid: () => source.value !== 'url' || Boolean(url.value.trim() && url.validity.valid)
+      }
+    ])
     form.addEventListener('submit', async event => {
       event.preventDefault()
-      if (source.value === 'project' && !projectDrawing.value) return
+      if (submit.disabled || !validate()) return
       submit.disabled = true
       try {
         await this.actions.createPhase({

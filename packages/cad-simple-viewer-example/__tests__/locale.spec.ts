@@ -67,6 +67,8 @@ describe('app locale', () => {
     expect(translate('en', 'phasePanelToggle')).toBe('Processes & Phases')
     expect(translate('zh', 'noDrawingOpen')).toBe('未打开图纸')
     expect(translate('en', 'noDrawingOpen')).toBe('No drawing open')
+    expect(translate('zh', 'addPhasePrompt')).toBe('请添加 Phase')
+    expect(translate('en', 'addPhasePrompt')).toBe('Please add a Phase')
   })
 
   it('localizes hidden text, tooltips, accessibility labels, and placeholders', () => {

@@ -165,6 +165,7 @@ describe('AcApOpenFileProgressController', () => {
       subStageStatus: 'IN-PROGRESS'
     })
     controller.reset()
+    expect(progress.hide).toHaveBeenCalledTimes(1)
 
     const next = controller.handle({
       database,

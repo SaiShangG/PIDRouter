@@ -97,7 +97,7 @@ import {
   translate
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
-import { shouldHotSwitchPhase } from './phase/phaseActivationUtils'
+import { resolveWorkspacePhase, shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import {
   type PhaseConfigImportLabels,
   PhaseConfigImportModal
@@ -665,6 +665,7 @@ class CadViewerApp {
       this.appLocale,
       'Open File'
     )
+    this.updateEmptyStateVisibility()
     localizeDom(document, this.appLocale)
     this.account.refreshLocale()
     this.valveDebugFeature?.setLocale(this.appLocale as ValveDebugLocale)
@@ -711,6 +712,7 @@ class CadViewerApp {
       this.drawingLibraryRepository,
       {
         onSelect: project => this.switchProject(project),
+        getLoadedProject: () => this.activeProject,
         onDelete: projectId => this.handleDeletedProject(projectId)
       },
       () => this.appLocale
@@ -1523,6 +1525,7 @@ class CadViewerApp {
     } catch (error) {
       log.error('Failed to switch Project:', error)
       this.showMessage('切换 Project 失败', 'error')
+      throw error
     }
   }
 
@@ -1567,15 +1570,7 @@ class CadViewerApp {
 
   private async prepareProjectForPhaseSelection(): Promise<void> {
     const state = this.phaseStore.snapshot()
-    const process = state.processes.find(
-      item => item.id === state.activeProcessId
-    )
-    const sequence = process?.sequences.find(
-      item => item.id === process.activeSequenceId
-    )
-    const phase = sequence?.phases.find(
-      item => item.drawing.kind === 'assigned'
-    )
+    const { process, sequence, phase } = resolveWorkspacePhase(state)
     if (process && sequence && phase) {
       await this.activateWorkspacePhase(
         process.id,
@@ -1591,8 +1586,18 @@ class CadViewerApp {
     }
     this.phasePanel?.render()
     this.syncPhaseContextBar()
-    const command = new AcApQNewCmd()
-    await command.execute(AcApDocManager.instance.context)
+    this.showEmptyWorkspaceDrawing()
+  }
+
+  private showEmptyWorkspaceDrawing(): void {
+    this.invalidateLoadedPhaseBinding()
+    this.resetPhaseRuntimeState()
+    this.clearPhaseTextNotes()
+    AcApDocManager.instance.clearDrawingDisplay()
+    this.hasOpenedFile = false
+    this.finishLoadingState()
+    this.syncAppToolbarContext()
+    this.updateDevToolbarLabels()
     document.title = 'CAD Viewer'
   }
 
@@ -2540,10 +2545,7 @@ class CadViewerApp {
       return
     }
 
-    this.invalidateLoadedPhaseBinding()
-    const command = new AcApQNewCmd()
-    await command.execute(AcApDocManager.instance.context)
-    document.title = 'CAD Viewer'
+    this.showEmptyWorkspaceDrawing()
   }
 
   private async deleteBackendProcess(processId: string): Promise<void> {
@@ -2820,10 +2822,7 @@ class CadViewerApp {
     this.phaseStore.persist()
     this.phasePanel?.render()
     this.syncPhaseContextBar()
-    this.invalidateLoadedPhaseBinding()
-    const command = new AcApQNewCmd()
-    await command.execute(AcApDocManager.instance.context)
-    document.title = 'CAD Viewer'
+    this.showEmptyWorkspaceDrawing()
   }
 
   private async deleteWorkspaceSequence(
@@ -2883,26 +2882,22 @@ class CadViewerApp {
     if (wasActive && nextSequence) {
       await this.activateWorkspaceSequence(processId, nextSequence.id)
     } else if (wasActive) {
-      const command = new AcApQNewCmd()
-      await command.execute(AcApDocManager.instance.context)
-      document.title = 'CAD Viewer'
+      this.showEmptyWorkspaceDrawing()
     }
   }
 
   private async restoreActiveWorkspacePhase() {
     const state = this.phaseStore.snapshot()
-    const process = state.processes.find(
-      item => item.id === state.activeProcessId
-    )
-    const sequence = process?.sequences.find(
-      item => item.id === process.activeSequenceId
-    )
-    if (!process || !sequence?.activePhaseId) return
+    const { process, sequence, phase } = resolveWorkspacePhase(state, 'active')
+    if (!process || !sequence || !phase) {
+      this.showEmptyWorkspaceDrawing()
+      return
+    }
     try {
       await this.activateWorkspacePhase(
         process.id,
         sequence.id,
-        sequence.activePhaseId
+        phase.id
       )
     } catch (error) {
       log.warn('Unable to restore the active phase drawing:', error)
@@ -3100,9 +3095,7 @@ class CadViewerApp {
           sequence.activePhaseId
         )
       } else if (wasLoaded) {
-        const command = new AcApQNewCmd()
-        await command.execute(AcApDocManager.instance.context)
-        document.title = 'CAD Viewer'
+        this.showEmptyWorkspaceDrawing()
       }
       this.showMessage(`Phase ${phase.number} deleted`, 'success')
     } catch (error) {
@@ -4641,6 +4634,15 @@ class CadViewerApp {
   }
 
   private updateEmptyStateVisibility() {
+    const needsPhase = Boolean(this.activeProject) && !this.phaseStore.snapshot().processes.some(
+      process => process.sequences.some(sequence => sequence.phases.length > 0)
+    )
+    this.centerOpenButton.hidden = needsPhase
+    const phasePrompt = document.getElementById('emptyPhasePrompt')
+    if (phasePrompt) {
+      phasePrompt.hidden = !needsPhase
+      phasePrompt.textContent = translate(this.appLocale, 'addPhasePrompt')
+    }
     this.emptyState.classList.toggle(
       'hidden',
       this.hasOpenedFile || this.isLoadingFile

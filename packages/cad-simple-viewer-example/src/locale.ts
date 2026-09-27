@@ -78,6 +78,7 @@ const messages = {
     phaseSaved: '阶段已保存',
     phaseSaveFailed: '阶段保存失败',
     noPhase: '尚未创建 Phase',
+    addPhasePrompt: '请添加 Phase',
     switchTo: '切换为英文',
     languageButton: '切换为英文'
   },
@@ -144,6 +145,7 @@ const messages = {
     phaseSaved: 'Phase saved',
     phaseSaveFailed: 'Failed to save Phase',
     noPhase: 'No Phase created',
+    addPhasePrompt: 'Please add a Phase',
     switchTo: 'Switch to Chinese',
     languageButton: 'Switch to Chinese'
   }

@@ -40,6 +40,7 @@ export class AcApOpenFileProgressController {
     this._completionToken++
     this._peak = 0
     this._stage = undefined
+    this._progress.hide()
   }
 
   /**
@@ -123,7 +124,6 @@ export class AcApOpenFileProgressController {
 
     if (isOpenFileProgressComplete(data)) {
       if (this._isViewerReady()) {
-        this._progress.hide()
         this.reset()
       } else {
         this._progress.setMessage(
@@ -142,7 +142,6 @@ export class AcApOpenFileProgressController {
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
     }
     if (token === this._completionToken) {
-      this._progress.hide()
       this.reset()
     }
   }

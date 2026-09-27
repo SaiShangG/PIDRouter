@@ -219,6 +219,7 @@ const pairs: TranslationPair[] = [
   ['Project 管理', 'Project management'], ['关闭 Project 管理', 'Close Project management'],
   ['已创建的 Project', 'Projects'], ['新建 Project', 'New Project'], ['尚未创建 Project', 'No projects created'],
   ['编辑 Project', 'Edit Project'], ['Project 详情', 'Project details'], ['创建 Project', 'Create Project'],
+  ['加载 Project', 'Load Project'], ['加载中', 'Loading'], ['已加载', 'Loaded'],
   ['修改 Project 名称或关联的 PID 图纸。', 'Edit the Project name or assigned PID drawings.'],
   ['查看 Project 信息和已关联的 PID 图纸。', 'View Project information and assigned PID drawings.'],
   ['编辑', 'Edit'], ['删除', 'Delete'], ['Project 名称', 'Project name'],

@@ -1301,6 +1301,13 @@ export class AcApDocManager {
     return [cmdName, ...lines.slice(1)]
   }
 
+  clearDrawingDisplay(): void {
+    this._openFileProgress.reset()
+    this.curView.selectionSet.clear()
+    this.curView.clear()
+    this.context.doc.destroy()
+  }
+
   /**
    * Configures layout information for the current view.
    *

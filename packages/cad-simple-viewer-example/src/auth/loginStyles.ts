@@ -41,7 +41,7 @@ export function injectLoginStyles() {
     .login-visibility { position: absolute; right: 2px; top: 2px; }
     .login-page .login-submit { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 10px 16px; border: 1px solid var(--app-accent); border-radius: 4px; color: white; background: var(--app-accent); font-size: 16px; font-weight: 600; }
     .login-submit:hover:not(:disabled) { background: var(--app-accent-hover); }
-    .login-page :disabled { cursor: wait; opacity: .65; }
+    .login-page :disabled { cursor: not-allowed; opacity: .65; }
     .login-page :focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
     .auth-account button:focus-visible { outline: 2px solid var(--app-focus); outline-offset: 3px; }
     .login-page input[aria-invalid="true"] { border-color: var(--app-danger); }
@@ -51,7 +51,7 @@ export function injectLoginStyles() {
     .auth-account-name { min-width: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--app-text); }
     #appToolbar .auth-account button { display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; min-width: 32px; padding: 0; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-surface-elevated); color: var(--app-text); cursor: pointer; }
     #appToolbar .auth-account button:hover { color: var(--app-danger); border-color: var(--app-danger); }
-    #appToolbar .auth-account button:disabled { opacity: .5; cursor: wait; }
+    #appToolbar .auth-account button:disabled { opacity: .5; cursor: not-allowed; }
     @media (max-width: 900px) {
       .login-page { grid-template-columns: minmax(0, 1fr); }
       .login-media { display: none; }

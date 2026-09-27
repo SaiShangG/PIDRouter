@@ -1,4 +1,4 @@
-import { FolderPlus, Pencil, Save, Search, Trash2, X } from 'lucide'
+import { FolderOpen, FolderPlus, Pencil, Save, Search, Trash2, X } from 'lucide'
 
 import type { DrawingRecord, DrawingRepository } from '../drawing-library/types'
 import type { AppLocale } from '../locale'
@@ -11,6 +11,7 @@ import type { ProjectRecord, ProjectRepository } from './types'
 export interface ProjectManagementModalOptions {
   onSelect?: (project: ProjectRecord) => void | Promise<void>
   onDelete?: (projectId: number) => void | Promise<void>
+  getLoadedProject?: () => ProjectRecord | undefined
 }
 
 const createIconButton = (
@@ -39,6 +40,11 @@ export class ProjectManagementModal {
   private drawingQuery = ''
   private isEditing = true
   private busy = false
+  private selectionToken = 0
+  private detailsLoading = false
+  private loadingProjectId?: number
+  private loadedProject?: ProjectRecord
+  private failedProjectId?: number
   private message = ''
   private readonly confirmationModal: ConfirmationModal
   private readonly focusController = createModalFocusController(this.element)
@@ -73,12 +79,16 @@ export class ProjectManagementModal {
     await this.refresh()
     if (this.element.hidden) return
     this.focusController.activate(
-      this.element.querySelector<HTMLInputElement>('input[type="search"], input')
+      this.element.querySelector<HTMLInputElement>(
+        'input[type="search"], input'
+      )
     )
   }
 
   close() {
     if (this.busy) return
+    this.selectionToken++
+    this.detailsLoading = false
     this.element.hidden = true
     document.body.classList.remove('project-management-open')
     this.focusController.deactivate()
@@ -143,7 +153,7 @@ export class ProjectManagementModal {
     const create = createIconButton('新建 Project', FolderPlus, () =>
       this.startNewProject()
     )
-    create.disabled = this.busy
+    create.disabled = this.busy || this.loadingProjectId !== undefined
     toolbar.append(title, create)
     panel.append(toolbar)
     if (this.projects.length === 0) {
@@ -159,7 +169,15 @@ export class ProjectManagementModal {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'project-list-item'
-      button.classList.toggle('is-selected', project.id === this.selectedProjectId)
+      button.classList.toggle(
+        'is-selected',
+        project.id === this.selectedProjectId
+      )
+      button.setAttribute(
+        'aria-pressed',
+        String(project.id === this.selectedProjectId)
+      )
+      button.disabled = this.busy
       const name = document.createElement('strong')
       name.textContent = project.name
       const details = document.createElement('span')
@@ -169,8 +187,20 @@ export class ProjectManagementModal {
       const id = document.createElement('span')
       id.textContent = `ID ${project.id}`
       details.append(count, id)
+      if (
+        this.loadingProjectId === project.id ||
+        this.isProjectLoaded(project)
+      ) {
+        const status = document.createElement('span')
+        status.textContent =
+          this.loadingProjectId === project.id ? '加载中' : '已加载'
+        details.append(status)
+      }
       button.append(name, details)
-      button.addEventListener('click', () => void this.selectProject(project.id))
+      button.addEventListener(
+        'click',
+        () => void this.selectProject(project.id)
+      )
       list.append(button)
     })
     panel.append(list)
@@ -201,6 +231,8 @@ export class ProjectManagementModal {
       const edit = document.createElement('button')
       edit.type = 'button'
       edit.className = 'project-secondary-button'
+      edit.disabled =
+        this.busy || this.detailsLoading || this.loadingProjectId !== undefined
       edit.append(createPhaseIcon(Pencil), document.createTextNode('编辑'))
       edit.addEventListener('click', () => {
         this.isEditing = true
@@ -210,7 +242,8 @@ export class ProjectManagementModal {
       const remove = document.createElement('button')
       remove.type = 'button'
       remove.className = 'project-danger-button'
-      remove.disabled = this.busy
+      remove.disabled =
+        this.busy || this.detailsLoading || this.loadingProjectId !== undefined
       remove.append(createPhaseIcon(Trash2), document.createTextNode('删除'))
       remove.addEventListener('click', () => void this.removeProject())
       headingActions.append(edit, remove)
@@ -281,10 +314,13 @@ export class ProjectManagementModal {
     drawingList.className = 'project-drawing-list'
     const normalizedQuery = this.drawingQuery.trim().toLocaleLowerCase()
     const visibleDrawings = this.drawings.filter(drawing => {
-      if (!this.isEditing && !this.selectedDrawingIds.has(drawing.id)) return false
-      return [drawing.name, drawing.drawingNumber, drawing.originalFileName].some(
-        value => value?.toLocaleLowerCase().includes(normalizedQuery)
-      )
+      if (!this.isEditing && !this.selectedDrawingIds.has(drawing.id))
+        return false
+      return [
+        drawing.name,
+        drawing.drawingNumber,
+        drawing.originalFileName
+      ].some(value => value?.toLocaleLowerCase().includes(normalizedQuery))
     })
     if (this.drawings.length === 0) {
       const empty = document.createElement('p')
@@ -303,6 +339,29 @@ export class ProjectManagementModal {
     }
 
     const actions = document.createElement('footer')
+    if (selectedProject && !this.isEditing) {
+      const load = document.createElement('button')
+      load.type = 'button'
+      load.className = 'project-primary-button project-load-button'
+      const loaded = this.isProjectLoaded(selectedProject)
+      load.disabled =
+        this.busy ||
+        this.detailsLoading ||
+        this.loadingProjectId !== undefined ||
+        loaded
+      load.append(
+        createPhaseIcon(FolderOpen),
+        document.createTextNode(
+          this.loadingProjectId === selectedProject.id
+            ? '加载中'
+            : loaded
+              ? '已加载'
+              : '加载 Project'
+        )
+      )
+      load.addEventListener('click', () => void this.loadSelectedProject())
+      actions.append(load)
+    }
     if (this.isEditing) {
       if (this.selectedProjectId) {
         const cancel = document.createElement('button')
@@ -397,11 +456,14 @@ export class ProjectManagementModal {
   }
 
   private async selectProject(projectId: number) {
-    this.busy = true
+    if (this.busy) return
+    const token = ++this.selectionToken
+    this.detailsLoading = true
     this.message = ''
     this.render()
     try {
       const project = await this.repository.get(projectId)
+      if (token !== this.selectionToken) return
       this.projects = this.projects.map(item =>
         item.id === project.id ? project : item
       )
@@ -411,21 +473,68 @@ export class ProjectManagementModal {
       this.selectedDrawingIds = new Set(project.fileIds.map(String))
       this.drawingQuery = ''
       this.isEditing = false
-      this.busy = false
-      this.render()
-      void Promise.resolve(this.options.onSelect?.(project)).catch(error => {
-        this.message = error instanceof Error ? error.message : String(error)
-        if (!this.element.hidden) this.render()
-      })
     } catch (error) {
-      this.message = error instanceof Error ? error.message : String(error)
+      if (token === this.selectionToken) {
+        this.message = error instanceof Error ? error.message : String(error)
+      }
     } finally {
-      this.busy = false
+      if (token === this.selectionToken) {
+        this.detailsLoading = false
+        if (!this.element.hidden) this.render()
+      }
+    }
+  }
+
+  private isProjectLoaded(project: ProjectRecord): boolean {
+    const loaded = this.options.getLoadedProject
+      ? this.options.getLoadedProject()
+      : this.loadedProject
+    return (
+      this.failedProjectId !== project.id &&
+      loaded?.id === project.id &&
+      loaded.name === project.name &&
+      loaded.description === project.description &&
+      loaded.fileIds.length === project.fileIds.length &&
+      project.fileIds.every(id => loaded.fileIds.includes(id))
+    )
+  }
+
+  private async loadSelectedProject() {
+    const project = this.projects.find(
+      item => item.id === this.selectedProjectId
+    )
+    if (
+      !project ||
+      this.busy ||
+      this.detailsLoading ||
+      this.loadingProjectId !== undefined ||
+      this.isProjectLoaded(project) ||
+      !this.options.onSelect
+    )
+      return
+    this.loadingProjectId = project.id
+    this.message = ''
+    this.render()
+    this.close()
+    try {
+      await this.options.onSelect(project)
+      this.loadedProject = project
+      this.failedProjectId = undefined
+    } catch (error) {
+      this.failedProjectId = project.id
+      if (this.selectedProjectId === project.id) {
+        this.message = error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      this.loadingProjectId = undefined
       if (!this.element.hidden) this.render()
     }
   }
 
   private startNewProject() {
+    if (this.busy || this.loadingProjectId !== undefined) return
+    this.selectionToken++
+    this.detailsLoading = false
     this.selectedProjectId = undefined
     this.name = ''
     this.description = ''
@@ -437,7 +546,9 @@ export class ProjectManagementModal {
   }
 
   private cancelEditing() {
-    const project = this.projects.find(item => item.id === this.selectedProjectId)
+    const project = this.projects.find(
+      item => item.id === this.selectedProjectId
+    )
     if (!project) return
     this.name = project.name
     this.description = project.description
@@ -449,6 +560,8 @@ export class ProjectManagementModal {
   }
 
   private async saveProject() {
+    if (this.busy || this.detailsLoading || this.loadingProjectId !== undefined)
+      return
     this.busy = true
     this.message = ''
     this.render()
@@ -470,7 +583,6 @@ export class ProjectManagementModal {
       this.drawingQuery = ''
       this.isEditing = false
       await this.refresh()
-      await this.options.onSelect?.(saved)
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error)
     } finally {
@@ -480,7 +592,11 @@ export class ProjectManagementModal {
   }
 
   private async removeProject() {
-    const project = this.projects.find(item => item.id === this.selectedProjectId)
+    if (this.busy || this.detailsLoading || this.loadingProjectId !== undefined)
+      return
+    const project = this.projects.find(
+      item => item.id === this.selectedProjectId
+    )
     if (!project) return
     const confirmed = await this.confirmationModal.confirm({
       title: '删除 Project',
@@ -488,7 +604,9 @@ export class ProjectManagementModal {
       confirmLabel: '删除',
       tone: 'danger'
     })
-    if (!confirmed) return
+    if (!confirmed || this.busy || this.loadingProjectId !== undefined) return
+    this.selectionToken++
+    this.detailsLoading = false
     this.busy = true
     this.render()
     try {

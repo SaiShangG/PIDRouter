@@ -15,7 +15,8 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace input, .phase-workspace select, .phase-workspace button, .phase-workspace-modal input, .phase-workspace-modal select, .phase-workspace-modal button { min-height: 34px; border: 1px solid var(--app-border-strong, #c4cfd2); border-radius: var(--app-radius-control, 4px); background: var(--app-surface-elevated, #ffffff); color: inherit; padding: 6px 9px; font: inherit; }
     .phase-workspace button, .phase-workspace-modal button { cursor: pointer; }
     .phase-workspace button:hover:not(:disabled), .phase-workspace-modal button:hover:not(:disabled) { border-color: var(--app-success-border, #7ebda9); color: var(--app-success-text, #075d43); background: var(--app-success-surface, #edf8f4); }
-    .phase-workspace button:disabled, .phase-workspace-modal button:disabled { opacity: .55; cursor: wait; }
+    .phase-workspace button:disabled, .phase-workspace-modal button:disabled { opacity: .55; cursor: not-allowed; }
+    .phase-workspace [aria-invalid='true'], .phase-workspace-modal [aria-invalid='true'] { border-color: var(--app-danger, #b42318); outline: 2px solid var(--app-danger, #b42318); outline-offset: 1px; background: var(--app-danger-surface, #fff1f0); }
     .phase-workspace .phase-workspace-primary, .phase-workspace-modal .phase-workspace-primary { border-color: var(--app-accent, #087b58); background: var(--app-accent, #087b58); color: #fff; font-weight: 650; }
     .phase-workspace .phase-workspace-primary:hover:not(:disabled), .phase-workspace-modal .phase-workspace-primary:hover:not(:disabled) { border-color: var(--app-accent-hover, #075f46); background: var(--app-accent-hover, #075f46); color: #fff; }
     .phase-ui-icon { display: block; flex: 0 0 auto; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; }
