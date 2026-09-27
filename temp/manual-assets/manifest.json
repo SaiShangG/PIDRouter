@@ -1,0 +1,2185 @@
+[
+  {
+    "name": "00-login",
+    "boxes": [
+      {
+        "label": "用户名",
+        "x": 844,
+        "y": 424.1875,
+        "width": 400,
+        "height": 48
+      },
+      {
+        "label": "密码",
+        "x": 844,
+        "y": 525.1875,
+        "width": 400,
+        "height": 48
+      },
+      {
+        "label": "登录",
+        "x": 844,
+        "y": 601.1875,
+        "width": 400,
+        "height": 48
+      }
+    ],
+    "text": "PID\nPID Viewer Lite\nEN\n用户登录\n用户名\n密码\n登录",
+    "controls": []
+  },
+  {
+    "name": "01-workspace",
+    "boxes": [
+      {
+        "label": "图纸库",
+        "x": 1062.25,
+        "y": 12.40625,
+        "width": 74.546875,
+        "height": 30.1875
+      },
+      {
+        "label": "项目管理",
+        "x": 1143.796875,
+        "y": 13.40625,
+        "width": 63.625,
+        "height": 28.1875
+      },
+      {
+        "label": "报告",
+        "x": 1214.421875,
+        "y": 12.40625,
+        "width": 49.03125,
+        "height": 30.1875
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n打开文件\n✕\n▾\n▾\n中\n阀门调试\n‹\n右键选择阀门，查看其连接路径。\n已加载后台 Process 数据",
+    "controls": []
+  },
+  {
+    "name": "02-projects",
+    "boxes": [
+      {
+        "label": "项目列表",
+        "x": 219,
+        "y": 159,
+        "width": 273,
+        "height": 566
+      },
+      {
+        "label": "新建项目",
+        "x": 456,
+        "y": 111,
+        "width": 36,
+        "height": 36
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n图纸正在加载\n正在解析文件 ...\n请耐心等待\n中\n阀门调试\n‹\n右键选择阀门，查看其连接路径。\nPID WORKSPACE\nProject 管理\n4 个 PROJECT\n已创建的 Project\nDemoNew\n1 张 PID\nID 81\nDemoProject\n1 张 PID\nID 80\n222\n1 张 PID\nID 78\n111\n1 张 PID\nID 77\n创建 Project\n\n修改 Project 名称或关联的 PID 图纸。\n\nProject 名称\nProject 描述\n选择 PID\n0 张\nDemoNew\nPraj-ParseResult-260907-3.pdi\nDemo\nPraj-ParseResult-260907-3.pdi\nPrajPID\nPraj-ParseResult-260907-3.pdi\nDemoTest\nParseResult-260902-final.pdi\nTofflon_Final\nParseResult-260902-final.pdi\nNewPID\nParseResult-260901-1-with-pdf.pdi\nTest\nParseResult-260827-2 1.pdi\n创建 Project\n已加载后台 Process 数据",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭 Project 管理",
+        "class": "project-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "新建 Project",
+        "class": "project-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "DemoNew1 张 PIDID 81",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "DemoProject1 张 PIDID 80",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "2221 张 PIDID 78",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "1111 张 PIDID 77",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "创建 Project",
+        "label": null,
+        "class": "project-primary-button"
+      }
+    ]
+  },
+  {
+    "name": "03-project-create",
+    "boxes": [
+      {
+        "label": "基本信息",
+        "x": 531,
+        "y": 188,
+        "width": 688,
+        "height": 36
+      },
+      {
+        "label": "选择图纸",
+        "x": 531,
+        "y": 416,
+        "width": 688,
+        "height": 259
+      },
+      {
+        "label": "创建",
+        "x": 1110.53125,
+        "y": 689,
+        "width": 108.46875,
+        "height": 34
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n图纸正在加载\n正在解析文件 ...\n请耐心等待\n中\n阀门调试\n‹\n右键选择阀门，查看其连接路径。\nPID WORKSPACE\nProject 管理\n4 个 PROJECT\n已创建的 Project\nDemoNew\n1 张 PID\nID 81\nDemoProject\n1 张 PID\nID 80\n222\n1 张 PID\nID 78\n111\n1 张 PID\nID 77\n创建 Project\n\n修改 Project 名称或关联的 PID 图纸。\n\nProject 名称\nProject 描述\n选择 PID\n0 张\nDemoNew\nPraj-ParseResult-260907-3.pdi\nDemo\nPraj-ParseResult-260907-3.pdi\nPrajPID\nPraj-ParseResult-260907-3.pdi\nDemoTest\nParseResult-260902-final.pdi\nTofflon_Final\nParseResult-260902-final.pdi\nNewPID\nParseResult-260901-1-with-pdf.pdi\nTest\nParseResult-260827-2 1.pdi\n创建 Project\n已加载后台 Process 数据",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭 Project 管理",
+        "class": "project-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "新建 Project",
+        "class": "project-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "DemoNew1 张 PIDID 81",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "DemoProject1 张 PIDID 80",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "2221 张 PIDID 78",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "1111 张 PIDID 77",
+        "label": null,
+        "class": "project-list-item"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "创建 Project",
+        "label": null,
+        "class": "project-primary-button"
+      }
+    ]
+  },
+  {
+    "name": "04-library",
+    "boxes": [
+      {
+        "label": "图纸名称",
+        "x": 151,
+        "y": 193.5,
+        "width": 259,
+        "height": 36
+      },
+      {
+        "label": "选择文件",
+        "x": 151,
+        "y": 312.5,
+        "width": 259,
+        "height": 103
+      },
+      {
+        "label": "上传",
+        "x": 151,
+        "y": 428.5,
+        "width": 259,
+        "height": 37
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\nPROCESSASSISTANT API\nPID 图纸库\n7 张图纸\n上传 PID\n\n文件将直接上传到目标服务器并由后台保存。\n\n图纸名称\n图号（可选）\n文件\n请选择文件\n上传\n已上传图纸\nDemoNew\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/22 11:35:04\n已上传\nDemo\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/21 14:33:17\n已上传\nPrajPID\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/18 13:05:42\n已上传\nDemoTest\nParseResult-260902-final.pdi · 4.9 MB\n上传者\nBackend\n上传时间\n2026/9/4 11:31:10\n已上传\nTofflon_Final\nParseResult-260902-final.pdi · 4.9 MB\n上传者\nBackend\n上传时间\n2026/9/2 16:37:05\n已上传\nNewPID\nParseResult-260901-1-with-pdf.pdi · 13.0 MB\n上传者\nBackend\n上传时间\n2026/9/1 15:14:03\n已上传\nTest\nParseResult-260827-2 1.pdi · 4.4 MB\n上传者\nBackend\n上传时间\n2026/8/28 11:11:20\n已上传",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭图纸库",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "上传",
+        "label": null,
+        "class": "drawing-library-primary-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      }
+    ]
+  },
+  {
+    "name": "18-library-search",
+    "boxes": [
+      {
+        "label": "搜索",
+        "x": 995,
+        "y": 112,
+        "width": 295,
+        "height": 36
+      },
+      {
+        "label": "查看图纸",
+        "x": 1199.984375,
+        "y": 181.5,
+        "width": 36,
+        "height": 36
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\nPROCESSASSISTANT API\nPID 图纸库\n7 张图纸\n上传 PID\n\n文件将直接上传到目标服务器并由后台保存。\n\n图纸名称\n图号（可选）\n文件\n请选择文件\n上传\n已上传图纸\nDemoNew\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/22 11:35:04\n已上传\nDemo\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/21 14:33:17\n已上传\nPrajPID\nPraj-ParseResult-260907-3.pdi · 2.8 MB\n上传者\nBackend\n上传时间\n2026/9/18 13:05:42\n已上传\nDemoTest\nParseResult-260902-final.pdi · 4.9 MB\n上传者\nBackend\n上传时间\n2026/9/4 11:31:10\n已上传\nTofflon_Final\nParseResult-260902-final.pdi · 4.9 MB\n上传者\nBackend\n上传时间\n2026/9/2 16:37:05\n已上传\nNewPID\nParseResult-260901-1-with-pdf.pdi · 13.0 MB\n上传者\nBackend\n上传时间\n2026/9/1 15:14:03\n已上传\nTest\nParseResult-260827-2 1.pdi · 4.4 MB\n上传者\nBackend\n上传时间\n2026/8/28 11:11:20\n已上传",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭图纸库",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "上传",
+        "label": null,
+        "class": "drawing-library-primary-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "查看图纸",
+        "class": "drawing-library-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除图纸",
+        "class": "drawing-library-icon-button"
+      }
+    ]
+  },
+  {
+    "name": "06-phase",
+    "boxes": [
+      {
+        "label": "工艺选择",
+        "x": 14,
+        "y": 137,
+        "width": 209,
+        "height": 35
+      },
+      {
+        "label": "新增序列",
+        "x": 277,
+        "y": 281,
+        "width": 28,
+        "height": 28
+      },
+      {
+        "label": "创建阶段",
+        "x": 14,
+        "y": 951,
+        "width": 291,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": []
+  },
+  {
+    "name": "15-sequence",
+    "boxes": [
+      {
+        "label": "序列编号",
+        "x": 517,
+        "y": 463.5,
+        "width": 406,
+        "height": 34
+      },
+      {
+        "label": "序列名称",
+        "x": 517,
+        "y": 525.5,
+        "width": 406,
+        "height": 34
+      },
+      {
+        "label": "创建",
+        "x": 835,
+        "y": 573.5,
+        "width": 88,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n创建序列\n序列编号\n序列名称\n取消\n创建\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭对话框",
+        "class": "phase-workspace-modal-close phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "序列编号",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "序列名称",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "创建",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  },
+  {
+    "name": "07-phase-create",
+    "boxes": [
+      {
+        "label": "编号",
+        "x": 477,
+        "y": 432.5,
+        "width": 116,
+        "height": 34
+      },
+      {
+        "label": "名称",
+        "x": 603,
+        "y": 432.5,
+        "width": 360,
+        "height": 34
+      },
+      {
+        "label": "创建方式",
+        "x": 477,
+        "y": 494.5,
+        "width": 486,
+        "height": 34
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n创建 Phase\n阶段编号\n阶段名称\n创建方式\n使用上一阶段的已标记图纸\n使用任意历史阶段的已标记图纸\n稍后关联图纸\n使用 Project PID\n图纸显示名\n取消\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭创建 Phase 对话框",
+        "class": "phase-workspace-modal-close phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "阶段编号",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "阶段名称",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "使用上一阶段的已标记图纸使用任意历史阶段的已标记图纸稍后关联图纸使用 Project PID",
+        "label": "阶段创建方式",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "请选择 Project PIDPraj-ParseResult-260907-3.pdi",
+        "label": "Project PID",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "Phase 1 · Phase1 · Praj-ParseResult-260907-3.pdiPhase 2 · Phase2 · Praj-ParseResult-260907-3.pdi",
+        "label": "历史阶段",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "本地图纸",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "图纸 URL",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "新图纸显示名",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "创建 Phase",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  },
+  {
+    "name": "08-phase-drawing",
+    "boxes": [
+      {
+        "label": "来源",
+        "x": 459,
+        "y": 407,
+        "width": 522,
+        "height": 38
+      },
+      {
+        "label": "确认",
+        "x": 893,
+        "y": 637,
+        "width": 88,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n更换关联图纸\n关联方式\n使用 Project PID\n使用任意已标记 Phase 的图纸\nProject PID\n请选择 Project PID\nPraj-ParseResult-260907-3.pdi\n图纸显示名\n取消\n确认更换",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭关联图纸对话框",
+        "class": "phase-workspace-modal-close phase-icon-button"
+      },
+      {
+        "tag": "SELECT",
+        "text": "使用 Project PID使用任意已标记 Phase 的图纸",
+        "label": "图纸关联方式",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "请选择 Project PIDPraj-ParseResult-260907-3.pdi",
+        "label": "Project PID",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "CIP / 序列 01 Sequence1 / Phase 02 Phase2 / Praj-ParseResult-260907-3.pdi",
+        "label": "已标记 Phase",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "关联图纸显示名",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "确认更换",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  },
+  {
+    "name": "09-import",
+    "boxes": [
+      {
+        "label": "选择 Excel",
+        "x": 487,
+        "y": 417.5,
+        "width": 466,
+        "height": 168
+      },
+      {
+        "label": "导入确认",
+        "x": 877,
+        "y": 616.5,
+        "width": 76,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n导入工艺配置\n拖拽 Excel 文件到此处\n.xlsx、.xls，支持一次上传多个文件\n选择文件\n取消\n确定",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭导入窗口",
+        "class": "phase-config-import-close"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "拖拽 Excel 文件到此处.xlsx、.xls，支持一次上传多个文件选择文件",
+        "label": null,
+        "class": "phase-config-import-dropzone"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": "phase-config-import-cancel"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "确定",
+        "label": null,
+        "class": "phase-config-import-confirm"
+      }
+    ]
+  },
+  {
+    "name": "10-styles",
+    "boxes": [
+      {
+        "label": "设备名称",
+        "x": 358,
+        "y": 284.5,
+        "width": 656,
+        "height": 35
+      },
+      {
+        "label": "状态名称",
+        "x": 500.734375,
+        "y": 353.5,
+        "width": 168.421875,
+        "height": 34
+      },
+      {
+        "label": "流路行为",
+        "x": 677.15625,
+        "y": 412.5,
+        "width": 336.84375,
+        "height": 34
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n高亮样式设置\n设备\nUtility\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n新增状态\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n新增状态\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n状态 key\n右键名称\n颜色\n十六进制\n线宽 (px)\n透明度 (%)\n选择此状态时自动高亮流路\n流路行为\n允许继续\n停止\n不参与\n新增状态\n新增设备\n取消\n应用\n应用并关闭",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "导入高亮样式 JSON",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "下载高亮样式 JSON",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭对话框",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "设备",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Utility",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "设备名称",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "新增状态",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "设备名称",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "新增状态",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "设备名称",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "状态 key",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "右键显示名称",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "十六进制颜色",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮线宽",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "高亮透明度",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "复制设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "删除设备状态",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自动高亮流路",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "允许继续停止不参与",
+        "label": "流路行为",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "新增状态",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "新增设备",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "应用",
+        "label": null,
+        "class": "phase-workspace-primary"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "应用并关闭",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  },
+  {
+    "name": "11-report",
+    "boxes": [
+      {
+        "label": "页面列表",
+        "x": 19,
+        "y": 83,
+        "width": 490.6875,
+        "height": 898
+      },
+      {
+        "label": "页面属性",
+        "x": 509.6875,
+        "y": 126,
+        "width": 911.296875,
+        "height": 54
+      },
+      {
+        "label": "导出设置",
+        "x": 509.6875,
+        "y": 83,
+        "width": 911.296875,
+        "height": 43
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n独立报告工作区\nPDF 报告页面\n导出 PDF\n导出 Matrix\n2 / 2 页\nProcess\n全部工艺\nCIP\n全部序列\n序列 01 · Sequence1\n批量排除\n批量恢复\n全部 2\n已排除 0\n已替换 0\n问题 0\n序列 01 · Sequence1\n2 个 Phase\n页 001\nPhase 01 · Phase1\n正常\n页 002\nPhase 02 · Phase2\n正常\n页面设置&导出\n生成记录 0\n页面属性\n生成 PDF 报告\n文件名\n导出范围\n全部序列\n当前序列\n选中序列\n预计页数\n2\n排除页面\n0\n替换页面\n0\n合并输出\n1 个 PDF\n分序列输出\n1 个 PDF（ZIP）\n\n报告已通过预检\n\n合并为一个 PDF\n每个序列一个 PDF（ZIP）",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "导出 PDF",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "导出 Matrix",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭报告工作区",
+        "class": "report-icon-button"
+      },
+      {
+        "tag": "SELECT",
+        "text": "全部工艺CIP",
+        "label": "PDF Process",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "搜索报告页面",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "跳转到页码",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "全部序列序列 01 · Sequence1",
+        "label": "按序列筛选",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "批量排除",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "批量恢复",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "全部 2",
+        "label": null,
+        "class": "is-active"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "已排除 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "已替换 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "问题 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "序列 01 · Sequence12 个 Phase",
+        "label": "折叠序列 1",
+        "class": "report-sequence-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页 001Phase 01 · Phase1正常",
+        "label": null,
+        "class": "report-page-row report-phase-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页 002Phase 02 · Phase2正常",
+        "label": null,
+        "class": "report-page-row report-phase-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页面设置&导出",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "生成记录 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自定义 PDF 文件名",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "合并为一个 PDF",
+        "label": null,
+        "class": "report-primary-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "每个序列一个 PDF（ZIP）",
+        "label": null,
+        "class": ""
+      }
+    ]
+  },
+  {
+    "name": "12-pdf-settings",
+    "boxes": [
+      {
+        "label": "文件名",
+        "x": 523.6875,
+        "y": 259,
+        "width": 883.296875,
+        "height": 34
+      },
+      {
+        "label": "合并 PDF",
+        "x": 523.6875,
+        "y": 525,
+        "width": 883.296875,
+        "height": 35
+      },
+      {
+        "label": "分序列 ZIP",
+        "x": 523.6875,
+        "y": 570,
+        "width": 883.296875,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n独立报告工作区\nPDF 报告页面\n导出 PDF\n导出 Matrix\n2 / 2 页\nProcess\n全部工艺\nCIP\n全部序列\n序列 01 · Sequence1\n批量排除\n批量恢复\n全部 2\n已排除 0\n已替换 0\n问题 0\n序列 01 · Sequence1\n2 个 Phase\n页 001\nPhase 01 · Phase1\n正常\n页 002\nPhase 02 · Phase2\n正常\n页面设置&导出\n生成记录 0\n页面属性\n生成 PDF 报告\n文件名\n导出范围\n全部序列\n当前序列\n选中序列\n预计页数\n2\n排除页面\n0\n替换页面\n0\n合并输出\n1 个 PDF\n分序列输出\n1 个 PDF（ZIP）\n\n报告已通过预检\n\n合并为一个 PDF\n每个序列一个 PDF（ZIP）",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "导出 PDF",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "导出 Matrix",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭报告工作区",
+        "class": "report-icon-button"
+      },
+      {
+        "tag": "SELECT",
+        "text": "全部工艺CIP",
+        "label": "PDF Process",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "搜索报告页面",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "跳转到页码",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "全部序列序列 01 · Sequence1",
+        "label": "按序列筛选",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "批量排除",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "批量恢复",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "全部 2",
+        "label": null,
+        "class": "is-active"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "已排除 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "已替换 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "问题 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "序列 01 · Sequence12 个 Phase",
+        "label": "折叠序列 1",
+        "class": "report-sequence-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页 001Phase 01 · Phase1正常",
+        "label": null,
+        "class": "report-page-row report-phase-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页 002Phase 02 · Phase2正常",
+        "label": null,
+        "class": "report-page-row report-phase-node"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "页面设置&导出",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "生成记录 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自定义 PDF 文件名",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "合并为一个 PDF",
+        "label": null,
+        "class": "report-primary-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "每个序列一个 PDF（ZIP）",
+        "label": null,
+        "class": ""
+      }
+    ]
+  },
+  {
+    "name": "13-matrix",
+    "boxes": [
+      {
+        "label": "范围",
+        "x": 113,
+        "y": 125,
+        "width": 381.6875,
+        "height": 34
+      },
+      {
+        "label": "文件名",
+        "x": 620.6875,
+        "y": 171,
+        "width": 205.84375,
+        "height": 34
+      },
+      {
+        "label": "导出",
+        "x": 523.6875,
+        "y": 396.78125,
+        "width": 883.296875,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n独立报告工作区\nMatrix 导出页面\n导出 PDF\n导出 Matrix\n已选择 1 个 SEQUENCE，2 个 PHASE\nSequence / Phase 范围\nProcess\n全部工艺\nCIP\n全部选择\n全部清除\n当前 Sequence\n序列 01\nPhase 01 · Phase1\nPhase 02 · Phase2\n导出设置\n生成记录 0\nMatrix 导出设置\n文件名\n文件格式\nXLSX\nCSV\n设备与内容\nValve\nPump / Motor\nSensor\n包含未激活设备\n包含转换条件\n\n已选择 1 个 Sequence，2 个 Phase，3 类设备\n\n导出 Matrix",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "导出 PDF",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "导出 Matrix",
+        "label": null,
+        "class": "report-export-tab"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭报告工作区",
+        "class": "report-icon-button"
+      },
+      {
+        "tag": "SELECT",
+        "text": "全部工艺CIP",
+        "label": "Matrix Process",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "搜索 Matrix 范围",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "全部选择",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "全部清除",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "当前 Sequence",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "折叠 Sequence 1",
+        "class": "report-matrix-tree-toggle"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "导出设置",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "生成记录 0",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "自定义 Matrix 文件名",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "XLSXCSV",
+        "label": "Matrix 文件格式",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "导出 Matrix",
+        "label": null,
+        "class": "report-primary-button"
+      }
+    ]
+  },
+  {
+    "name": "14-save",
+    "boxes": [
+      {
+        "label": "阶段切换",
+        "x": 738.953125,
+        "y": 66.5,
+        "width": 160,
+        "height": 32
+      },
+      {
+        "label": "保存",
+        "x": 1196.734375,
+        "y": 66.5,
+        "width": 70,
+        "height": 32
+      },
+      {
+        "label": "高亮样式",
+        "x": 275,
+        "y": 62,
+        "width": 30,
+        "height": 30
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": []
+  },
+  {
+    "name": "16-tank",
+    "boxes": [
+      {
+        "label": "筛选 Tank",
+        "x": 14,
+        "y": 221,
+        "width": 250,
+        "height": 35
+      },
+      {
+        "label": "定位 Tank",
+        "x": 271,
+        "y": 221.5,
+        "width": 34,
+        "height": 34
+      },
+      {
+        "label": "阶段归属",
+        "x": 87,
+        "y": 729,
+        "width": 207,
+        "height": 34
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": []
+  },
+  {
+    "name": "17-phase-copy",
+    "boxes": [
+      {
+        "label": "目标序列",
+        "x": 517,
+        "y": 463.5,
+        "width": 406,
+        "height": 34
+      },
+      {
+        "label": "编号",
+        "x": 517,
+        "y": 525.5,
+        "width": 406,
+        "height": 34
+      },
+      {
+        "label": "名称",
+        "x": 517,
+        "y": 587.5,
+        "width": 406,
+        "height": 34
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n复制 Phase\n来源 Phase\n目标序列\n01 · Sequence1\n新 Phase 编号\n新 Phase 名称\n取消\n复制\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭对话框",
+        "class": "phase-workspace-modal-close phase-icon-button"
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "来源 Phase",
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "01 · Sequence1",
+        "label": "目标序列",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "新 Phase 编号",
+        "class": ""
+      },
+      {
+        "tag": "INPUT",
+        "text": "",
+        "label": "新 Phase 名称",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "复制",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  },
+  {
+    "name": "19-tools",
+    "boxes": [
+      {
+        "label": "缩放至范围",
+        "x": 1017,
+        "y": 304,
+        "width": 32,
+        "height": 32
+      },
+      {
+        "label": "画笔",
+        "x": 1017,
+        "y": 412,
+        "width": 32,
+        "height": 32
+      },
+      {
+        "label": "擦除",
+        "x": 1017,
+        "y": 448,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断",
+    "controls": []
+  },
+  {
+    "name": "20-brush",
+    "boxes": [
+      {
+        "label": "样式来源",
+        "x": 457,
+        "y": 418,
+        "width": 526,
+        "height": 42
+      },
+      {
+        "label": "应用",
+        "x": 895,
+        "y": 599,
+        "width": 88,
+        "height": 35
+      }
+    ],
+    "text": "工艺与阶段\n工艺\nCIP\n所属 TANK\n全部 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n工艺结构\n01\nSequence1\n2\n活动\n01\nPhase1\n图纸已关联\n02\nPhase2\n图纸已关联\n当前阶段概览\nPhase1\n图纸\nPraj-ParseResult-260907-3.pdi\n更换图纸\n来源\n新图纸\n所属 Tank\n未分配 Tank\nVessel_1\nVessel_2\nVessel_3\nVessel_4\n创建阶段\n\n可先创建 Phase，之后再关联图纸，也可复制历史状态或直接使用图纸。\n\n创建 Phase\n工艺\nCIP\n序列\n序列 01 · Sequence1\nPHASE\nPhase 01 · Phase1\nPhase 02 · Phase2\n2 个阶段\n导入配置\n阶段已保存\n保存\nPID\nPID Viewer Lite\n工业 P&ID 工作台\nPROJECT\nDemoNew\n图纸\nPraj-ParseResult-260907-3.pdi\nPID 图纸\nProject\n报告\nmanual-demo\n✕\n▾\n▾\n中\n阀门调试\n‹\n起点\n6925\n状态\n打开\n节点\n28\n截断\n2\n▾\nV\n6925\n阀门 · 1B0D\n起点\n▾\nL\n14556\n线路 · 38DC\n线路\n▾\nL\n39674\n线路 · 9AFA\n线路\n▾\nL\n39607\n线路 · 9AB7\n线路\n▾\nL\n14320\n线路 · 37F0\n线路\n▾\nV\n47482\n阀门 · B97A\n打开\n▾\nL\n830\n线路 · 33E\n线路\n▾\nL\n15159\n线路 · 3B37\n线路\nL\n15155\n线路 · 3B33\n线路\n▾\nL\n15173\n线路 · 3B45\n线路\n▾\nL\n15268\n线路 · 3BA4\n线路\n▾\nL\n15174\n线路 · 3B46\n线路\nL\n810\n线路 · 32A\n线路\n▾\nL\n11502\n线路 · 2CEE\n线路\n▾\nL\n15153\n线路 · 3B31\n线路\nL\n4732\n线路 · 127C\n线路\n▾\nL\n15154\n线路 · 3B32\n线路\n▾\nL\n15272\n线路 · 3BA8\n线路\n▾\nL\n15160\n线路 · 3B38\n线路\n▾\nL\n831\n线路 · 33F\n线路\n▾\nL\n815\n线路 · 32F\n线路\nL\n13083\n线路 · 331B\n线路\n▾\nL\n14557\n线路 · 38DD\n线路\n▾\nL\n13342\n线路 · 341E\n线路\nV\n6105\n阀门 · 17D9\n关闭/截断\n▾\nL\n14558\n线路 · 38DE\n线路\n▾\nL\n14559\n线路 · 38DF\n线路\nV\n4004\n阀门 · FA4\n关闭/截断\n选择画笔样式\nUtility 预设\n设备样式预设\nUtility 样式\nUtility 1\nUtility 2\n预览 · 50% · 4px\n取消\n应用",
+    "controls": [
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "label": "关闭样式选择对话框",
+        "class": "phase-icon-button"
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Utility 预设",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "设备样式预设",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "SELECT",
+        "text": "Utility 1Utility 2",
+        "label": "Utility 样式",
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "取消",
+        "label": null,
+        "class": ""
+      },
+      {
+        "tag": "BUTTON",
+        "text": "应用",
+        "label": null,
+        "class": "phase-workspace-primary"
+      }
+    ]
+  }
+]
