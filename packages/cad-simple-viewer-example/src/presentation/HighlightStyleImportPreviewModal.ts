@@ -18,6 +18,7 @@ export interface HighlightStyleImportAnalysis {
 export interface HighlightStyleImportPreviewOptions {
   locale: AppLocale
   analysis: HighlightStyleImportAnalysis
+  defaults?: { addedStates: string[]; unknownCategories: string[] }
   onConfirm(mode: HighlightStyleImportMode): void
   onClose(): void
 }
@@ -59,7 +60,9 @@ export class HighlightStyleImportPreviewModal {
     const header = document.createElement('header')
     const title = document.createElement('h2')
     title.id = 'highlightImportPreviewTitle'
-    title.append(createPhaseIcon(FileJson), en ? 'Import preview' : '导入预览')
+    title.append(createPhaseIcon(FileJson), this.options.defaults
+      ? (en ? 'Missing styles preview' : '样式补齐预览')
+      : (en ? 'Import preview' : '导入预览'))
     const close = this.iconButton(en ? 'Close import preview' : '关闭导入预览', X, () => this.close())
     header.append(title, close)
 
@@ -73,6 +76,24 @@ export class HighlightStyleImportPreviewModal {
       this.metric('Utility', analysis.utilityCount)
     )
     body.append(summary)
+
+    if (this.options.defaults) {
+      const details = document.createElement('ul')
+      details.className = 'highlight-import-issues'
+      const { addedStates, unknownCategories } = this.options.defaults
+      const messages = [
+        ...addedStates.map(value => en ? `Add state: ${value}` : `新增状态：${value}`),
+        ...unknownCategories.map(value => en ? `No template: ${value}` : `未匹配模板：${value}`),
+        ...(addedStates.length ? [] : [en ? 'No missing styles to add.' : '没有可补齐的样式。'])
+      ]
+      messages.forEach(message => {
+        const item = document.createElement('li')
+        item.textContent = message
+        item.style.overflowWrap = 'anywhere'
+        details.append(item)
+      })
+      body.append(details)
+    }
 
     const issues = [
       ...analysis.errors.map(message => ({ kind: 'error', message })),
@@ -95,7 +116,7 @@ export class HighlightStyleImportPreviewModal {
         issueList.append(item)
       })
       body.append(issueList)
-    } else {
+    } else if (!this.options.defaults) {
       const valid = document.createElement('p')
       valid.className = 'highlight-import-valid'
       valid.textContent = en ? 'No duplicate devices or states found.' : '未发现重复设备或状态。'
@@ -110,18 +131,20 @@ export class HighlightStyleImportPreviewModal {
       this.modeButton('merge', en ? 'Merge with current configuration' : '合并现有配置'),
       this.modeButton('replace', en ? 'Replace all configuration' : '替换全部配置')
     )
-    body.append(modes)
+    if (!this.options.defaults) body.append(modes)
 
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions highlight-import-actions'
     const cancel = this.button(en ? 'Cancel' : '取消', () => this.close())
     cancel.className = 'highlight-import-cancel'
-    const confirm = this.button(en ? 'Confirm import' : '确认导入', () => {
+    const confirm = this.button(this.options.defaults
+      ? (en ? 'Confirm additions' : '确认补齐')
+      : (en ? 'Confirm import' : '确认导入'), () => {
       this.options.onConfirm(this.mode)
       this.close(false)
     })
     confirm.classList.add('phase-workspace-primary')
-    confirm.disabled = analysis.errors.length > 0
+    confirm.disabled = analysis.errors.length > 0 || this.options.defaults?.addedStates.length === 0
     footer.append(cancel, confirm)
     shell.append(header, body, footer)
     this.element.append(shell)

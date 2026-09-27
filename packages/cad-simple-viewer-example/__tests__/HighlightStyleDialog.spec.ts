@@ -1,14 +1,107 @@
 /** @jest-environment jsdom */
 
-import { toPersistedPresentationProfile } from '../src/phase/phaseWorkspaceRepository'
+import { PhaseWorkspaceRepository, toPersistedPresentationProfile } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import { HighlightStyleDialog } from '../src/presentation/HighlightStyleDialog'
+import defaultStyles from '../src/presentation/defaultDeviceStyles.json'
+import { initializeProjectDeviceStyles } from '../src/presentation/defaultDeviceStyles'
 
 const value = () => ({
   presentationProfile: createDefaultPresentationProfile()
 })
 
 describe('HighlightStyleDialog', () => {
+  it('shows Valve and Utilities when a new project returns empty backend style arrays', async () => {
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '', projectId: 1,
+      projectConfigure: { presentationProfile: { deviceStyles: [], utilities: [] } },
+      files: { list: jest.fn().mockResolvedValue([]), upload: jest.fn() },
+      procedures: { list: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      operations: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      phases: { list: jest.fn(), get: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() }
+    })
+    const workspace = await repository.load()
+    const result = initializeProjectDeviceStyles(workspace.presentationProfile)
+    expect(result).toBeDefined()
+    const onApply = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: { presentationProfile: result!.profile }, onApply, onClose: jest.fn()
+    })
+    dialog.open()
+    expect(dialog.element.querySelector<HTMLInputElement>('[aria-label="设备名称"]')?.value).toBe('Valve')
+    expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="右键显示名称"]')]
+      .map(input => input.value)).toEqual(['ON', 'OFF', 'PULSE'])
+    ;[...dialog.element.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find(button => button.textContent === 'Utility')!.click()
+    expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="Utility 名称"]')]
+      .map(input => input.value)).toEqual(['Utility 1', 'Utility 2'])
+    expect(onApply).not.toHaveBeenCalled()
+  })
+
+  it.each(['zh', 'en'] as const)('previews additions without replacing user settings in %s', locale => {
+    const source = value()
+    const drawing = { Areas: [{ ControlModules: [{ Name: 'Valve' }, { Name: 'PP' }] }] }
+    const onApply = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: source, getLocale: () => locale, getDrawingDocument: () => drawing,
+      onApply, onClose: jest.fn()
+    })
+    dialog.open()
+    const supplementLabel = locale === 'en' ? 'Add missing styles from drawing' : '根据图纸补齐'
+    dialog.element.querySelector<HTMLButtonElement>(`[aria-label="${supplementLabel}"]`)!.click()
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect(preview.parentElement).toBe(document.body)
+    expect(preview.textContent).toContain('Valve / OPEN')
+    expect(preview.textContent).toContain(locale === 'en' ? 'No template: PP' : '未匹配模板：PP')
+    expect(preview.querySelector('[role="radiogroup"]')).toBeNull()
+    expect(source.presentationProfile.devices).toEqual([])
+    expect(onApply).not.toHaveBeenCalled()
+    ;[...preview.querySelectorAll('button')].find(button => button.textContent ===
+      (locale === 'en' ? 'Confirm additions' : '确认补齐'))!.click()
+    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(3)
+    dialog.element.querySelector<HTMLButtonElement>(`[aria-label="${supplementLabel}"]`)!.click()
+    const repeat = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect([...repeat.querySelectorAll('button')].find(button => button.textContent ===
+      (locale === 'en' ? 'Confirm additions' : '确认补齐'))!.disabled).toBe(true)
+    expect(source.presentationProfile.devices).toEqual([])
+  })
+
+  it('disables supplementation without a drawing', () => {
+    const dialog = new HighlightStyleDialog({
+      value: value(), getDrawingDocument: () => undefined, onClose: jest.fn()
+    })
+    expect(dialog.element.querySelector<HTMLButtonElement>('[aria-label="根据图纸补齐"]')!.disabled).toBe(true)
+  })
+
+  it('cancels supplementation without editing the draft', () => {
+    const onApply = jest.fn()
+    const drawing = { Areas: [{ ControlModules: [{ Name: 'Valve' }] }] }
+    const dialog = new HighlightStyleDialog({
+      value: value(), getDrawingDocument: () => drawing, onApply, onClose: jest.fn()
+    })
+    dialog.open()
+    dialog.element.querySelector<HTMLButtonElement>('[aria-label="根据图纸补齐"]')!.click()
+    document.querySelector<HTMLButtonElement>('.highlight-import-cancel')!.click()
+    expect(document.querySelector('.highlight-import-preview-modal')).toBeNull()
+    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(0)
+    expect(onApply).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale drawing previews', () => {
+    let drawing: { Areas: Array<{ ControlModules: Array<{ Name: string }> }> } | undefined =
+      { Areas: [{ ControlModules: [{ Name: 'Valve' }] }] }
+    const dialog = new HighlightStyleDialog({
+      value: value(), getDrawingDocument: () => drawing, onClose: jest.fn()
+    })
+    dialog.open()
+    dialog.element.querySelector<HTMLButtonElement>('[aria-label="根据图纸补齐"]')!.click()
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    drawing = undefined
+    ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认补齐')!.click()
+    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(0)
+    expect(dialog.element.textContent).toContain('图纸已切换')
+  })
+
   it('waits for saving before closing and prevents duplicate submissions', async () => {
     let finishSave!: () => void
     const onApply = jest.fn(() => new Promise<void>(resolve => { finishSave = resolve }))
@@ -430,9 +523,45 @@ describe('HighlightStyleDialog', () => {
 
     const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     expect(preview.textContent).toContain(
-      'deviceStyles[0] 缺少有效的 deviceType 或 deviceState。'
+      '缺少有效的必填字段。 (deviceStyles[0].deviceState)'
     )
     expect([...preview.querySelectorAll<HTMLButtonElement>('button')]
       .find(button => button.textContent === '确认导入')?.disabled).toBe(true)
+  })
+
+  it('imports the bundled default file using the same data as project initialization', async () => {
+    const dialog = new HighlightStyleDialog({ value: value(), onClose: jest.fn() })
+    dialog.open()
+    await (dialog as unknown as { importStyles(file: File): Promise<void> }).importStyles({
+      text: async () => JSON.stringify(defaultStyles)
+    } as File)
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect([...preview.querySelectorAll('.highlight-import-summary strong')]
+      .map(item => item.textContent)).toEqual(['1', '3', '2'])
+    ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认导入')!.click()
+    const imported = (dialog as unknown as { draft: ReturnType<typeof value> }).draft.presentationProfile
+    const initialized = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
+    expect(imported.devices).toEqual(initialized.devices)
+    expect(imported.utilities).toEqual(initialized.utilities)
+    expect(imported.defaultStyleSeed).toEqual({ status: 'configured' })
+  })
+
+  it.each(['zh', 'en'] as const)('rejects invalid Utility values with localized errors in %s', async locale => {
+    const source = value()
+    const dialog = new HighlightStyleDialog({ value: source, getLocale: () => locale, onClose: jest.fn() })
+    dialog.open()
+    await (dialog as unknown as { importStyles(file: File): Promise<void> }).importStyles({
+      text: async () => JSON.stringify({ presentationProfile: {
+        ...defaultStyles.presentationProfile,
+        utilities: [{ ...defaultStyles.presentationProfile.utilities[0], opacity: 2 }]
+      } })
+    } as File)
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect(preview.textContent).toContain(locale === 'en'
+      ? 'The field value is invalid or out of range. (utilities[0].opacity)'
+      : '字段值无效或超出允许范围。 (utilities[0].opacity)')
+    expect([...preview.querySelectorAll<HTMLButtonElement>('button')]
+      .find(button => button.textContent === (locale === 'en' ? 'Confirm import' : '确认导入'))?.disabled).toBe(true)
+    expect(source.presentationProfile.utilities).toEqual([])
   })
 })

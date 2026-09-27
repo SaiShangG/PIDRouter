@@ -156,6 +156,7 @@ import {
   HighlightStyleDialog,
   type HighlightStyleDraft
 } from './presentation/HighlightStyleDialog'
+import { initializeDefaultDeviceStyles, initializeProjectDeviceStyles } from './presentation/defaultDeviceStyles'
 import { PhasePresentationController } from './presentation/PhasePresentationController'
 import {
   type ResolvedEntityPresentation,
@@ -2890,8 +2891,8 @@ class CadViewerApp {
     fallback: PresentationProfile
   ): PresentationProfile {
     const existing = this.projectPresentationProfiles.get(projectId)
-    if (existing) return clonePresentationProfile(existing)
-    const profile = clonePresentationProfile(fallback)
+    const source = existing ?? fallback
+    const profile = clonePresentationProfile(initializeProjectDeviceStyles(source)?.profile ?? source)
     this.projectPresentationProfiles.set(projectId, profile)
     return clonePresentationProfile(profile)
   }
@@ -3604,6 +3605,7 @@ class CadViewerApp {
     if (hotSwitch) {
       this.pendingPhase = undefined
       this.resetPhaseRuntimeState(true)
+      this.initializeDrawingDeviceStyles()
       if (!this.applyPhaseSnapshot(processId, sequenceId, phaseId)) {
         this.invalidateLoadedPhaseBinding()
         throw new Error('Unable to apply Phase state')
@@ -3644,6 +3646,7 @@ class CadViewerApp {
     }
     if (success && token === this.phaseActivationToken) {
       this.pendingPhase = undefined
+      this.initializeDrawingDeviceStyles()
       if (!this.applyPhaseSnapshot(processId, sequenceId, phaseId)) {
         this.invalidateLoadedPhaseBinding()
         throw new Error('Unable to apply Phase state')
@@ -3652,7 +3655,11 @@ class CadViewerApp {
   }
 
   private async openPhaseDrawing(drawing: DrawingAssetRef) {
+    const activationToken = this.phaseActivationToken
+    const repository = this.phaseRepository
+    const isCurrent = () => activationToken === this.phaseActivationToken && repository === this.phaseRepository
     await this.initialize()
+    if (!isCurrent()) return false
     const options: AcApOpenDatabaseOptions = {
       minimumChunkSize: 1000,
       progressiveRendering: false,
@@ -3668,6 +3675,7 @@ class CadViewerApp {
             backendFileMatch[1]
           )
           const extracted = await extractPdiArchive(pdiContent)
+          if (!isCurrent()) return false
           useFlowConnectionDocument(extracted.flowConnectionJsonText)
           this.valveDebugFeature?.setGraphDocument(flowConnectionDocument)
           const success = await AcApDocManager.instance.openDocument(
@@ -3675,6 +3683,7 @@ class CadViewerApp {
             extracted.cadContent,
             options
           )
+          if (!isCurrent()) return false
           if (success) {
             selectFlowConnectionDocumentAndView(
               extracted.flowConnectionJsonText
@@ -4000,6 +4009,26 @@ class CadViewerApp {
     return { presentationProfile: this.getActivePresentationProfile() }
   }
 
+  private initializeDrawingDeviceStyles() {
+    try {
+      const result = initializeDefaultDeviceStyles(
+        flowConnectionDocument,
+        this.getActivePresentationProfile()
+      )
+      if (!result?.addedStates.length) return
+      this.phaseStore.updatePresentationProfile(result.profile)
+      if (this.activeProjectId !== undefined) {
+        this.projectPresentationProfiles.set(this.activeProjectId, clonePresentationProfile(result.profile))
+      }
+      this.phaseStore.persist()
+      this.syncPhaseContextBar()
+      this.showMessage('已生成默认设备样式，尚未保存到后台', 'success')
+    } catch (error) {
+      log.error('Failed to initialize default device styles:', error)
+      this.showMessage('默认设备样式生成失败', 'error')
+    }
+  }
+
   private getLoadedHighlightStyleDraft() {
     return this.loadedPhase
       ? { presentationProfile: this.getActivePresentationProfile() }
@@ -4008,11 +4037,24 @@ class CadViewerApp {
 
   private openHighlightStyleDialog() {
     const value = this.getHighlightStyleDraft()
+    const projectId = this.activeProjectId
+    const repository = this.phaseRepository
+    const drawing = flowConnectionDocument
     document.querySelector('.highlight-style-modal')?.remove()
     const dialog = new HighlightStyleDialog({
       value,
       getLocale: () => this.appLocale,
-      onApply: draft => this.savePresentationProfile(draft.presentationProfile),
+      getDrawingDocument: () => projectId === this.activeProjectId &&
+        repository === this.phaseRepository && drawing === flowConnectionDocument &&
+        this.loadedPhase && !this.pendingPhase && !this.isLoadingFile && drawing.Areas?.length
+        ? drawing
+        : undefined,
+      onApply: draft => {
+        if (projectId !== this.activeProjectId || repository !== this.phaseRepository) {
+          throw new Error('Project changed while editing styles')
+        }
+        return this.savePresentationProfile(draft.presentationProfile)
+      },
       onClose: () => undefined
     })
     dialog.open()
@@ -4024,6 +4066,10 @@ class CadViewerApp {
     this.phaseSaveState.beginStyles()
     let failed = false
     try {
+      profile = clonePresentationProfile(profile)
+      if (!profile.defaultStyleSeed || profile.defaultStyleSeed.status === 'pending') {
+        profile.defaultStyleSeed = { status: 'configured' }
+      }
       this.phaseStore.updatePresentationProfile(profile)
       const normalizedProfile = this.phaseStore.snapshot().presentationProfile
       if (this.activeProjectId !== undefined) {

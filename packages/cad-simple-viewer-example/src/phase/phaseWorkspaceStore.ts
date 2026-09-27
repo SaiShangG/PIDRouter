@@ -28,6 +28,7 @@ const createHighlightStyle = (
 ): HighlightStyle => ({ color, lineWidthPx, opacity: 1, visible: true })
 
 export const createDefaultPresentationProfile = (): PresentationProfile => ({
+  defaultStyleSeed: { status: 'pending' },
   defaultFlowStyle: createHighlightStyle(0x00c853, 3),
   unknownDeviceStyle: null,
   dimmedBaseStyle: { color: 0x9e9e9e, opacity: 0.35 },
@@ -58,6 +59,7 @@ const cloneNullableStyle = (style: HighlightStyle | null) =>
 export const clonePresentationProfile = (
   profile: PresentationProfile
 ): PresentationProfile => ({
+  ...(profile.defaultStyleSeed ? { defaultStyleSeed: { ...profile.defaultStyleSeed } } : {}),
   defaultFlowStyle: cloneHighlightStyle(profile.defaultFlowStyle),
   unknownDeviceStyle: cloneNullableStyle(profile.unknownDeviceStyle),
   dimmedBaseStyle: { ...profile.dimmedBaseStyle },
@@ -532,7 +534,23 @@ export const normalizePresentationProfile = (value: unknown): PresentationProfil
     ? value.dimmedBaseStyle
     : {}
   const devices = normalizeDevices(persistedDevices ?? value.devices)
+  const resolvedDevices = devices.length
+    ? devices
+    : preserveDeviceStyles ? migrateLegacyDevices(value) : []
+  const seed = isRecord(value.defaultStyleSeed) ? value.defaultStyleSeed : undefined
+  const seedStatus = seed?.status
+  const defaultStyleSeed: PresentationProfile['defaultStyleSeed'] = {
+    status: seedStatus === 'pending' || seedStatus === 'generated' || seedStatus === 'configured'
+      ? seedStatus
+      : resolvedDevices.length > 0 || utilities.length > 0
+        ? 'configured'
+        : 'pending',
+    ...(typeof seed?.templateVersion === 'number' && Number.isInteger(seed.templateVersion) && seed.templateVersion > 0
+      ? { templateVersion: seed.templateVersion }
+      : {})
+  }
   return {
+    defaultStyleSeed,
     defaultFlowStyle: normalizeStyle(
       value.defaultFlowStyle,
       defaults.defaultFlowStyle
@@ -564,11 +582,7 @@ export const normalizePresentationProfile = (value: unknown): PresentationProfil
       }
     },
     deviceStylesInitialized: true,
-    devices: devices.length
-      ? devices
-      : preserveDeviceStyles
-        ? migrateLegacyDevices(value)
-        : [],
+    devices: resolvedDevices,
     utilities
   }
 }

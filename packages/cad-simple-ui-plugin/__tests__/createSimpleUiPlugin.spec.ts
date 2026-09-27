@@ -3,9 +3,9 @@
 jest.mock('../package.json', () => ({ version: '0.0.0-test' }))
 
 class ResizeObserverMock {
-  observe() {}
-  disconnect() {}
-  unobserve() {}
+  observe() { }
+  disconnect() { }
+  unobserve() { }
 }
 
 beforeAll(() => {
@@ -35,7 +35,7 @@ jest.mock('@mlightcad/cad-simple-viewer', () => {
       window.matchMedia?.(layout.ML_UI_MOBILE_MEDIA_QUERY).matches ?? false,
     isCompactUiLayout: () =>
       window.matchMedia?.(layout.ML_UI_COMPACT_MEDIA_QUERY).matches ?? false,
-    AcApContext: class {},
+    AcApContext: class { },
     AcApDocManager: {
       instance: {
         get curView() {
@@ -72,13 +72,13 @@ jest.mock('@mlightcad/cad-simple-viewer', () => {
       currentLocale: 'en',
       setCurrentLocale: jest.fn()
     },
-    AcApPlugin: class {},
+    AcApPlugin: class { },
     AcApAnnotation: class {
       getAnnotationLayer() {
         return 'annotation'
       }
     },
-    AcEdCommand: class {},
+    AcEdCommand: class { },
     AcEdCommandStack: class {
       static SYSTEMT_COMMAND_GROUP_NAME = 'SYSTEM'
       addCommand(
@@ -112,7 +112,7 @@ jest.mock('@mlightcad/data-model', () => ({
   AcCmColor: {
     fromString: jest.fn(() => null)
   },
-  AcDbDatabase: class {},
+  AcDbDatabase: class { },
   AcDbSystemVariables: {
     COLORTHEME: 'COLORTHEME'
   },

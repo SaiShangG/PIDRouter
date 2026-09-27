@@ -119,7 +119,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   /**
    * @param options - Toolbar, layer manager, dock panel, and host configuration.
    */
-  constructor(private readonly options: AcExSimpleUiPluginOptions = {}) {}
+  constructor(private readonly options: AcExSimpleUiPluginOptions = {}) { }
 
   /**
    * Adds a tab to the dock panel and opens it.

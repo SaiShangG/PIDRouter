@@ -1,5 +1,6 @@
-import { Copy, Download, Plus, Trash2, Upload, X } from 'lucide'
+import { Copy, Download, ListPlus, Plus, Trash2, Upload, X } from 'lucide'
 
+import type { FlowConnectionDocumentInput } from '../flow/types'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
 import type {
@@ -9,7 +10,6 @@ import type {
   PresentationProfile
 } from '../phase/types'
 import { toPersistedPresentationProfile } from '../phase/phaseWorkspaceRepository'
-import { normalizePresentationProfile } from '../phase/phaseWorkspaceStore'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom, translateUiText } from '../uiTranslations'
@@ -18,6 +18,8 @@ import {
   type HighlightStyleImportAnalysis,
   type HighlightStyleImportMode
 } from './HighlightStyleImportPreviewModal'
+import { generateDefaultDeviceStyles } from './defaultDeviceStyles'
+import { parseHighlightStyleDocument, type StyleValidationError } from './highlightStyleDocument'
 
 export interface HighlightStyleDraft {
   presentationProfile: PresentationProfile
@@ -27,6 +29,7 @@ export interface HighlightStyleDialogOptions {
   value: HighlightStyleDraft
   getLocale?: () => AppLocale
   createId?: () => string
+  getDrawingDocument?: () => FlowConnectionDocumentInput | undefined
   onApply?(value: HighlightStyleDraft): void | Promise<void>
   onClose(): void
 }
@@ -39,9 +42,6 @@ const toHex = (color: number) =>
 
 const parseHex = (value: string) =>
   /^#[0-9a-f]{6}$/i.test(value) ? Number.parseInt(value.slice(1), 16) : undefined
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export class HighlightStyleDialog {
   readonly element = document.createElement('div')
@@ -117,6 +117,9 @@ export class HighlightStyleDialog {
     controls.forEach(({ control }) => { control.disabled = true })
     let saved = false
     try {
+      if (this.draft.presentationProfile.defaultStyleSeed?.status === 'pending') {
+        this.draft.presentationProfile.defaultStyleSeed = { status: 'configured' }
+      }
       await this.options.onApply?.(cloneDraft(this.draft))
       saved = true
       this.setSaveStatus('高亮样式已保存')
@@ -169,6 +172,11 @@ export class HighlightStyleDialog {
       this.downloadStyles()
     })
     const close = this.iconButton('关闭对话框', X, () => this.close())
+    if (this.options.getDrawingDocument) {
+      const supplement = this.iconButton('根据图纸补齐', ListPlus, () => this.previewMissingStyles())
+      supplement.disabled = !this.options.getDrawingDocument()
+      headerActions.append(supplement)
+    }
     headerActions.append(importStyles, exportStyles, close)
     header.append(title, headerActions)
 
@@ -359,6 +367,42 @@ export class HighlightStyleDialog {
     }
   }
 
+  private previewMissingStyles() {
+    const drawing = this.options.getDrawingDocument?.()
+    if (!drawing) {
+      this.setSaveStatus('图纸已切换，请重新打开高亮样式设置', true)
+      return
+    }
+    try {
+      const result = generateDefaultDeviceStyles(drawing, this.draft.presentationProfile)
+      const modal = new HighlightStyleImportPreviewModal({
+        locale: this.options.getLocale?.() ?? 'zh',
+        analysis: {
+          deviceCount: result.addedCategories.length,
+          stateCount: result.addedStates.length,
+          utilityCount: 0,
+          duplicateDevices: [],
+          duplicateStates: [],
+          errors: []
+        },
+        defaults: result,
+        onConfirm: () => {
+          if (this.options.getDrawingDocument?.() !== drawing) {
+            this.setSaveStatus('图纸已切换，请重新打开高亮样式设置', true)
+            return
+          }
+          this.draft.presentationProfile = result.profile
+          this.emitPreview()
+          this.render()
+        },
+        onClose: () => undefined
+      })
+      modal.open()
+    } catch {
+      this.setSaveStatus('默认设备样式生成失败', true)
+    }
+  }
+
   private downloadStyles() {
     const presentationProfile = toPersistedPresentationProfile(
       this.draft.presentationProfile
@@ -387,69 +431,47 @@ export class HighlightStyleDialog {
 
   private async importStyles(file: File) {
     try {
-      const parsed: unknown = JSON.parse(await file.text())
-      if (!isRecord(parsed) || !isRecord(parsed.presentationProfile)) {
-        this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
-        return
-      }
-      const profile = parsed.presentationProfile
-      if (!Array.isArray(profile.deviceStyles) || !Array.isArray(profile.utilities)) {
-        this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
-        return
-      }
-      const errors = this.validateImportedStyles(profile.deviceStyles)
-      this.openImportPreview(profile, errors)
+      const result = parseHighlightStyleDocument(JSON.parse(await file.text()))
+      this.openImportPreview(
+        result.ok ? result.profile : undefined,
+        result.ok ? [] : result.errors.map(error => this.formatStyleError(error))
+      )
     } catch {
       this.openImportPreview(undefined, ['高亮样式 JSON 格式无效。'])
     }
   }
 
-  private validateImportedStyles(styles: unknown[]) {
-    const errors: string[] = []
-    styles.forEach((style, index) => {
-      if (!isRecord(style) || typeof style.deviceType !== 'string' ||
-        !style.deviceType.trim() || typeof style.deviceState !== 'string' ||
-        !style.deviceState.trim()) {
-        errors.push(`deviceStyles[${index}] 缺少有效的 deviceType 或 deviceState。`)
-      }
-    })
-    return errors
+  private formatStyleError(error: StyleValidationError) {
+    const messages: Record<StyleValidationError['code'], string> = {
+      structure: '高亮样式 JSON 格式无效。',
+      required: '缺少有效的必填字段。',
+      value: '字段值无效或超出允许范围。',
+      duplicateId: '文件中存在重复的样式 ID。',
+      duplicateState: '文件中存在重复的设备状态。'
+    }
+    return `${translateUiText(this.options.getLocale?.() ?? 'zh', messages[error.code])} (${error.path})`
   }
 
   private openImportPreview(
-    profile: Record<string, unknown> | undefined,
+    profile: PresentationProfile | undefined,
     errors: string[]
   ) {
-    const styles = profile?.deviceStyles as unknown[] | undefined ?? []
-    const utilities = profile?.utilities as unknown[] | undefined ?? []
-    const deviceTypes = new Set<string>()
-    const importedPairs = new Set<string>()
+    const devices = profile?.devices ?? []
+    const deviceTypes = new Set(devices.map(device => device.name))
     const duplicateStates = new Set<string>()
-    styles.forEach(style => {
-      if (!isRecord(style) || typeof style.deviceType !== 'string' ||
-        typeof style.deviceState !== 'string') return
-      const deviceType = style.deviceType.trim()
-      const deviceState = style.deviceState.trim()
-      if (!deviceType || !deviceState) return
-      deviceTypes.add(deviceType)
-      const pair = `${deviceType}\u0000${deviceState}`
-      if (importedPairs.has(pair)) duplicateStates.add(`${deviceType} / ${deviceState}`)
-      importedPairs.add(pair)
-    })
     const existingDevices = new Map(
       this.draft.presentationProfile.devices.map(device => [device.name, device])
     )
     const duplicateDevices = [...deviceTypes].filter(type => existingDevices.has(type))
-    importedPairs.forEach(pair => {
-      const [deviceType, deviceState] = pair.split('\u0000')
-      if (existingDevices.get(deviceType)?.states.some(state => state.key === deviceState)) {
-        duplicateStates.add(`${deviceType} / ${deviceState}`)
+    devices.forEach(device => device.states.forEach(importedState => {
+      if (existingDevices.get(device.name)?.states.some(state => state.key === importedState.key)) {
+        duplicateStates.add(`${device.name} / ${importedState.key}`)
       }
-    })
+    }))
     const analysis: HighlightStyleImportAnalysis = {
       deviceCount: deviceTypes.size,
-      stateCount: styles.length,
-      utilityCount: utilities.length,
+      stateCount: devices.reduce((count, device) => count + device.states.length, 0),
+      utilityCount: profile?.utilities.length ?? 0,
       duplicateDevices,
       duplicateStates: [...duplicateStates],
       errors
@@ -461,7 +483,7 @@ export class HighlightStyleDialog {
       analysis: { ...analysis, errors: localizedErrors },
       onConfirm: mode => {
         if (!profile) return
-        this.applyImportedProfile(normalizePresentationProfile(profile), mode)
+        this.applyImportedProfile(profile, mode)
       },
       onClose: () => undefined
     })
@@ -493,6 +515,7 @@ export class HighlightStyleDialog {
         order: current.utilities.length
       }))
     }
+    this.draft.presentationProfile.defaultStyleSeed = { status: 'configured' }
     this.emitPreview()
     this.render()
   }

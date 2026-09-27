@@ -21,6 +21,7 @@ const toHexColor = (color: number) =>
   `#${Math.round(color).toString(16).padStart(6, '0').slice(-6).toUpperCase()}`
 
 export interface PersistedPresentationProfile {
+  defaultStyleSeed?: PresentationProfile['defaultStyleSeed']
   deviceStyles: Array<{
     id: string
     deviceType: string
@@ -55,6 +56,7 @@ interface PersistedTextAnnotation {
 export const toPersistedPresentationProfile = (
   profile: PresentationProfile
 ): PersistedPresentationProfile => ({
+  ...(profile.defaultStyleSeed ? { defaultStyleSeed: { ...profile.defaultStyleSeed } } : {}),
   deviceStyles: profile.devices.flatMap(device =>
     device.states.map(state => ({
       id: state.id,

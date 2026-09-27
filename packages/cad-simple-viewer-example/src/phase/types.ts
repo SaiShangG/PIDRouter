@@ -67,6 +67,10 @@ export type FlowPathStyleSource =
   | { kind: 'custom'; style: HighlightStyle }
 
 export interface PresentationProfile {
+  defaultStyleSeed?: {
+    status: 'pending' | 'generated' | 'configured'
+    templateVersion?: number
+  }
   defaultFlowStyle: HighlightStyle
   unknownDeviceStyle: HighlightStyle | null
   dimmedBaseStyle: {
