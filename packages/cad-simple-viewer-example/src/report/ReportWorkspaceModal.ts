@@ -1232,7 +1232,7 @@ export class ReportWorkspaceModal {
       ).length
       if (this.matrixProcessId === ALL_REPORT_PROCESSES_ID) {
         const processHeader = document.createElement('div')
-        processHeader.className = 'report-matrix-process-header'
+        processHeader.className = 'report-sequence-node report-matrix-process-header'
         const processToggle = this.createMatrixTreeToggle(
           processExpanded,
           `Process ${item.name}`,
@@ -1281,14 +1281,14 @@ export class ReportWorkspaceModal {
         if (!sequenceMatches && visiblePhases.length === 0) return
 
         const group = document.createElement('div')
-        group.className = 'report-matrix-sequence'
+        group.className = 'report-sequence-group report-matrix-sequence'
         const sequenceExpanded = Boolean(query) ||
           !this.collapsedMatrixSequenceIds.has(sequence.id)
         const selectedPhaseCount = sequence.phases.filter(phase =>
           this.matrixPhaseIds.has(phase.id)
         ).length
         const sequenceHeader = document.createElement('div')
-        sequenceHeader.className = 'report-matrix-sequence-header'
+        sequenceHeader.className = 'report-sequence-node report-matrix-sequence-header'
         const sequenceToggle = this.createMatrixTreeToggle(
           sequenceExpanded,
           `Sequence ${sequence.number}`,
@@ -1316,7 +1316,7 @@ export class ReportWorkspaceModal {
         sequenceHeader.append(sequenceToggle, sequenceOption)
         group.append(sequenceHeader)
         const phasesGroup = document.createElement('div')
-        phasesGroup.className = 'report-matrix-phases'
+        phasesGroup.className = 'report-phase-list report-matrix-phases'
         phasesGroup.hidden = !sequenceExpanded
         const phases = sequenceMatches ? sequence.phases : visiblePhases
         phases.forEach(phase => {
@@ -1336,7 +1336,7 @@ export class ReportWorkspaceModal {
               this.render()
             }
           )
-          option.classList.add('is-phase')
+          option.classList.add('report-page-row', 'is-phase')
           phasesGroup.append(option)
         })
         group.append(phasesGroup)
@@ -1447,7 +1447,11 @@ export class ReportWorkspaceModal {
     input.indeterminate = indeterminate
     input.disabled = Boolean(this.exportController)
     input.addEventListener('change', () => onChange(input.checked))
-    label.append(input, document.createTextNode(text))
+    const identity = document.createElement('span')
+    identity.className = 'report-matrix-option-text'
+    identity.textContent = text
+    identity.title = text
+    label.append(input, identity)
     return label
   }
 

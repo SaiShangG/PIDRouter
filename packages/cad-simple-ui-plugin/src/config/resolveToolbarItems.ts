@@ -25,6 +25,25 @@ export function createDefaultToolbarPresetMap(
   return map
 }
 
+export function filterToolbarItems(
+  items: readonly AcExToolbarItem[],
+  hiddenIds: ReadonlySet<string>
+): AcExToolbarItem[] {
+  const visible: AcExToolbarItem[] = []
+  for (const item of items) {
+    if (hiddenIds.has(item.id)) continue
+    if (isToolbarSeparatorItem(item)) {
+      if (visible.length && !isToolbarSeparatorItem(visible[visible.length - 1])) visible.push(item)
+      continue
+    }
+    const children = item.children ? filterToolbarItems(item.children, hiddenIds) : undefined
+    if (children && !children.length) continue
+    visible.push(children ? { ...item, children } : { ...item })
+  }
+  if (visible.length && isToolbarSeparatorItem(visible[visible.length - 1])) visible.pop()
+  return visible
+}
+
 /**
  * Inserts toolbar items at the configured position relative to a root item id.
  *

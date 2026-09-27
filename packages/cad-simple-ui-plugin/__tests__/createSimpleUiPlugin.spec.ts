@@ -135,6 +135,7 @@ import { AcDbDatabase } from '@mlightcad/data-model'
 
 import { AcApSimpleUiPlugin } from '../src/createSimpleUiPlugin'
 import { toolbarPreset } from '../src/config/toolbarItemUtils'
+import { filterToolbarItems } from '../src/config/resolveToolbarItems'
 
 function createHostTree() {
   const host = document.createElement('div')
@@ -175,6 +176,88 @@ function loadPlugin(
 }
 
 describe('AcApSimpleUiPlugin', () => {
+  it('refreshes toggle feedback after external state changes and toolbar rebuilds', () => {
+    const { host } = createHostTree()
+    let active = false
+    const { plugin, commandManager } = loadPlugin({
+      host,
+      toolbar: {
+        items: [{
+          id: 'brush-highlight',
+          label: 'toolbar.brush',
+          toggle: { getValue: () => active, on: {}, off: {} },
+          action: () => {
+            active = !active
+            plugin.refreshToolbar()
+          }
+        }, { id: 'hidden-tool', label: 'toolbar.select' }]
+      }
+    })
+    const getButton = () => host.querySelector<HTMLButtonElement>(
+      '[data-toolbar-item-id="brush-highlight"]'
+    )!
+
+    expect(getButton().getAttribute('aria-pressed')).toBe('false')
+    active = true
+    plugin.refreshToolbar()
+    expect(getButton().getAttribute('aria-pressed')).toBe('true')
+    plugin.setHiddenToolbarItems(['hidden-tool'])
+    plugin.refreshToolbar()
+    expect(getButton().getAttribute('aria-pressed')).toBe('true')
+    expect(host.querySelector('[data-toolbar-item-id="hidden-tool"]')).toBeNull()
+    getButton().click()
+    expect(getButton().getAttribute('aria-pressed')).toBe('false')
+
+    plugin.onUnload({} as never, commandManager)
+    host.remove()
+  })
+
+  it('reports visibility, collapse, position and inset changes', () => {
+    const { host } = createHostTree()
+    const onStateChange = jest.fn()
+    const { plugin } = loadPlugin({ host, toolbar: { items: [{ id: 'custom', label: 'Custom' }], collapsible: true, onStateChange } })
+    plugin.setToolbarVisible(false)
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
+    plugin.setToolbarCollapsed(true)
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ collapsed: true }))
+    plugin.setToolbarCollapsed(false)
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ collapsed: false }))
+    plugin.setToolbarPlacement('left')
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ placement: 'left' }))
+    plugin.setToolbarEdgeOffset(12)
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ edgeOffset: 12 }))
+  })
+
+  it('filters children and empty menus without mutating the catalog', () => {
+    const items = [
+      { id: 'start', type: 'separator' as const },
+      { id: 'select' },
+      { id: 'separator', type: 'separator' as const },
+      { id: 'export', children: [{ id: 'pdf' }, { id: 'svg' }] },
+      { id: 'end', type: 'separator' as const }
+    ]
+    expect(filterToolbarItems(items, new Set(['pdf', 'svg']))).toEqual([{ id: 'select' }])
+    expect(filterToolbarItems(items, new Set(['pdf']))[2].children).toEqual([{ id: 'svg' }])
+    expect(items[3].children).toHaveLength(2)
+  })
+
+  it('keeps hidden custom tools filtered after replacing the layout', () => {
+    const { host } = createHostTree()
+    const { plugin } = loadPlugin({ host, toolbar: { items: [{ id: 'custom', label: 'Custom' }, { id: 'other', label: 'Other' }] } })
+    plugin.setHiddenToolbarItems(['custom'])
+    expect(host.querySelector('[data-toolbar-item-id="custom"]')).toBeNull()
+    expect(plugin.getAvailableToolbarItems().map(item => item.id)).toEqual(['custom', 'other'])
+    plugin.setToolbarItems([{ id: 'custom', label: 'Custom' }, { id: 'new-tool', label: 'New' }])
+    expect(host.querySelector('[data-toolbar-item-id="custom"]')).toBeNull()
+    plugin.refreshToolbar()
+    mockDocumentActivatedListeners.forEach(listener => listener({ doc: { database: new AcDbDatabase() } }))
+    expect(host.querySelector('[data-toolbar-item-id="custom"]')).toBeNull()
+    expect(plugin.getAvailableToolbarItems().map(item => item.id)).toEqual(['custom', 'new-tool'])
+    plugin.setHiddenToolbarItems([])
+    expect(host.querySelector('[data-toolbar-item-id="custom"]')).not.toBeNull()
+    expect(plugin.getAvailableToolbarItems()).toHaveLength(2)
+  })
+
   afterEach(() => {
     document.body.replaceChildren()
     mockCommands.clear()

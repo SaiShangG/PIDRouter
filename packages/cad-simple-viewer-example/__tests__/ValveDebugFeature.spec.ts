@@ -11,7 +11,7 @@ describe('ValveDebugFeature', () => {
     })
   })
 
-  it('opens a valve from the canvas context menu and updates its path overlay', () => {
+  it('enables and disables debug interactions without losing valve state', () => {
     const host = document.createElement('div')
     document.body.append(host)
     const canvas = document.createElement('canvas')
@@ -28,6 +28,7 @@ describe('ValveDebugFeature', () => {
       isDirty: false
     }
     const feature = new ValveDebugFeature({
+      enabled: false,
       panelHost: host,
       graphDocument: {
         Areas: [{
@@ -58,9 +59,17 @@ describe('ValveDebugFeature', () => {
       getLocale: () => 'en'
     })
 
-    feature.attach()
-    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }))
     const menu = document.querySelector<HTMLDivElement>('.valve-debug-context-menu')!
+    feature.attach()
+    const disabledEvent = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    canvas.dispatchEvent(disabledEvent)
+    expect(disabledEvent.defaultPrevented).toBe(false)
+    expect(menu.hidden).toBe(true)
+    expect(feature.panel.element.hidden).toBe(true)
+
+    feature.setEnabled(true)
+    expect(feature.panel.element.hidden).toBe(false)
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }))
     expect(menu.hidden).toBe(false)
     const openButton = menu.querySelector<HTMLButtonElement>('[data-valve-action="open"]')!
     const closeButton = menu.querySelector<HTMLButtonElement>('[data-valve-action="close"]')!
@@ -74,6 +83,21 @@ describe('ValveDebugFeature', () => {
     expect(overlays.some(item => item.kind === 'path' && item.ids.includes('1') && item.ids.includes('2'))).toBe(true)
     host.querySelector<HTMLButtonElement>('[data-handle-key="2"]')?.click()
     expect(zoomCalls).toBe(0)
+
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    feature.setEnabled(false)
+    expect(menu.hidden).toBe(true)
+    expect(feature.panel.element.hidden).toBe(true)
+    expect(overlays.every(item => item.disposed)).toBe(true)
+    feature.attach()
+    feature.resize()
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    expect(menu.hidden).toBe(true)
+    expect(overlays.every(item => item.disposed)).toBe(true)
+    feature.setEnabled(true)
+    feature.setEnabled(true)
+    expect(feature.panel.element.hidden).toBe(false)
+    expect(host.querySelector('.valve-debug-tree-label')?.textContent).toBe('1')
 
     canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }))
     expect(openButton.textContent).toBe('Open')
@@ -132,7 +156,7 @@ describe('ValveDebugFeature', () => {
     feature.dispose()
   })
 
-  it('applies a configured state with the first enabled Utility', () => {
+  it.each([undefined, 'running'])('requires an explicit state selection with current state=%s', currentStateKey => {
     const host = document.createElement('div')
     document.body.append(host)
     const canvas = document.createElement('canvas')
@@ -183,6 +207,7 @@ describe('ValveDebugFeature', () => {
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => 'en',
       getConfiguredStates: () => [configuredState, alternateState],
+      getConfiguredStateKey: () => currentStateKey,
       getUtilities: () => [
         {
           id: 'disabled-first',
@@ -214,9 +239,14 @@ describe('ValveDebugFeature', () => {
       '[data-valve-utility-select="true"]'
     )!
     expect(stateRadios).toHaveLength(2)
-    expect(stateRadios[0].checked).toBe(true)
+    expect([...stateRadios].every(input => !input.checked)).toBe(true)
+    const applyButton = document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!
+    expect(applyButton.disabled).toBe(true)
+    applyButton.click()
+    expect(requestConfiguredStateChange).not.toHaveBeenCalled()
     expect(stateRadios[0].parentElement?.textContent).toContain('Running')
     stateRadios[1].click()
+    expect(applyButton.disabled).toBe(false)
     expect(stateRadios[0].checked).toBe(false)
     expect(stateRadios[1].checked).toBe(true)
     expect(utilitySelect.options).toHaveLength(1)
@@ -231,10 +261,13 @@ describe('ValveDebugFeature', () => {
       'process-water'
     )
     expect(onStateChanged).not.toHaveBeenCalled()
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    expect(document.querySelector('input[data-valve-state-radio="true"]:checked')).toBeNull()
+    expect(applyButton.disabled).toBe(true)
     feature.dispose()
   })
 
-  it('opens configured states for a dynamically resolved PP device', () => {
+  it.each([true, false])('opens configured states for a dynamically resolved PP device with debug enabled=%s', enabled => {
     const host = document.createElement('div')
     document.body.append(host)
     const canvas = document.createElement('canvas')
@@ -250,7 +283,9 @@ describe('ValveDebugFeature', () => {
       flowBehavior: 'neutral' as const,
       order: 0
     }
+    const requestConfiguredStateChange = jest.fn(() => true)
     const feature = new ValveDebugFeature({
+      enabled,
       panelHost: host,
       graphDocument: {
         Areas: [{
@@ -275,7 +310,8 @@ describe('ValveDebugFeature', () => {
       getLabels: locale => defaultValveDebugLabels(locale),
       getLocale: () => 'en',
       resolveConfiguredDeviceKey: () => '2',
-      getConfiguredStates: () => [configuredState]
+      getConfiguredStates: () => [configuredState],
+      requestConfiguredStateChange
     })
 
     feature.attach()
@@ -286,6 +322,16 @@ describe('ValveDebugFeature', () => {
     expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')?.hidden).toBe(false)
     expect(document.body.textContent).toContain('Device state')
     expect(document.body.textContent).toContain('Running')
+    expect(feature.panel.element.hidden).toBe(!enabled)
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio="true"]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.click()
+    expect(requestConfiguredStateChange).toHaveBeenCalledWith('2', configuredState, undefined)
+
+    feature.setEnabled(!enabled)
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')?.hidden).toBe(false)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')?.hidden).toBe(true)
     feature.dispose()
   })
 
@@ -342,6 +388,7 @@ describe('ValveDebugFeature', () => {
     expect(document.body.textContent).toContain(
       'No enabled Utility. The state can be applied without a flow highlight.'
     )
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio="true"]')!.click()
     document
       .querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!
       .click()

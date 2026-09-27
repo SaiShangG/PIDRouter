@@ -124,11 +124,13 @@ export function injectUiReferenceThemeStyles() {
     }
 
     .phase-contextbar {
-      flex: 0 0 54px;
+      flex: 0 0 auto;
+      min-height: 54px;
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 10px;
-      padding: 0 14px;
+      padding: 8px 14px;
       border-bottom: 1px solid var(--reference-line);
       background: #f2f5f5;
     }
@@ -237,6 +239,12 @@ export function injectUiReferenceThemeStyles() {
       border-radius: 50%;
       background: var(--reference-green);
     }
+
+    .phase-context-status { height: auto; min-height: 30px; min-width: 0; max-width: min(420px, calc(100vw - 32px)); padding-block: 5px; border-radius: 4px; white-space: normal; overflow-wrap: anywhere; }
+    .phase-context-status i { flex: 0 0 8px; background: currentColor; }
+    .phase-context-status[data-state='unsaved'], .phase-context-status[data-state='failed'], .phase-context-status[data-state='saving'] { color: var(--app-danger-text, #a7352d); border-color: var(--app-danger-border, #cf7d75); background: var(--app-danger-surface, #fff8f7); }
+    .phase-context-status[data-state='idle'] { color: var(--app-text-muted); border-color: var(--app-border); background: var(--app-surface); }
+    .phase-context-save.has-unsaved-changes:not(:disabled) { border-color: var(--app-danger, #b42318); background: var(--app-danger, #b42318); }
 
     .viewer-canvas-area { background: var(--app-surface-canvas); }
 

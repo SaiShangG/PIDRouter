@@ -1,32 +1,18 @@
 /** @jest-environment jsdom */
 
-import { Toast } from '../src/ui/Toast'
+import { reportMessage, type ToastTone } from '../src/ui/Toast'
 
 describe('Toast', () => {
   afterEach(() => {
-    jest.useRealTimers()
+    jest.restoreAllMocks()
     document.body.replaceChildren()
   })
 
-  it('announces messages and exposes an accessible close control', () => {
-    const toast = new Toast(() => 'Close')
-    toast.show('Drawing loaded', 'success')
-
-    const element = document.querySelector<HTMLElement>('.app-toast')
-    expect(element?.getAttribute('role')).toBe('status')
-    expect(element?.getAttribute('aria-live')).toBe('polite')
-    expect(element?.textContent).toContain('Drawing loaded')
-    expect(element?.querySelector('button')?.getAttribute('aria-label')).toBe('Close')
-  })
-
-  it('uses assertive announcements for errors and supports manual dismissal', () => {
-    const toast = new Toast(() => '关闭')
-    toast.show('加载失败', 'error')
-
-    const element = document.querySelector<HTMLElement>('.app-toast')
-    expect(element?.getAttribute('role')).toBe('alert')
-    expect(element?.getAttribute('aria-live')).toBe('assertive')
-    element?.querySelector<HTMLButtonElement>('button')?.click()
-    expect(document.querySelector('.app-toast')).toBeNull()
+  it.each<ToastTone>(['success', 'info', 'warning', 'error'])('logs %s messages without creating a popup', tone => {
+    const method = tone === 'error' ? 'error' : tone === 'warning' ? 'warn' : 'info'
+    const logger = jest.spyOn(console, method).mockImplementation(() => { })
+    reportMessage('Drawing status', tone)
+    expect(logger).toHaveBeenCalledWith('Drawing status')
+    expect(document.body.childElementCount).toBe(0)
   })
 })

@@ -7,6 +7,13 @@ import type {
 /** Toolbar edge placement relative to the viewer host element. */
 export type AcExToolbarPlacement = 'top' | 'bottom' | 'left' | 'right'
 
+export interface AcExToolbarState {
+  placement: AcExToolbarPlacement
+  visible: boolean
+  collapsed: boolean
+  edgeOffset: number
+}
+
 /** Dock panel edge placement relative to the viewer host element. */
 export type AcExDockPanelSide = 'top' | 'bottom' | 'left' | 'right'
 
@@ -138,6 +145,7 @@ export interface AcExSimpleUiPluginOptions {
   }
   /** Toolbar configuration. Enabled by default. */
   toolbar?: {
+    onStateChange?: (state: AcExToolbarState) => void
     /** When false, the toolbar is not created. */
     enabled?: boolean
     /** Edge placement relative to `host`. */

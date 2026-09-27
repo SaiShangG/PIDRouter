@@ -29,7 +29,8 @@ export type {
   AcExToolbarChildIconMode,
   AcExToolbarPresetRef,
   AcExToolbarSeparator,
-  AcExToolbarPlacement
+  AcExToolbarPlacement,
+  AcExToolbarState
 } from './config/types'
 export { SIMPLE_UI_PLUGIN_NAME } from './config/types'
 export { createDefaultToolbarPresetMap } from './config/resolveToolbarItems'

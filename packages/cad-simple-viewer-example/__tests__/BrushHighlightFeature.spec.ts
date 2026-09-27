@@ -89,6 +89,13 @@ const createView = () => {
     }
   } as unknown as AcEdBaseView
 
+  canvas.addEventListener('mousedown', event => {
+    if (event.button === 1) canvas.style.cursor = 'grab'
+  })
+  canvas.addEventListener('mouseup', event => {
+    if (event.button === 1) view.setCursor(0)
+  })
+
   return { canvas, view, overlays, selectionSet }
 }
 
@@ -118,11 +125,28 @@ describe('BrushHighlightFeature', () => {
     expect(feature.activate('paint')).toBe(true)
     expect(canvas.style.cursor).toBe('brush-cursor')
 
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 1 }))
+    expect(canvas.style.cursor).toBe('grab')
+    canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
+    expect(canvas.style.cursor).toBe('brush-cursor')
+    expect(feature.isActive).toBe(true)
+    expect(view.mode).toBe(BRUSH_VIEW_MODE)
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
+    expect(feature.highlightedIds).toEqual(['A'])
+
     expect(feature.activate('erase')).toBe(true)
+    expect(canvas.style.cursor).toBe('eraser-cursor')
+
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 1 }))
+    canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
     expect(canvas.style.cursor).toBe('eraser-cursor')
 
     feature.deactivate()
     expect(canvas.style.cursor).toBe('crosshair')
+    canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
+    expect(canvas.style.cursor).toBe('crosshair')
+    feature.dispose()
   })
 
   it('highlights interpolated hits and erases only brush highlights', () => {
@@ -166,6 +190,45 @@ describe('BrushHighlightFeature', () => {
     expect(activeOverlayAfterErase[activeOverlayAfterErase.length - 1]?.ids).toEqual(['A', 'C'])
     feature.deactivate()
     expect(view.mode).toBe(SELECTION_VIEW_MODE)
+  })
+
+  it('toggles off without clearing highlights and notifies the toolbar on every state change', () => {
+    const { canvas, view } = createView()
+    const onActiveChanged = jest.fn()
+    const disposeOverlay = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getHighlightStyle: () => ({
+        key: 'flow',
+        color: 0x112233,
+        lineWidthPx: 3,
+        opacity: 1,
+        visible: true,
+        source: 'default'
+      }),
+      createOverlay: () => ({ dispose: disposeOverlay }),
+      onActiveChanged
+    })
+
+    feature.activate('paint')
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
+    expect(feature.activate('paint')).toBe(false)
+    expect(feature.isActive).toBe(false)
+    expect(view.mode).toBe(SELECTION_VIEW_MODE)
+    expect(onActiveChanged).toHaveBeenCalledTimes(2)
+    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
+    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
+    expect(feature.highlightedIds).toEqual(['A'])
+    expect(disposeOverlay).not.toHaveBeenCalled()
+
+    feature.activate('paint')
+    expect(feature.isActive).toBe(true)
+    expect(onActiveChanged).toHaveBeenCalledTimes(3)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(feature.isActive).toBe(false)
+    expect(onActiveChanged).toHaveBeenCalledTimes(4)
+    feature.dispose()
   })
 
   it('reports painted and erased hit objects to the host', () => {

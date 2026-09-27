@@ -24,6 +24,7 @@ import { ValveDebugPanel, type ValveDebugPanelSnapshot } from './ValveDebugPanel
 export type ValveDebugLocale = 'zh' | 'en'
 
 export interface ValveDebugFeatureOptions {
+  enabled?: boolean
   panelHost: HTMLElement
   graphDocument: FlowConnectionDocumentInput
   getView(): ValveDebugView | undefined
@@ -377,6 +378,7 @@ export class ValveDebugFeature {
   private locatorTimer?: number
   private locatorBlinkTimer?: number
   private disposed = false
+  private enabled = true
 
   constructor(private readonly options: ValveDebugFeatureOptions) {
     this.graph = buildFlowGraphIndex(options.graphDocument)
@@ -446,6 +448,16 @@ export class ValveDebugFeature {
       window.matchMedia('(max-width: 640px)').matches
     this.panel.setCollapsed(compact)
     this.renderPanel()
+    this.setEnabled(options.enabled ?? true)
+  }
+
+  setEnabled(enabled: boolean) {
+    if (this.disposed || this.enabled === enabled) return
+    this.enabled = enabled
+    this.panel.element.hidden = !enabled
+    this.closeMenu()
+    this.attach()
+    this.resize()
   }
 
   attach() {
@@ -521,6 +533,7 @@ export class ValveDebugFeature {
   }
 
   private readonly handleContextMenu = (event: MouseEvent) => {
+    if (this.disposed) return
     console.log('[ValveDebugFeature] Right-click received / 收到右键点击', {
       target: event.target,
       currentTarget: event.currentTarget,
@@ -543,7 +556,10 @@ export class ValveDebugFeature {
     const hit = pickedItems
       .flatMap(item => this.getCandidateHandleKeys(item.id))
       .map(key => this.resolveValveKey(key))
-      .find((key): key is string => key != null)
+      .find((key): key is string => key != null && (
+        this.enabled ||
+        (this.options.getConfiguredStates?.(key) ?? []).some(state => state.enabled)
+      ))
     if (!hit) {
       console.warn('[ValveDebugFeature] Right-click did not resolve to a configured device / 右键点击未命中已配置设备', {
         canvasPoint,
@@ -674,9 +690,6 @@ export class ValveDebugFeature {
     this.utilityEmpty.textContent = locale === 'zh'
       ? '没有已启用的 Utility；状态仍可应用，但不会创建流路高亮。'
       : 'No enabled Utility. The state can be applied without a flow highlight.'
-    const currentStateKey = this.options.getConfiguredStateKey?.(key)
-    const currentState = configuredStates.find(candidate => candidate.key === currentStateKey)
-    const selectedStateId = currentState?.id ?? configuredStates[0].id
     this.stateOptions.replaceChildren(...configuredStates.map(candidate => {
       const label = document.createElement('label')
       label.className = 'valve-debug-context-menu-state-option'
@@ -684,7 +697,7 @@ export class ValveDebugFeature {
       input.type = 'radio'
       input.name = 'valve-configured-state'
       input.value = candidate.id
-      input.checked = candidate.id === selectedStateId
+      input.checked = false
       input.dataset.valveStateRadio = 'true'
       input.addEventListener('change', () => this.updateConfiguredPreview())
       label.append(input, document.createTextNode(candidate.displayName))
@@ -710,6 +723,7 @@ export class ValveDebugFeature {
     const utility = this.options.getUtilities?.().find(
       candidate => candidate.id === this.utilitySelect.value
     )
+    this.applyMenuAction.disabled = !state
     this.stateSwatch.style.setProperty(
       '--valve-menu-swatch',
       state ? `#${state.color.toString(16).padStart(6, '0')}` : 'transparent'
@@ -778,7 +792,7 @@ export class ValveDebugFeature {
 
   private renderHighlights() {
     this.disposePathOverlay()
-    if (this.options.renderPathOverlay === false) return
+    if (this.disposed || !this.enabled || this.options.renderPathOverlay === false) return
     const openResults = [...this.states.entries()]
       .filter(([, state]) => state === 'open')
       .map(([key]) => this.results.get(key) ?? traverseFlowFromValve(this.graph, key, this.states))
@@ -804,6 +818,7 @@ export class ValveDebugFeature {
   }
 
   private locateNode(key: string) {
+    if (this.disposed || !this.enabled) return
     const objectId = this.options.resolveObjectId(key)
     if (!objectId) {
       this.panel.markNodeUnavailable(key)

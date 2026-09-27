@@ -52,6 +52,14 @@ export function injectLoginStyles() {
     #appToolbar .auth-account button { display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; min-width: 32px; padding: 0; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-surface-elevated); color: var(--app-text); cursor: pointer; }
     #appToolbar .auth-account button:hover { color: var(--app-danger); border-color: var(--app-danger); }
     #appToolbar .auth-account button:disabled { opacity: .5; cursor: not-allowed; }
+    #appToolbar .auth-account .auth-account-trigger { display: flex; gap: 6px; flex: 0 1 auto; width: auto; max-width: 170px; padding: 0 8px; }
+    #appToolbar .auth-account .auth-account-trigger:hover { color: var(--app-accent); border-color: var(--app-accent); }
+    .auth-account-trigger svg, .auth-account-menu svg { width: 18px; height: 18px; flex: 0 0 18px; }
+    .auth-account-menu[hidden], .auth-account-menu button[hidden] { display: none; }
+    .auth-account-menu { position: fixed; z-index: 15000; width: 210px; max-width: calc(100vw - 16px); padding: 4px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-surface-elevated); box-shadow: 0 6px 24px #0003; }
+    .auth-account-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; border: 0; border-radius: 3px; padding: 8px; text-align: left; color: var(--app-text); background: transparent; cursor: pointer; }
+    .auth-account-menu button:hover, .auth-account-menu button:focus-visible { background: var(--app-success-surface); outline: 1px solid var(--app-focus); }
+    .auth-account-menu .auth-account-logout { color: var(--app-danger); }
     @media (max-width: 900px) {
       .login-page { grid-template-columns: minmax(0, 1fr); }
       .login-media { display: none; }

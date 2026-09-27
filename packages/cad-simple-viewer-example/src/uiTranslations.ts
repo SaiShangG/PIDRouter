@@ -3,6 +3,15 @@ import type { AppLocale } from './locale'
 type TranslationPair = readonly [zh: string, en: string]
 
 const pairs: TranslationPair[] = [
+  ['功能配置', 'Feature settings'], ['Viewer 工具栏', 'Viewer toolbar'],
+  ['图纸 Viewer 功能配置', 'Drawing Viewer feature settings'],
+  ['开发', 'Development'], ['阀门调试', 'Valve debug'],
+  ['显示工具栏', 'Show toolbar'], ['默认折叠', 'Start collapsed'],
+  ['工具栏位置', 'Toolbar position'], ['边缘间距（像素）', 'Edge inset (px)'],
+  ['顶部', 'Top'], ['底部', 'Bottom'], ['左侧', 'Left'], ['右侧', 'Right'],
+  ['恢复默认', 'Restore defaults'], ['浏览', 'Navigation'],
+  ['高亮与标注', 'Highlights and annotations'], ['显示设置', 'Display settings'],
+  ['其他功能', 'Other features'], ['功能配置保存失败，请重试。', 'Unable to save feature settings. Please try again.'],
   ['PID 图纸', 'PID drawings'],
   ['PID 工作区', 'PID Workspace'],
   ['PDF 工艺', 'PDF Process'], ['Matrix 工艺', 'Matrix Process'],

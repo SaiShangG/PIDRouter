@@ -586,6 +586,10 @@ describe('ReportWorkspaceModal', () => {
     const selectedSequence = document.querySelectorAll<HTMLElement>(
       '.report-matrix-sequence'
     )[1]
+    expect(selectedSequence.classList.contains('report-sequence-group')).toBe(true)
+    expect(selectedSequence.querySelector('.report-sequence-node input[type="checkbox"]')).not.toBeNull()
+    expect(selectedSequence.querySelectorAll('.report-phase-list .report-page-row input[type="checkbox"]')).toHaveLength(2)
+    expect(selectedSequence.querySelector('.is-phase .report-matrix-option-text')?.textContent).toBe('Phase 01 · Step 1')
     const selectedPhase = selectedSequence.querySelectorAll<HTMLInputElement>(
       'input[type="checkbox"]'
     )[1]

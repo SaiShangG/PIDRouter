@@ -39,6 +39,7 @@ export interface AcExToolbarOptions {
   defaultCollapsed?: boolean
   /** Invoked when the toolbar is collapsed (e.g. close the dock panel). */
   onCollapse?: () => void
+  onStateChange?: () => void
   /** Distance from the canvas edge in px. @default 8 */
   edgeOffset?: number
 }
@@ -229,6 +230,7 @@ export class AcExToolbar {
       this.openDropdown = undefined
       this.options.onCollapse?.()
     }
+    this.options.onStateChange?.()
   }
 
   /**
@@ -260,6 +262,7 @@ export class AcExToolbar {
     this.syncRootClasses()
     this.syncCollapseToggleButton()
     this.scheduleSyncPosition()
+    this.options.onStateChange?.()
   }
 
   /** Removes listeners, closes dropdowns, and detaches the toolbar DOM. */
@@ -390,6 +393,10 @@ export class AcExToolbar {
         : effective.id
       button.setAttribute('aria-label', button.title)
       button.dataset.toolbarItemId = effective.id
+
+      if (item.toggle) {
+        button.setAttribute('aria-pressed', String(item.toggle.getValue()))
+      }
 
       if (effective.children?.length) {
         button.classList.add('has-children')

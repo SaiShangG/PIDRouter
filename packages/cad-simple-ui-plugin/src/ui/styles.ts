@@ -125,6 +125,13 @@ export function ensureUiStyles() {
       color: var(--ml-ui-accent, #409eff);
     }
 
+    .ml-ex-ui-toolbar-btn[aria-pressed="true"] {
+      border-color: var(--ml-ui-accent, #409eff);
+      background: color-mix(in srgb, var(--ml-ui-accent, #409eff) 18%, var(--ml-ui-bg, #ffffff));
+      color: var(--ml-ui-accent, #409eff);
+      box-shadow: inset 0 0 0 1px var(--ml-ui-accent, #409eff);
+    }
+
     .ml-ex-ui-toolbar-btn:disabled {
       opacity: 0.45;
       cursor: not-allowed;

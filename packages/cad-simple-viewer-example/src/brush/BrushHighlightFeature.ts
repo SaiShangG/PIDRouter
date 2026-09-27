@@ -152,6 +152,7 @@ export class BrushHighlightFeature {
     canvas.addEventListener('pointercancel', this.handlePointerCancel, true)
     canvas.addEventListener('lostpointercapture', this.handlePointerCancel, true)
     canvas.addEventListener('contextmenu', this.handleContextMenu, true)
+    canvas.addEventListener('mouseup', this.handleMouseUp)
   }
 
   private removePointerListeners() {
@@ -163,6 +164,7 @@ export class BrushHighlightFeature {
     canvas.removeEventListener('pointercancel', this.handlePointerCancel, true)
     canvas.removeEventListener('lostpointercapture', this.handlePointerCancel, true)
     canvas.removeEventListener('contextmenu', this.handleContextMenu, true)
+    canvas.removeEventListener('mouseup', this.handleMouseUp)
   }
 
   private releasePointer() {
@@ -236,6 +238,12 @@ export class BrushHighlightFeature {
     if (!this.active) return
     event.preventDefault()
     event.stopPropagation()
+  }
+
+  private readonly handleMouseUp = (event: MouseEvent) => {
+    if (event.button === 1 && this.active && this.attachedView) {
+      this.options.setOperationCursor?.(this.attachedView, this.operation)
+    }
   }
 
   private isActivePointer(event: PointerEvent) {

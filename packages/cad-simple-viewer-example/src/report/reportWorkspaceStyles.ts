@@ -107,17 +107,14 @@ export function injectReportWorkspaceStyles() {
     .report-matrix-controls fieldset label, .report-matrix-tree label { display: flex; align-items: center; gap: 7px; min-width: 0; color: #33484e; font-weight: 500; line-height: 1.35; }
     .report-matrix-controls input[type='checkbox'] { flex: 0 0 auto; width: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--app-accent, #087b58); }
     .report-matrix-process + .report-matrix-process { border-top: 1px solid #b9c9cc; }
-    .report-matrix-process-header, .report-matrix-sequence-header { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; }
-    .report-matrix-process-header { padding: 6px 8px; background: #edf4f4; }
-    .report-matrix-process-option { min-height: 28px; font-weight: 750 !important; }
-    .report-matrix-process-sequences { border-top: 1px solid #d3dfe1; }
-    .report-workspace-modal .report-matrix-tree-toggle { display: grid; width: 24px; min-height: 24px; place-items: center; padding: 0; border: 0; background: transparent; color: #52676d; }
+    .report-workspace-modal .report-matrix-process-header, .report-workspace-modal .report-matrix-sequence-header { grid-template-columns: 16px minmax(0, 1fr); }
+    .report-matrix-tree .report-sequence-node > label { color: inherit; font-weight: inherit; }
+    .report-matrix-option-text { min-width: 0; }
+    .report-matrix-tree .report-matrix-option-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .report-workspace-modal .report-matrix-tree-toggle { display: grid; width: 16px; height: 24px; min-height: 24px; place-items: center; padding: 0; border: 0; background: transparent; color: inherit; }
     .report-matrix-tree-chevron { transition: transform 140ms ease; }
     .report-matrix-tree-toggle[aria-expanded='false'] .report-matrix-tree-chevron { transform: rotate(-90deg); }
-    .report-matrix-sequence { display: grid; gap: 7px; padding: 10px; }
-    .report-matrix-sequence + .report-matrix-sequence { border-top: 1px solid #e1e7e8; }
-    .report-matrix-phases { display: grid; gap: 7px; }
-    .report-matrix-sequence .is-phase { padding-left: 46px; color: #60747a; font-size: 10px; }
+    .report-workspace-modal .report-matrix-tree .is-phase { grid-template-columns: 16px minmax(0, 1fr); color: #536b71; background: #fff; font-size: 10px; cursor: pointer; }
     .report-matrix-empty { margin: 0; padding: 28px 12px; color: #64777d; text-align: center; font-size: 11px; }
     .report-matrix-summary { min-height: 36px; margin: auto 0 0; padding-top: 12px; border-top: 1px solid #d9e1e2; color: #52676d; font-size: 11px; }
     .report-export-estimates { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; margin: 0; padding: 9px 10px; border: 1px solid #d2dcde; background: #fff; font-size: 10px; }

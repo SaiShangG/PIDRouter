@@ -181,23 +181,40 @@ describe('StyleSourceDialog', () => {
     })
   })
 
-  it('closes on Escape without applying', () => {
+  it.each(['Escape', 'Cancel', 'close button', 'backdrop'])(
+    'closes using %s without applying and requires Apply when reopened', closeMethod => {
     const onApply = jest.fn()
     const onClose = jest.fn()
     const dialog = new StyleSourceDialog({
       mode: 'brush',
       profile: createProfile(),
+      getLocale: () => 'en',
       onApply,
       onClose
     })
     dialog.open()
 
-    dialog.element.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-    )
+    expect(onApply).not.toHaveBeenCalled()
+    if (closeMethod === 'Escape') {
+      dialog.element.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      )
+    } else if (closeMethod === 'Cancel') {
+      findButton(dialog.element, 'Cancel').click()
+    } else if (closeMethod === 'close button') {
+      dialog.element.querySelector<HTMLButtonElement>('header button')!.click()
+    } else {
+      dialog.element.click()
+    }
 
     expect(onApply).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(dialog.element.isConnected).toBe(false)
+
+    dialog.open()
+    expect(onApply).not.toHaveBeenCalled()
+    findButton(dialog.element, 'Apply').click()
+    expect(onApply).toHaveBeenCalledTimes(1)
     expect(dialog.element.isConnected).toBe(false)
   })
 })

@@ -17,7 +17,7 @@ import {
 import { prependToolbarLayoutSwitcher } from './config/createToolbarLayoutSwitcher'
 import { normalizePluginOptions } from './config/normalizePluginOptions'
 import { resolveDockMountTarget } from './config/resolveDockMountTarget'
-import { resolveToolbarItems } from './config/resolveToolbarItems'
+import { filterToolbarItems, resolveToolbarItems } from './config/resolveToolbarItems'
 import { resolveToolbarMountTarget } from './config/resolveToolbarMountTarget'
 import { toolbarItemsIncludeItem } from './config/toolbarItemUtils'
 import {
@@ -72,6 +72,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   private dockPanelMountTargetOption?: HTMLElement
   /** Resolved toolbar items before layer action wiring. */
   private baseToolbarItems: AcExToolbarItem[] = []
+  private hiddenToolbarIds = new Set<string>()
   /** Raw toolbar items configuration last applied via {@link setToolbarItems}. */
   private toolbarItemsInput: AcExToolbarItemsInput = 'default'
   /** Command stack reference for dynamic layer command registration. */
@@ -233,6 +234,19 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
     return this.toolbarItemsInput
   }
 
+  refreshToolbar(): void {
+    this.toolbar?.refresh()
+  }
+
+  getAvailableToolbarItems(): AcExToolbarItem[] {
+    return filterToolbarItems(this.baseToolbarItems, new Set())
+  }
+
+  setHiddenToolbarItems(ids: readonly string[]): void {
+    this.hiddenToolbarIds = new Set(ids)
+    this.renderToolbarItems()
+  }
+
   /**
    * Replaces the entire toolbar item list at runtime.
    *
@@ -353,6 +367,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
     }
     this.toolbarEdgeOffset = Math.max(0, offset)
     this.toolbar.setEdgeOffset(this.toolbarEdgeOffset)
+    this.notifyToolbarStateChange()
     return true
   }
 
@@ -430,6 +445,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
         onCollapse: () => {
           this.dockPanel?.close()
         },
+        onStateChange: () => this.notifyToolbarStateChange(),
         onCommand: command => {
           AcApDocManager.instance.sendStringToExecute(command)
         }
@@ -489,7 +505,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
 
   /** Applies {@link baseToolbarItems} to the toolbar. */
   private renderToolbarItems() {
-    this.toolbar?.updateItems(this.baseToolbarItems)
+    this.toolbar?.updateItems(filterToolbarItems(this.baseToolbarItems, this.hiddenToolbarIds))
   }
 
   /** Mounts or tears down layer UI when the layer toolbar button is added or removed. */
@@ -705,6 +721,17 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   private applyToolbarPlacement(placement: AcExToolbarPlacement) {
     this.toolbarPlacement = placement
     this.toolbar?.setPlacement(placement)
+    this.notifyToolbarStateChange()
+  }
+
+  private notifyToolbarStateChange(): void {
+    if (!this.toolbar) return
+    this.options.toolbar?.onStateChange?.({
+      placement: this.getToolbarPlacement(),
+      visible: this.isToolbarVisible(),
+      collapsed: this.isToolbarCollapsed(),
+      edgeOffset: this.getToolbarEdgeOffset()
+    })
   }
 
   /**

@@ -44,6 +44,7 @@ const injectStyles = () => {
       color: var(--valve-debug-ink);
       transition: flex-basis 160ms ease, width 160ms ease;
     }
+    .valve-debug-panel[hidden] { display: none; }
     .valve-debug-panel.is-collapsed {
       flex-basis: ${COLLAPSED_PANEL_WIDTH}px;
       width: ${COLLAPSED_PANEL_WIDTH}px;

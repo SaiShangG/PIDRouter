@@ -1,7 +1,12 @@
 import {
   type AcApSimpleUiPlugin,
   type AcExDockPanelSide,
+  type AcExToolbarItem,
+  type AcExToolbarItemConfig,
   type AcExToolbarPlacement,
+  type AcExToolbarState,
+  createDefaultToolbarPresetMap,
+  registerSimpleUiI18n,
   SIMPLE_UI_PLUGIN_NAME
 } from '@mlightcad/cad-simple-ui-plugin'
 import { registerSimpleUiPlugin } from '@mlightcad/cad-simple-ui-plugin/register'
@@ -54,6 +59,9 @@ import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { AccountControls } from './auth/AccountControls'
+import { PhaseSaveState, phaseSaveStatusText } from './phase/phaseSaveState'
+import { loadToolbarPreferences, saveToolbarPreferences, type ToolbarPreferences } from './toolbarPreferences'
+import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
 import type { AuthService, AuthUser } from './auth/authService'
 import {
   BrushHighlightFeature,
@@ -181,8 +189,7 @@ import {
 } from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
 import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
-import { Toast, type ToastTone } from './ui/Toast'
-import { injectToastStyles } from './ui/toastStyles'
+import { reportMessage, type ToastTone } from './ui/Toast'
 import { injectUiReferenceThemeStyles } from './uiReferenceThemeStyles'
 import { localizeDom, translateUiText } from './uiTranslations'
 
@@ -410,11 +417,12 @@ class CadViewerApp {
   private dockMenuOpen = false
   private demoDockTabCount = 0
   private viewerToolbarMenuOpen = false
+  private readonly toolbarPreferenceUserId: string
+  private toolbarPreferences: ToolbarPreferences
+  private toolbarPreferencesModal?: ToolbarPreferencesModal
+  private applyingToolbarPreferences = false
   private appLocale: AppLocale = loadAppLocale()
   private phaseConfigFiles: File[] = []
-  private readonly toast = new Toast(() =>
-    translateUiText(this.appLocale, 'Close')
-  )
   private isInitialized = false
   private hasOpenedFile = false
   private isLoadingFile = false
@@ -489,6 +497,9 @@ class CadViewerApp {
     token: number
   }
   private readonly backendPhaseSaveTimers = new Map<string, number>()
+  private readonly phaseSaveState = new PhaseSaveState()
+  private readonly phaseSaveTasks = new Map<string, Promise<void>>()
+  private presentationSaveTask?: Promise<void>
   private phaseActivationToken = 0
   private projectLoadToken = 0
   private activeProject?: ProjectRecord
@@ -498,6 +509,9 @@ class CadViewerApp {
   private brushStyleSelection?: StyleSourceSelection
 
   constructor(authService: AuthService, user: AuthUser) {
+    this.toolbarPreferenceUserId = authService.mode === 'demo' ? `demo:${user.name}` : `remote:${user.id}`
+    this.toolbarPreferences = loadToolbarPreferences(this.toolbarPreferenceUserId, { getItem: key => localStorage.getItem(key) })
+    registerSimpleUiI18n()
     this.container = document.getElementById('cad-container') as HTMLDivElement
     this.fileInput = document.getElementById(
       'fileInputElement'
@@ -566,7 +580,7 @@ class CadViewerApp {
       '[data-viewer-toolbar-placement]'
     ) as NodeListOf<HTMLButtonElement>
     this.devToolbar = document.getElementById('appToolbar') as HTMLElement
-    this.account = new AccountControls(authService, user)
+    this.account = new AccountControls(authService, user, undefined, () => this.openToolbarPreferences())
     this.devToolbar.append(this.account.element)
     this.setupLanguageToggle()
     this.setupFileHandling()
@@ -724,7 +738,6 @@ class CadViewerApp {
 
   private async openLibraryDrawing(record: DrawingRecord) {
     await this.initialize()
-    this.clearMessages()
     this.captureLoadedPhaseState()
     this.invalidateLoadedPhaseBinding()
     this.setLoadingState(true)
@@ -1308,6 +1321,12 @@ class CadViewerApp {
     }
 
     applyDemoToolbarLayout(plugin, presetId, this.appLocale)
+    if (presetId === 'default') {
+      const presets = createDefaultToolbarPresetMap()
+      plugin.setToolbarItems(this.getDefaultToolbarCatalog().map(item =>
+        presets.has(item.id) ? { preset: item.id } : item
+      ))
+    }
     this.syncViewerToolbarMenuState()
 
     const label =
@@ -1356,6 +1375,109 @@ class CadViewerApp {
     ) as AcApSimpleUiPlugin | undefined
   }
 
+  private getCustomToolbarItems(): AcExToolbarItemConfig[] {
+    return [
+      {
+        id: 'brush-highlight', label: 'toolbar.brush', requiresDocument: true,
+        icon: () => {
+          const icon = document.createElement('span')
+          icon.append(createPhaseIcon(Brush))
+          return icon
+        },
+        action: () => this.openBrushStyleDialog(),
+        toggle: {
+          getValue: () =>
+            this.brushHighlightFeature?.isActive === true &&
+            this.brushHighlightFeature.currentOperation === 'paint',
+          on: {},
+          off: {}
+        }
+      },
+      {
+        id: 'brush-erase', label: 'toolbar.eraser', requiresDocument: true,
+        icon: () => {
+          const icon = document.createElement('span')
+          icon.append(createPhaseIcon(Eraser))
+          return icon
+        },
+        action: () => this.brushHighlightFeature?.activate('erase'),
+        toggle: {
+          getValue: () =>
+            this.brushHighlightFeature?.isActive === true &&
+            this.brushHighlightFeature.currentOperation === 'erase',
+          on: {},
+          off: {}
+        }
+      },
+      createAgentToolbarItem(this.appLocale)
+    ]
+  }
+
+  private getDefaultToolbarCatalog(): AcExToolbarItem[] {
+    const definitions = [...createDefaultToolbarPresetMap().values()]
+    const childIds = new Set(definitions.flatMap(item => item.children?.map(child => child.id) ?? []))
+    const roots = definitions.filter(item => !childIds.has(item.id))
+    const custom = this.getCustomToolbarItems().filter((item): item is AcExToolbarItem => 'id' in item && Boolean(item.id) && item.type !== 'separator')
+    roots.splice(roots.findIndex(item => item.id === 'layer') + 1, 0, ...custom)
+    return roots
+  }
+
+  private openToolbarPreferences(): void {
+    this.closeViewerToolbarMenu()
+    this.closeDockMenu()
+    this.toolbarPreferencesModal ??= new ToolbarPreferencesModal(
+      () => this.appLocale,
+      item => {
+        const label = item.label ?? item.toggle?.on.label ?? item.toggle?.off.label ?? item.id
+        return label.startsWith('toolbar.')
+          ? AcApI18n.t(`simpleUi.${label}`, { fallback: label })
+          : translateUiText(this.appLocale, label)
+      },
+      preferences => {
+        saveToolbarPreferences(this.toolbarPreferenceUserId, preferences, localStorage)
+        const hidesTools = !preferences.visible || preferences.hiddenIds.some(id => !this.toolbarPreferences.hiddenIds.includes(id))
+        if (hidesTools && this.isInitialized) {
+          this.brushHighlightFeature?.deactivate()
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
+        }
+        this.toolbarPreferences = preferences
+        this.applyUserToolbarPreferences()
+      }
+    )
+    this.toolbarPreferencesModal.open(
+      this.toolbarPreferences,
+      this.getSimpleUiPlugin()?.getAvailableToolbarItems() ?? this.getDefaultToolbarCatalog()
+    )
+  }
+
+  private applyUserToolbarPreferences(): void {
+    this.valveDebugFeature?.setEnabled(this.toolbarPreferences.valveDebugEnabled)
+    const plugin = this.getSimpleUiPlugin()
+    if (!plugin) return
+    this.applyingToolbarPreferences = true
+    try {
+      plugin.setHiddenToolbarItems([...this.toolbarPreferences.hiddenIds, 'export'])
+      plugin.setToolbarPlacement(this.toolbarPreferences.placement)
+      plugin.setToolbarEdgeOffset(this.toolbarPreferences.edgeOffset)
+      plugin.setToolbarCollapsed(this.toolbarPreferences.collapsed)
+      plugin.setToolbarVisible(this.toolbarPreferences.visible)
+    } finally {
+      this.applyingToolbarPreferences = false
+    }
+    this.syncViewerToolbarMenuState()
+  }
+
+  private handleToolbarStateChange(state: AcExToolbarState): void {
+    if (this.applyingToolbarPreferences || !this.isInitialized) return
+    this.toolbarPreferences = { ...this.toolbarPreferences, ...state }
+    try {
+      saveToolbarPreferences(this.toolbarPreferenceUserId, this.toolbarPreferences, localStorage)
+    } catch {
+      this.showMessage('功能配置保存失败，请重试。', 'error')
+    }
+    this.syncViewerToolbarMenuState()
+  }
+
   private isDevToolbarEnabled(): boolean {
     return this.hasOpenedFile
   }
@@ -1399,35 +1521,14 @@ class CadViewerApp {
           defaultWidth: 280
         },
         toolbar: {
-          placement: 'right',
+          placement: this.toolbarPreferences.placement,
           items: 'default',
-          appendItems: [
-            {
-              id: 'brush-highlight',
-              label: 'toolbar.brush',
-              requiresDocument: true,
-              icon: () => {
-                const icon = document.createElement('span')
-                icon.append(createPhaseIcon(Brush))
-                return icon
-              },
-              action: () => this.openBrushStyleDialog()
-            },
-            {
-              id: 'brush-erase',
-              label: 'toolbar.eraser',
-              requiresDocument: true,
-              icon: () => {
-                const icon = document.createElement('span')
-                icon.append(createPhaseIcon(Eraser))
-                return icon
-              },
-              action: () => this.brushHighlightFeature?.activate('erase')
-            },
-            createAgentToolbarItem(this.appLocale)
-          ],
+          appendItems: this.getCustomToolbarItems(),
           appendItemsAfter: 'layer',
-          collapsible: true
+          collapsible: true,
+          defaultCollapsed: this.toolbarPreferences.collapsed,
+          edgeOffset: this.toolbarPreferences.edgeOffset,
+          onStateChange: state => this.handleToolbarStateChange(state)
         }
       })
 
@@ -1457,8 +1558,14 @@ class CadViewerApp {
       AcApDocManager.instance.events.documentToBeOpened.addEventListener(() => {
         this.setLoadingState(true)
       })
+      AcApDocManager.instance.curView.editor.events.commandEnded.addEventListener(() => {
+        queueMicrotask(() => {
+          if (!this.isLoadingFile && !this.pendingPhase) this.captureLoadedPhaseState()
+        })
+      })
 
       this.isInitialized = true
+      this.applyUserToolbarPreferences()
       this.updateDevToolbarLabels()
       document.body.classList.remove('app-booting')
       await this.restoreActiveWorkspacePhase()
@@ -1555,6 +1662,10 @@ class CadViewerApp {
       workspace.presentationProfile
     )
     this.phaseRepository = repository
+    this.phaseSaveState.reset([])
+    this.phaseSaveTasks.clear()
+    this.presentationSaveTask = undefined
+    this.phaseSaveState.acceptStyles(toPersistedPresentationProfile(workspace.presentationProfile))
     this.replaceBackendWorkspace(workspace, presentationProfile)
     this.activeProject = projectDetails
     this.activeProjectId = projectDetails.id
@@ -1618,6 +1729,9 @@ class CadViewerApp {
     this.cancelAllBackendPhaseSaves()
     this.invalidateLoadedPhaseBinding()
     this.phaseRepository = undefined
+    this.phaseSaveState.reset([])
+    this.phaseSaveTasks.clear()
+    this.presentationSaveTask = undefined
     this.phaseStore = new PhaseWorkspaceStore()
     this.activeProject = undefined
     this.activeProjectId = undefined
@@ -1805,16 +1919,19 @@ class CadViewerApp {
       const index = sequence?.phases.findIndex(phase => phase.id === phaseId) ?? -1
       const phase = sequence?.phases[index]
       if (!phase) throw new Error('Phase was not found')
-      if (repository) {
-        this.cancelBackendPhaseSave(phaseId)
-        await repository.updatePhase(sequenceId, { ...phase, tankId }, index + 1)
-      }
-      if (this.phaseStore !== store || this.phaseRepository !== repository) return
       store.assignPhaseTank(processId, sequenceId, phaseId, tankId)
       store.persist()
+      this.syncPhaseContextBar()
+      if (repository) {
+        this.cancelBackendPhaseSave(phaseId)
+        await this.saveBackendPhase(processId, sequenceId, phaseId)
+      }
     } catch (error) {
       log.error('Failed to assign Phase Vessel / 阶段 Vessel 归属保存失败：', error)
       this.showMessage('Vessel 归属保存失败', 'error')
+    } finally {
+      this.phasePanel?.render()
+      this.syncPhaseContextBar()
     }
   }
 
@@ -1823,6 +1940,7 @@ class CadViewerApp {
     if (!panelHost) throw new Error('App shell was not found')
 
     this.valveDebugFeature = createValveDebugFeature({
+      enabled: this.toolbarPreferences.valveDebugEnabled,
       panelHost,
       graphDocument: flowConnectionDocument,
       getView: () => {
@@ -1870,6 +1988,7 @@ class CadViewerApp {
       setOperationCursor: (view, operation) => {
         view.canvas.style.cursor = this.createBrushCursor(operation)
       },
+      onActiveChanged: () => this.getSimpleUiPlugin()?.refreshToolbar(),
       onEntitiesChanged: (operation, objectIds) => {
         this.handleBrushEntitiesChanged(operation, objectIds)
       }
@@ -1878,6 +1997,13 @@ class CadViewerApp {
   }
 
   private openBrushStyleDialog() {
+    if (this.brushHighlightFeature?.isActive) {
+      if (this.brushHighlightFeature.currentOperation === 'paint') {
+        this.brushHighlightFeature.deactivate()
+        return
+      }
+      this.brushHighlightFeature.deactivate()
+    }
     const profile = this.getActivePresentationProfile()
     document.querySelector('.style-source-modal')?.remove()
     const dialog = new StyleSourceDialog({
@@ -2298,26 +2424,47 @@ class CadViewerApp {
     })
     saveButton.prepend(createPhaseIcon(Save))
     saveButton.addEventListener('click', async () => {
-      const loadedPhase = this.loadedPhase
-      if (!loadedPhase) return
+      const { process, sequence, phase } = resolveWorkspacePhase(this.phaseStore.snapshot(), 'active')
+      if (!process || !sequence || !phase || this.phaseSaveState.get(phase).saving) return
+      const repository = this.phaseRepository
+      let failed = false
       saveButton.disabled = true
+      this.phaseSaveState.begin(phase.id)
       try {
         this.captureLoadedPhaseState()
-        this.cancelBackendPhaseSave(loadedPhase.phaseId)
-        await this.saveBackendPhase(
-          loadedPhase.processId,
-          loadedPhase.sequenceId,
-          loadedPhase.phaseId
-        )
-        this.showMessage(translate(this.appLocale, 'phaseSaved'), 'success')
+        const phasesToSave = sequence.phases.filter((item, index) => item.id === phase.id ||
+          this.phaseSaveState.get(item, { orderIndex: index + 1 }).changes.includes('order'))
+        await Promise.all(phasesToSave.map(item => {
+          this.cancelBackendPhaseSave(item.id)
+          return this.saveBackendPhase(process.id, sequence.id, item.id)
+        }))
+        if (this.phaseRepository !== repository) return
+        const profile = this.phaseStore.snapshot().presentationProfile
+        if (this.phaseSaveState.get(phase, { styles: toPersistedPresentationProfile(profile) }).changes.includes('styles')) {
+          await this.savePresentationProfile(profile)
+        }
       } catch (error) {
+        failed = true
         log.error('Failed to save backend Phase state:', error)
         this.showMessage(
           translate(this.appLocale, 'phaseSaveFailed'),
           'error'
         )
       } finally {
-        saveButton.disabled = false
+        if (this.phaseRepository === repository) {
+          this.phaseSaveState.finish(phase.id, failed)
+          const state = this.phaseStore.snapshot()
+          const currentSequence = state.processes.find(item => item.id === process.id)
+            ?.sequences.find(item => item.id === sequence.id)
+          const current = currentSequence?.phases.find(item => item.id === phase.id)
+          if (current && this.phaseSaveState.get(current, {
+            orderIndex: currentSequence!.phases.indexOf(current) + 1,
+            styles: toPersistedPresentationProfile(state.presentationProfile)
+          }).saved) {
+            this.showMessage(translate(this.appLocale, 'phaseSaved'), 'success')
+          }
+        }
+        this.syncPhaseContextBar()
       }
     })
     processSelect.addEventListener('change', () => {
@@ -2434,7 +2581,18 @@ class CadViewerApp {
     )
     phaseSelect.disabled = !sequence || sequence.phases.length === 0
     phaseSelect.value = sequence?.activePhaseId ?? ''
-    if (saveButton) saveButton.disabled = !sequence?.activePhaseId
+    const activePhase = sequence?.phases.find(phase => phase.id === sequence.activePhaseId)
+    const saveState = activePhase ? this.phaseSaveState.get(activePhase, {
+      orderIndex: sequence!.phases.indexOf(activePhase) + 1,
+      styles: toPersistedPresentationProfile(state.presentationProfile)
+    }) : undefined
+    if (saveButton) {
+      saveButton.disabled = !activePhase || !this.phaseRepository || Boolean(saveState?.saving) || this.isLoadingFile || Boolean(this.pendingPhase)
+      saveButton.classList.toggle('has-unsaved-changes', Boolean(saveState && !saveState.saved))
+      saveButton.title = saveState ? phaseSaveStatusText(this.appLocale, saveState) : translate(this.appLocale, 'savePhase')
+      const saveLabel = saveButton.querySelector('span')
+      if (saveLabel) saveLabel.textContent = translate(this.appLocale, saveState?.saving ? 'phaseSaving' : 'savePhase')
+    }
     if (styleButton) {
       styleButton.disabled = !process
       styleButton.setAttribute('aria-haspopup', 'dialog')
@@ -2442,11 +2600,18 @@ class CadViewerApp {
     summary.textContent = sequence
       ? `${sequence.phases.length} ${translate(this.appLocale, 'phaseCount')}`
       : translate(this.appLocale, 'noProcess')
-    status.textContent = sequence?.activePhaseId
-      ? translate(this.appLocale, 'phaseSaved')
+    status.textContent = saveState
+      ? phaseSaveStatusText(this.appLocale, saveState)
       : process
         ? translate(this.appLocale, 'noPhase')
         : translate(this.appLocale, 'waitingProcess')
+    const statusElement = status.parentElement!
+    statusElement.dataset.state = saveState
+      ? saveState.saved ? 'saved' : saveState.failed ? 'failed' : saveState.saving ? 'saving' : 'unsaved'
+      : 'idle'
+    statusElement.setAttribute('role', 'status')
+    statusElement.setAttribute('aria-live', 'polite')
+    statusElement.title = status.textContent
     this.syncAppToolbarContext()
   }
 
@@ -2686,6 +2851,34 @@ class CadViewerApp {
     workspace: PhaseWorkspaceState,
     presentationProfile: PresentationProfile
   ) {
+    const localState = this.phaseStore.snapshot()
+    const localPhases = new Map(localState.processes.flatMap(process =>
+      process.sequences.flatMap(sequence => sequence.phases.map(phase => [phase.id, phase] as const))
+    ))
+    for (const process of workspace.processes) {
+      for (const sequence of process.sequences) {
+        const localSequence = localState.processes.find(item => item.id === process.id)
+          ?.sequences.find(item => item.id === sequence.id)
+        const hasUnsavedOrder = localSequence?.phases.some((phase, index) =>
+          this.phaseSaveState.has(phase.id) &&
+          this.phaseSaveState.get(phase, { orderIndex: index + 1 }).changes.includes('order'))
+        sequence.phases = sequence.phases.map((phase, index) => {
+          const local = localPhases.get(phase.id)
+          if (local && this.phaseSaveState.has(local.id) && (hasUnsavedOrder || !this.phaseSaveState.get(local).saved)) return local
+          this.phaseSaveState.accept(phase, index + 1)
+          return phase
+        })
+        if (hasUnsavedOrder && localSequence) {
+          const incoming = new Map(sequence.phases.map(phase => [phase.id, phase]))
+          const ordered = localSequence.phases.flatMap(phase => {
+            const match = incoming.get(phase.id)
+            incoming.delete(phase.id)
+            return match ? [match] : []
+          })
+          sequence.phases = [...ordered, ...incoming.values()]
+        }
+      }
+    }
     this.phaseStore = new PhaseWorkspaceStore({
       ...workspace,
       presentationProfile
@@ -3114,23 +3307,12 @@ class CadViewerApp {
     const repository = this.phaseRepository
     if (!repository) return
     try {
+      this.captureLoadedPhaseState()
       this.cancelBackendPhaseSave(phaseId)
-      const sequence = this.phaseStore
-        .snapshot()
-        .processes.find(process => process.id === processId)
-        ?.sequences.find(item => item.id === sequenceId)
-      const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId)
-      const phase =
-        phaseIndex !== undefined && phaseIndex >= 0
-          ? sequence?.phases[phaseIndex]
-          : undefined
-      if (!phase) throw new Error('Phase was not found')
-      await repository.updatePhase(
-        sequenceId,
-        { ...phase, name },
-        phaseIndex! + 1
-      )
-      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+      this.phaseStore.renamePhase(processId, sequenceId, phaseId, name)
+      this.phaseStore.persist()
+      this.phasePanel?.render()
+      await this.saveBackendPhase(processId, sequenceId, phaseId)
       this.showMessage('Phase 已更新', 'success')
     } catch (error) {
       log.error('Failed to rename backend Phase:', error)
@@ -3160,9 +3342,12 @@ class CadViewerApp {
       }
       const [phase] = phases.splice(currentIndex, 1)
       phases.splice(targetIndex, 0, phase)
+      this.phaseStore.reorderPhase(processId, sequenceId, phaseId, targetIndex)
+      this.phaseStore.persist()
+      this.phasePanel?.render()
       await Promise.all(
-        phases.map((item, index) =>
-          repository.updatePhase(sequenceId, item, index + 1)
+        phases.map(item =>
+          this.saveBackendPhase(processId, sequenceId, item.id)
         )
       )
       await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
@@ -3295,7 +3480,8 @@ class CadViewerApp {
     }
 
     this.cancelBackendPhaseSave(request.phaseId)
-    await repository.updatePhase(
+    this.phaseStore.replacePhase(
+      request.processId,
       request.sequenceId,
       {
         ...phase,
@@ -3304,9 +3490,11 @@ class CadViewerApp {
           assetId: `file:${fileId}`,
           displayName
         }
-      },
-      phaseIndex! + 1
+      }
     )
+    this.phaseStore.persist()
+    this.phasePanel?.render()
+    await this.saveBackendPhase(request.processId, request.sequenceId, request.phaseId)
     this.invalidateLoadedPhaseBinding()
     await this.reloadBackendWorkspace(
       request.processId,
@@ -3346,15 +3534,9 @@ class CadViewerApp {
       const displayName = name.trim()
       if (!displayName) throw new Error('Drawing display name is required')
       this.cancelBackendPhaseSave(phaseId)
-      await repository.updatePhase(
-        sequenceId,
-        {
-          ...phase,
-          drawing: { ...phase.drawing, displayName }
-        },
-        phaseIndex! + 1
-      )
-      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+      this.phaseStore.renameDrawing(processId, sequenceId, phaseId, displayName)
+      this.phaseStore.persist()
+      await this.saveBackendPhase(processId, sequenceId, phaseId)
       if (this.loadedPhase?.phaseId === phaseId) document.title = displayName
       this.showMessage('图纸显示名已更新', 'success')
     } catch (error) {
@@ -3388,12 +3570,19 @@ class CadViewerApp {
     const repository = this.phaseRepository
     if (!cachedPhase || !repository) throw new Error('Phase was not found')
     const phaseIndex = sequence?.phases.findIndex(item => item.id === phaseId) ?? 0
-    const phase = await repository.loadPhase(
+    let phase = await repository.loadPhase(
       phaseId,
       state.drawingAssets,
       phaseIndex
     )
     if (activationToken !== this.phaseActivationToken) return
+    if (this.phaseSaveState.has(cachedPhase.id) && !this.phaseSaveState.get(cachedPhase).saved) {
+      await this.saveBackendPhase(processId, sequenceId, phaseId)
+      if (activationToken !== this.phaseActivationToken) return
+      phase = await repository.loadPhase(phaseId, state.drawingAssets, phaseIndex)
+      if (activationToken !== this.phaseActivationToken) return
+    }
+    this.phaseSaveState.accept(phase, phaseIndex + 1)
     this.phaseStore.replacePhase(processId, sequenceId, phase)
     const refreshedState = this.phaseStore.snapshot()
     const refreshedProcess = refreshedState.processes.find(item => item.id === processId)
@@ -3424,8 +3613,7 @@ class CadViewerApp {
     const token = activationToken
     this.pendingPhase = { processId, sequenceId, phaseId, token }
     if (refreshedPhase.drawing.kind === 'unassigned') {
-      const command = new AcApQNewCmd()
-      await command.execute(AcApDocManager.instance.context)
+      this.showEmptyWorkspaceDrawing()
       return
     }
     const drawing = refreshedState.drawingAssets[refreshedPhase.drawing.assetId]
@@ -3450,9 +3638,7 @@ class CadViewerApp {
         item => item.id === currentSequence.activePhaseId
       )
       if (!currentPhase || currentPhase.drawing.kind === 'unassigned') {
-        const command = new AcApQNewCmd()
-        await command.execute(AcApDocManager.instance.context)
-        document.title = 'CAD Viewer'
+        this.showEmptyWorkspaceDrawing()
       }
       return
     }
@@ -3833,6 +4019,10 @@ class CadViewerApp {
   }
 
   private async savePresentationProfile(profile: PresentationProfile) {
+    const projectId = this.activeProjectId
+    const repository = this.phaseRepository
+    this.phaseSaveState.beginStyles()
+    let failed = false
     try {
       this.phaseStore.updatePresentationProfile(profile)
       const normalizedProfile = this.phaseStore.snapshot().presentationProfile
@@ -3852,18 +4042,27 @@ class CadViewerApp {
           '[PresentationProfile] Payload prepared for backend / 已准备好提交后台的表现配置：',
           presentationProfile
         )
-        await this.processAssistantProjectApi.saveStyle(
-          this.activeProjectId,
-          jsonData
+        this.syncPhaseContextBar()
+        const previous = this.presentationSaveTask ?? Promise.resolve()
+        const task = previous.catch(() => undefined).then(() =>
+          this.processAssistantProjectApi.saveStyle(projectId!, jsonData)
         )
+        this.presentationSaveTask = task
+        await task
+        if (this.presentationSaveTask === task) this.presentationSaveTask = undefined
+        if (this.phaseRepository === repository) this.phaseSaveState.acceptStyles(presentationProfile)
       }
       this.syncOpenHighlightRoots()
       this.phasePanel?.render()
       this.showMessage('高亮样式已保存', 'success')
     } catch (error) {
+      failed = true
       log.error('Failed to save highlight styles:', error)
       this.showMessage('高亮样式保存失败', 'error')
       throw error
+    } finally {
+      if (this.phaseRepository === repository) this.phaseSaveState.finishStyles(failed)
+      this.syncPhaseContextBar()
     }
   }
 
@@ -4156,7 +4355,23 @@ class CadViewerApp {
     if (!phase || phaseIndex === undefined) {
       throw new Error(`Phase ${phaseId} was not found`)
     }
-    await repository.updatePhase(sequenceId, phase, phaseIndex + 1)
+    const previous = this.phaseSaveTasks.get(phaseId) ?? Promise.resolve()
+    this.phaseSaveState.begin(phaseId)
+    this.syncPhaseContextBar()
+    const task = previous.catch(() => undefined).then(async () => {
+      await repository.updatePhase(sequenceId, phase, phaseIndex + 1)
+      if (this.phaseRepository === repository) this.phaseSaveState.accept(phase, phaseIndex + 1)
+    }).catch(error => {
+      if (this.phaseRepository === repository) this.phaseSaveState.finish(phaseId, true)
+      throw error
+    }).then(() => {
+      if (this.phaseRepository === repository) this.phaseSaveState.finish(phaseId)
+    }).finally(() => {
+      if (this.phaseSaveTasks.get(phaseId) === task) this.phaseSaveTasks.delete(phaseId)
+      this.syncPhaseContextBar()
+    })
+    this.phaseSaveTasks.set(phaseId, task)
+    await task
   }
 
   private cancelBackendPhaseSave(phaseId: string): void {
@@ -4505,7 +4720,6 @@ class CadViewerApp {
       return
     }
 
-    this.clearMessages()
     this.captureLoadedPhaseState()
     this.invalidateLoadedPhaseBinding()
 
@@ -4545,7 +4759,6 @@ class CadViewerApp {
 
   private async loadPredefinedFile(url: string) {
     await this.initialize()
-    this.clearMessages()
     this.captureLoadedPhaseState()
     this.invalidateLoadedPhaseBinding()
 
@@ -4631,6 +4844,7 @@ class CadViewerApp {
   private finishLoadingState() {
     this.isLoadingFile = false
     this.updateEmptyStateVisibility()
+    this.syncPhaseContextBar()
   }
 
   private updateEmptyStateVisibility() {
@@ -4667,18 +4881,13 @@ class CadViewerApp {
     message: string,
     type: ToastTone = 'info'
   ) {
-    this.toast.show(translateUiText(this.appLocale, message), type)
-  }
-
-  private clearMessages() {
-    this.toast.clear()
+    reportMessage(translateUiText(this.appLocale, message), type)
   }
 }
 
 export function prepareWorkspaceStyles(): void {
   injectAppShellResponsiveStyles()
   injectConfirmationModalStyles()
-  injectToastStyles()
   injectParsingDetailsStyles()
   injectUiReferenceThemeStyles()
   injectPhaseConfigImportModalStyles()
