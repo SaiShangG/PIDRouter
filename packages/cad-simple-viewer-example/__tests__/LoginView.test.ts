@@ -37,11 +37,11 @@ describe('LoginView', () => {
     setup()
     const image = document.querySelector<HTMLImageElement>('.login-media img')!
     expect(image.getAttribute('src')).toBe('./biopharma-login.jpg')
-    expect(image.alt).toBe('工业车间中的不锈钢罐体与工艺管道')
+    expect(image.alt).toBe('工业车间中的不锈钢容器与工艺管道')
     expect(document.querySelector('.login-panel form')).not.toBeNull()
     expect(document.querySelector('.login-footer')).toBeNull()
     document.querySelector<HTMLButtonElement>('header button')!.click()
-    expect(image.alt).toBe('Stainless steel tanks and process piping in an industrial facility')
+    expect(image.alt).toBe('Stainless steel vessels and process piping in an industrial facility')
   })
 
   it('switches language without clearing values and toggles password visibility', () => {

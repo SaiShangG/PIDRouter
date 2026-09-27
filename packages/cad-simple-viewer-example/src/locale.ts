@@ -17,7 +17,7 @@ export const toggleAppLocale = (locale: AppLocale): AppLocale =>
 const messages = {
   zh: {
     loginTitle: '用户登录',
-    loginPhotoAlt: '工业车间中的不锈钢罐体与工艺管道',
+    loginPhotoAlt: '工业车间中的不锈钢容器与工艺管道',
     loginLanguageTarget: 'EN',
     loginUsername: '用户名',
     loginPassword: '密码',
@@ -83,7 +83,7 @@ const messages = {
   },
   en: {
     loginTitle: 'Sign in',
-    loginPhotoAlt: 'Stainless steel tanks and process piping in an industrial facility',
+    loginPhotoAlt: 'Stainless steel vessels and process piping in an industrial facility',
     loginLanguageTarget: '中文',
     loginUsername: 'Username',
     loginPassword: 'Password',

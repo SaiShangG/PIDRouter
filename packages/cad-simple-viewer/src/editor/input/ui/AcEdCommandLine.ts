@@ -195,7 +195,7 @@ export class AcEdCommandLine {
     return AcApI18n.t(key, { fallback: defaultText })
   }
 
-  /** Refresh all messages when locale changes */
+  /** 语言切换时刷新消息与控件。 Refresh messages and controls when the locale changes. */
   private refreshLocale() {
     Array.from(this.msgPanel.children).forEach(child => {
       const div = child as HTMLDivElement
@@ -223,9 +223,13 @@ export class AcEdCommandLine {
       this.textInput.placeholder = this.localize('main.commandLine.placeholder')
     }
 
-    // Refresh button titles
+    // 刷新按钮提示和无障碍名称。 Refresh button tooltips and accessible names.
+    this.closeBtn.title = this.localize('main.commandLine.close')
+    this.closeBtn.setAttribute('aria-label', this.closeBtn.title)
     this.downBtn.title = this.localize('main.commandLine.showHistory')
+    this.downBtn.setAttribute('aria-label', this.downBtn.title)
     this.upBtn.title = this.localize('main.commandLine.showMessages')
+    this.upBtn.setAttribute('aria-label', this.upBtn.title)
   }
 
   /**

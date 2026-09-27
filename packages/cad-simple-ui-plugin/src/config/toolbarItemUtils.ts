@@ -96,7 +96,7 @@ function expandToolbarItemConfig(
     const preset = presets.get(item.preset)
     if (!preset) {
       console.warn(
-        `[cad-simple-ui-plugin] Unknown toolbar preset "${item.preset}".`
+        `[cad-simple-ui-plugin] Unknown toolbar preset "${item.preset}". / 未知的工具栏预设。`
       )
       return null
     }

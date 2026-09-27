@@ -455,11 +455,7 @@ export class HighlightStyleDialog {
       errors
     }
     const locale = this.options.getLocale?.() ?? 'zh'
-    const localizedErrors = locale === 'en'
-      ? errors.map(error => error.includes('deviceStyles')
-        ? error.replace('缺少有效的', 'is missing a valid')
-        : 'Invalid highlight style JSON format.')
-      : errors
+    const localizedErrors = errors.map(error => translateUiText(locale, error))
     const modal = new HighlightStyleImportPreviewModal({
       locale,
       analysis: { ...analysis, errors: localizedErrors },

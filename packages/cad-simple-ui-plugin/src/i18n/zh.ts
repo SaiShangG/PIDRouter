@@ -1,5 +1,6 @@
 /**
  * Chinese UI strings for {@link registerSimpleUiI18n}.
+ * 简易工具栏中文词条，必须与英文词条的键及占位符保持一致。
  *
  * Keys use dot notation (for example `toolbar.select`) and are nested under
  * the `simpleUi` namespace when registered.
@@ -40,8 +41,8 @@ export const zh: Record<string, string> = {
   'toolbar.placementRight': '右侧',
   'toolbar.themeLight': '切换为深色主题',
   'toolbar.themeDark': '切换为浅色主题',
-  'toolbar.localeEn': 'English（切换为中文）',
-  'toolbar.localeZh': '中文（切换为 English）',
+  'toolbar.localeEn': '切换为中文',
+  'toolbar.localeZh': '切换为英文',
   'toolbar.collapse': '收起工具栏',
   'toolbar.expand': '展开工具栏',
   'layerManager.title': '图层管理器',

@@ -344,7 +344,7 @@ export class PhaseWorkspaceRepository {
   ): Promise<void> {
     const id = this.requireBackendId(phase.id, 'Phase')
     const jsonData = JSON.stringify(this.toPersistedPhaseData(phase, orderIndex))
-    console.log('[Phase] Payload prepared for backend:', {
+    console.log('[Phase] Payload prepared for backend / 已准备好提交后台的阶段数据：', {
       id,
       name: phase.name,
       index: phase.number,

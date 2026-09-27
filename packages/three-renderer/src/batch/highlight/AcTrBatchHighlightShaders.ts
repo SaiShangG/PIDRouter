@@ -236,7 +236,7 @@ function warnUnpatchedHighlightMaterial(material: THREE.Material) {
   }
   warnedUnpatchedMaterials.add(key)
   console.warn(
-    `[AcTrBatchHighlight] Could not inject highlight shader for material type "${key}". Highlight tinting may be skipped.`
+    `[AcTrBatchHighlight] Could not inject highlight shader for material type "${key}". Highlight tinting may be skipped. / 无法为该材质注入高亮着色器，可能跳过高亮着色。`
   )
 }
 

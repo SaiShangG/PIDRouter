@@ -31,7 +31,7 @@ export function acapRunServiceEdit<T>(
   if (typeof db.runDatabaseEdit !== 'function') {
     if (process.env.NODE_ENV !== 'production') {
       console.warn(
-        `[cad-simple-viewer] acapRunServiceEdit("${label}"): database.runDatabaseEdit is unavailable; mutation ran without undo support.`
+        `[cad-simple-viewer] acapRunServiceEdit("${label}"): database.runDatabaseEdit is unavailable; mutation ran without undo support. / 数据库编辑接口不可用，本次修改不支持撤销。`
       )
     }
     return fn()

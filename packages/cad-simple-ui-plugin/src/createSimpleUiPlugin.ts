@@ -182,7 +182,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
 
       if (!this.dockPanel) {
         console.warn(
-          '[SimpleUiPlugin] setDockPanelOpen skipped: dock panel is unavailable.'
+          '[SimpleUiPlugin] setDockPanelOpen skipped: dock panel is unavailable. / 停靠面板不可用，已跳过开关操作。'
         )
         return false
       }
@@ -220,7 +220,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
 
     if (!this.dockPanel) {
       console.warn(
-        '[SimpleUiPlugin] setDockPanelSize skipped: dock panel is unavailable.'
+        '[SimpleUiPlugin] setDockPanelSize skipped: dock panel is unavailable. / 停靠面板不可用，已跳过尺寸设置。'
       )
       return false
     }
@@ -272,7 +272,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   setToolbarPlacement(placement: AcExToolbarPlacement): boolean {
     if (!this.toolbar) {
       console.warn(
-        '[SimpleUiPlugin] setToolbarPlacement skipped: toolbar is unavailable.'
+        '[SimpleUiPlugin] setToolbarPlacement skipped: toolbar is unavailable. / 工具栏不可用，已跳过位置设置。'
       )
       return false
     }
@@ -294,7 +294,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   setToolbarVisible(visible: boolean): boolean {
     if (!this.toolbar) {
       console.warn(
-        '[SimpleUiPlugin] setToolbarVisible skipped: toolbar is unavailable.'
+        '[SimpleUiPlugin] setToolbarVisible skipped: toolbar is unavailable. / 工具栏不可用，已跳过显示设置。'
       )
       return false
     }
@@ -319,13 +319,13 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   setToolbarCollapsed(collapsed: boolean): boolean {
     if (!this.toolbar) {
       console.warn(
-        '[SimpleUiPlugin] setToolbarCollapsed skipped: toolbar is unavailable.'
+        '[SimpleUiPlugin] setToolbarCollapsed skipped: toolbar is unavailable. / 工具栏不可用，已跳过折叠设置。'
       )
       return false
     }
     if (!this.toolbarCollapsible) {
       console.warn(
-        '[SimpleUiPlugin] setToolbarCollapsed skipped: toolbar is not collapsible.'
+        '[SimpleUiPlugin] setToolbarCollapsed skipped: toolbar is not collapsible. / 工具栏不支持折叠，已跳过设置。'
       )
       return false
     }
@@ -347,7 +347,7 @@ export class AcApSimpleUiPlugin implements AcApPlugin {
   setToolbarEdgeOffset(offset: number): boolean {
     if (!this.toolbar) {
       console.warn(
-        '[SimpleUiPlugin] setToolbarEdgeOffset skipped: toolbar is unavailable.'
+        '[SimpleUiPlugin] setToolbarEdgeOffset skipped: toolbar is unavailable. / 工具栏不可用，已跳过边缘间距设置。'
       )
       return false
     }

@@ -1,5 +1,6 @@
 /**
  * English UI strings for {@link registerSimpleUiI18n}.
+ * 简易工具栏英文词条，必须与中文词条的键及占位符保持一致。
  *
  * Keys use dot notation (for example `toolbar.select`) and are nested under
  * the `simpleUi` namespace when registered.
@@ -40,8 +41,8 @@ export const en: Record<string, string> = {
   'toolbar.placementRight': 'Right',
   'toolbar.themeLight': 'Switch to Dark Theme',
   'toolbar.themeDark': 'Switch to Light Theme',
-  'toolbar.localeEn': 'English (switch to Chinese)',
-  'toolbar.localeZh': '中文 (switch to English)',
+  'toolbar.localeEn': 'Switch to Chinese',
+  'toolbar.localeZh': 'Switch to English',
   'toolbar.collapse': 'Collapse toolbar',
   'toolbar.expand': 'Expand toolbar',
   'layerManager.title': 'Layer Manager',

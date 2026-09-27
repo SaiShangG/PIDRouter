@@ -603,11 +603,20 @@ class CadViewerApp {
       saveAppLocale(this.appLocale)
       this.applyAppLocale()
     })
+    AcApI18n.events.localeChanged.addEventListener(event => {
+      if (event.new !== 'en' && event.new !== 'zh') return
+      if (event.new === this.appLocale) return
+      this.appLocale = event.new
+      saveAppLocale(this.appLocale)
+      this.applyAppLocale()
+    })
   }
 
   private applyAppLocale() {
     document.documentElement.lang = this.appLocale === 'zh' ? 'zh-CN' : 'en'
-    AcApI18n.setCurrentLocale(this.appLocale)
+    if (AcApI18n.currentLocale !== this.appLocale) {
+      AcApI18n.setCurrentLocale(this.appLocale)
+    }
     const setText = (selector: string, key: Parameters<typeof translate>[1]) => {
       const element = document.querySelector<HTMLElement>(selector)
       if (element) element.textContent = translate(this.appLocale, key)
@@ -1067,13 +1076,13 @@ class CadViewerApp {
     this.dockButton.disabled = !enabled
     this.dockOpenToggle.disabled = !enabled
     this.dockAddTabButton.disabled = !enabled
-    this.dockOpenToggle.textContent = isOpen ? 'Close Dock' : 'Open Dock'
+    this.dockOpenToggle.textContent = translateUiText(this.appLocale, isOpen ? 'Close Dock' : 'Open Dock')
     this.dockSizeInput.disabled = !enabled
     this.dockSizeInput.value = String(size)
-    this.dockSizeLabel.textContent = this.isDockSizeVertical(side)
+    this.dockSizeLabel.textContent = translateUiText(this.appLocale, this.isDockSizeVertical(side)
       ? 'Height (px)'
-      : 'Width (px)'
-    this.dockButton.textContent = 'Dock'
+      : 'Width (px)')
+    this.dockButton.textContent = translateUiText(this.appLocale, 'Dock')
   }
 
   private setupViewerToolbarMenu() {
@@ -1263,14 +1272,14 @@ class CadViewerApp {
     })
 
     this.viewerToolbarVisibilityToggle.disabled = !enabled
-    this.viewerToolbarVisibilityToggle.textContent = visible
+    this.viewerToolbarVisibilityToggle.textContent = translateUiText(this.appLocale, visible
       ? 'Hide Toolbar'
-      : 'Show Toolbar'
+      : 'Show Toolbar')
 
     this.viewerToolbarCollapseToggle.disabled = !enabled
-    this.viewerToolbarCollapseToggle.textContent = collapsed
+    this.viewerToolbarCollapseToggle.textContent = translateUiText(this.appLocale, collapsed
       ? 'Expand Toolbar'
-      : 'Collapse Toolbar'
+      : 'Collapse Toolbar')
 
     this.viewerToolbarEdgeOffsetInput.disabled = !enabled
     this.viewerToolbarEdgeOffsetInput.value = String(edgeOffset)
@@ -1280,7 +1289,7 @@ class CadViewerApp {
       this.toolbarLayoutSelect.value = getCurrentDemoToolbarLayoutId()
     }
 
-    this.viewerToolbarButton.textContent = 'Toolbar'
+    this.viewerToolbarButton.textContent = translateUiText(this.appLocale, 'Toolbar')
   }
 
   private openFilePicker() {
@@ -1734,7 +1743,7 @@ class CadViewerApp {
         locateTank: tankId => {
           const tank = this.tankOptions.find(option => option.id === tankId)
           const located = Boolean(tank && this.tankLocator.start(tank.handleKey))
-          if (!located) this.showMessage('无法定位所选 Tank', 'error')
+          if (!located) this.showMessage('无法定位所选 Vessel', 'error')
           return located
         },
         stopLocatingTank: () => this.tankLocator.stop(),
@@ -1783,7 +1792,7 @@ class CadViewerApp {
     const repository = this.phaseRepository
     try {
       if (tankId && !this.tankOptions.some(tank => tank.id === tankId)) {
-        throw new Error('Tank was not found')
+        throw new Error('Vessel was not found')
       }
       this.captureLoadedPhaseState()
       const sequence = store.snapshot().processes.find(process => process.id === processId)
@@ -1799,8 +1808,8 @@ class CadViewerApp {
       store.assignPhaseTank(processId, sequenceId, phaseId, tankId)
       store.persist()
     } catch (error) {
-      log.error('Failed to assign Phase Tank:', error)
-      this.showMessage('Tank 归属保存失败', 'error')
+      log.error('Failed to assign Phase Vessel / 阶段 Vessel 归属保存失败：', error)
+      this.showMessage('Vessel 归属保存失败', 'error')
     }
   }
 
@@ -3847,7 +3856,7 @@ class CadViewerApp {
         )
         const jsonData = JSON.stringify({ presentationProfile })
         console.log(
-          '[PresentationProfile] Payload prepared for backend:',
+          '[PresentationProfile] Payload prepared for backend / 已准备好提交后台的表现配置：',
           presentationProfile
         )
         await this.processAssistantProjectApi.saveStyle(
@@ -4491,7 +4500,7 @@ class CadViewerApp {
   private updateFileSidebarSubtitle(label: string) {
     if (!this.fileSidebarSubtitle) return
 
-    this.fileSidebarSubtitle.textContent = label || 'Tap to browse sample files'
+    this.fileSidebarSubtitle.textContent = label || translateUiText(this.appLocale, 'Tap to browse sample files')
   }
 
   private async loadLocalFile(file: File) {

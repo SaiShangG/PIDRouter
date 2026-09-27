@@ -457,7 +457,7 @@ export class ValveDebugFeature {
     }
     this.attachedCanvas = canvas
     canvas.addEventListener('contextmenu', this.handleContextMenu, true)
-    console.log('[ValveDebugFeature] Attached context menu listener', { canvas })
+    console.log('[ValveDebugFeature] Attached context menu listener / 已注册右键菜单监听器', { canvas })
   }
 
   setGraphDocument(document: FlowConnectionDocumentInput) {
@@ -521,7 +521,7 @@ export class ValveDebugFeature {
   }
 
   private readonly handleContextMenu = (event: MouseEvent) => {
-    console.log('[ValveDebugFeature] Right-click received', {
+    console.log('[ValveDebugFeature] Right-click received / 收到右键点击', {
       target: event.target,
       currentTarget: event.currentTarget,
       clientX: event.clientX,
@@ -529,11 +529,11 @@ export class ValveDebugFeature {
     })
     const view = this.options.getView()
     if (!view) {
-      console.warn('[ValveDebugFeature] Right-click ignored: no active view')
+      console.warn('[ValveDebugFeature] Right-click ignored: no active view / 无活动视图，已忽略右键点击')
       return
     }
     if (event.currentTarget !== view.canvas) {
-      console.warn('[ValveDebugFeature] Right-click ignored: canvas mismatch')
+      console.warn('[ValveDebugFeature] Right-click ignored: canvas mismatch / 画布不匹配，已忽略右键点击')
       return
     }
     const canvasPoint = view.viewportToCanvas({ x: event.clientX, y: event.clientY })
@@ -545,7 +545,7 @@ export class ValveDebugFeature {
       .map(key => this.resolveValveKey(key))
       .find((key): key is string => key != null)
     if (!hit) {
-      console.warn('[ValveDebugFeature] Right-click did not resolve to a configured device', {
+      console.warn('[ValveDebugFeature] Right-click did not resolve to a configured device / 右键点击未命中已配置设备', {
         canvasPoint,
         worldPoint,
         pickedIds: pickedItems.map(item => String(item.id)),
@@ -558,7 +558,7 @@ export class ValveDebugFeature {
     event.preventDefault()
     event.stopPropagation()
     event.stopImmediatePropagation()
-    console.log('[ValveDebugFeature] Right-click selected configured device', {
+    console.log('[ValveDebugFeature] Right-click selected configured device / 右键已选中已配置设备', {
       key: hit,
       label: this.graph.nodes.get(hit)?.label ?? hit,
       clientX: event.clientX,

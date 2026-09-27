@@ -258,11 +258,11 @@ export class AcTrGeometrySanitizer {
       ? `${entityTypeName(entity)} ${entity.objectId} (layer ${entity.layer})`
       : 'unknown entity'
     console.warn(
-      `[AcTrGeometrySanitizer] ${label} ${source}: ${detail}. Upstream DWG/proxy-graphic data is likely invalid.`
+      `[AcTrGeometrySanitizer] ${label} ${source}: ${detail}. Upstream DWG/proxy-graphic data is likely invalid. / 上游 DWG 或代理图形数据可能无效。`
     )
   }
 
-  /** Clears deduplicated diagnostic keys; intended for tests. */
+  /** 清除已去重的诊断键，仅供测试。 Clears deduplicated diagnostic keys for tests. */
   static resetDiagnosticsForTests() {
     reportedIssues.clear()
   }

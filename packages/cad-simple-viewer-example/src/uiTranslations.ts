@@ -3,6 +3,52 @@ import type { AppLocale } from './locale'
 type TranslationPair = readonly [zh: string, en: string]
 
 const pairs: TranslationPair[] = [
+  ['PID 图纸', 'PID drawings'],
+  ['PID 工作区', 'PID Workspace'],
+  ['PDF 工艺', 'PDF Process'], ['Matrix 工艺', 'Matrix Process'],
+  ['确认', 'Confirm'], ['折叠', 'Collapse'], ['展开', 'Expand'],
+  ['手工高亮', 'Manual highlight'], ['副本', 'Copy'],
+  ['高亮样式设置', 'Highlight style settings'], ['设备', 'Device'],
+  ['设备名称', 'Device name'], ['删除设备', 'Delete device'],
+  ['新增设备', 'Add device'], ['新增状态', 'Add state'],
+  ['右键显示名称', 'Context menu label'], ['删除设备状态', 'Delete device state'],
+  ['客户颜色标准尚未确认', 'Customer color standard has not been confirmed'],
+  ['删除 Utility', 'Delete Utility'], ['新增 Utility', 'Add Utility'],
+  ['高亮颜色', 'Highlight color'], ['十六进制颜色', 'Hexadecimal color'],
+  ['高亮线宽', 'Highlight line width'],
+  ['高亮样式 JSON 格式无效。', 'Invalid highlight style JSON format.'],
+  ['查看 Matrix', 'View matrix'],
+  ['请输入图纸名称', 'Enter a drawing name'],
+  ['图纸文件不存在', 'Drawing file was not found'],
+  ['图纸记录不存在', 'Drawing record was not found'],
+  ['模拟 DWG 解析失败', 'Simulated DWG parsing failure'],
+  ['PDI 文件不是有效的 ZIP 压缩包', 'The PDI file is not a valid ZIP archive'],
+  ['PDI 压缩包中缺少 Document.json', 'The PDI archive is missing Document.json'],
+  ['PDI 压缩包中缺少 DWG 或 DXF 图纸', 'The PDI archive is missing a DWG or DXF drawing'],
+  ['PDI 压缩包中的 Document.json 格式无效', 'Document.json in the PDI archive is invalid'],
+  ['后台上传未返回有效文件 ID', 'The server upload did not return a valid file ID'],
+  ['后台文件缺少存储文件名', 'The server file is missing its stored filename'],
+  ['当前后台 API 不支持重新解析文件', 'The server API does not support reprocessing files'],
+  ['后台文件 ID 无效', 'The server file ID is invalid'],
+  ['请输入 Project 名称', 'Enter a Project name'],
+  ['Project API 返回了无效数据', 'The Project API returned invalid data'],
+  ['Phase API 返回了无效数据', 'The Phase API returned invalid data'],
+  ['PDF 导出需要先选择 Project', 'PDF export requires an active Project'],
+  ['流路 PDF 导出失败', 'Flow path PDF export failed'],
+  ['等待流路导出结果超时', 'Timed out waiting for the flow path export result'],
+  ['Matrix 导出需要先选择 Project', 'Matrix export requires an active Project'],
+  ['所选工艺不存在', 'Selected Process does not exist'],
+  ['等待 Matrix 导出结果超时', 'Timed out waiting for the Matrix export result'],
+  ['工艺配置导入失败', 'Process configuration import failed'],
+  ['未找到所选 Vessel', 'Vessel was not found'],
+  ['请先选择后台 Project，再使用 Project PID', 'Project PID requires a backend Project'],
+  ['请先选择后台 Project，再关联 Project PID', 'Project PID association requires a backend Project'],
+  ['未找到阶段图纸', 'Phase drawing was not found'],
+  ['无法应用阶段状态', 'Unable to apply Phase state'],
+  ['阶段数据存储尚未初始化', 'Phase repository is not initialized'],
+  ['后台文件上传未返回有效 ID', 'Backend file upload did not return a valid ID'],
+  ['二维画布上下文不可用', 'Canvas 2D context is unavailable'],
+  ['未找到报告页面', 'Report page was not found'],
   ['PID Optimizer', 'PID Optimizer'],
   ['工艺与阶段', 'Processes & Phases'], ['调整工艺侧栏宽度', 'Resize process sidebar'],
   ['高亮样式', 'Highlight styles'],
@@ -101,11 +147,11 @@ const pairs: TranslationPair[] = [
   ['工作区当前为空。创建一个工艺，例如 CIP，然后添加第一个 Phase。', 'The workspace is empty. Create a process such as CIP, then add the first Phase.'],
   ['工艺名称，例如 CIP', 'Process name, e.g. CIP'], ['工艺名称', 'Process name'], ['创建工艺', 'Create process'],
   ['当前工艺', 'Current process'], ['新增工艺', 'Add process'], ['输入新工艺名称', 'Enter process name'],
-  ['当前 Tank', 'Current Tank'], ['全部 Tank', 'All Tanks'], ['未分配 Tank', 'Unassigned Tank'],
-  ['定位 Tank', 'Locate Tank'], ['停止 Tank 闪烁', 'Stop Tank blinking'], ['所属 Tank', 'Tank'],
-  ['Phase 所属 Tank', 'Phase Tank'], ['不可用 Tank', 'Unavailable Tank'],
-  ['此 Tank 下暂无 Phase。', 'No Phases for this Tank.'],
-  ['无法定位所选 Tank', 'Unable to locate the selected Tank'], ['Tank 归属保存失败', 'Failed to save Tank assignment'],
+  ['当前 Vessel', 'Current Vessel'], ['全部 Vessel', 'All Vessels'], ['未分配 Vessel', 'Unassigned Vessel'],
+  ['定位 Vessel', 'Locate Vessel'], ['停止 Vessel 闪烁', 'Stop Vessel blinking'], ['所属 Vessel', 'Vessel'],
+  ['Phase 所属 Vessel', 'Phase Vessel'], ['不可用 Vessel', 'Unavailable Vessel'],
+  ['此 Vessel 下暂无 Phase。', 'No Phases for this Vessel.'],
+  ['无法定位所选 Vessel', 'Unable to locate the selected Vessel'], ['Vessel 归属保存失败', 'Failed to save Vessel assignment'],
   ['删除当前工艺', 'Delete current process'], ['删除工艺？', 'Delete process?'], ['新工艺名称', 'New process name'], ['创建', 'Create'], ['取消新增工艺', 'Cancel adding process'],
   ['工艺结构', 'PROCESS STRUCTURE'], ['新增序列', 'Add sequence'], ['序列编号', 'Sequence number'],
   ['序列名称', 'Sequence name'], ['创建序列', 'Create sequence'], ['删除序列？', 'Delete sequence?'], ['取消', 'Cancel'],
@@ -267,9 +313,13 @@ const indexes = {
 export const translateUiText = (locale: AppLocale, text: string): string => {
   const exact = indexes[locale].get(text)
   if (exact) return exact
+  const error = text.match(/^(?:Error: |错误：)([\s\S]+)$/)
+  if (error) return `${locale === 'en' ? 'Error: ' : '错误：'}${translateUiText(locale, error[1])}`
   const dynamic: Array<[RegExp, (match: RegExpMatchArray) => string]> = locale === 'en'
     ? [
-      [/^序列 (\d+)/, m => `Sequence ${m[1]}`],
+      [/^例如：(.+)$/, match => `e.g. ${match[1]}`],
+      [/^deviceStyles\[(\d+)\] 缺少有效的 deviceType 或 deviceState。$/, match => `deviceStyles[${match[1]}] is missing a valid deviceType or deviceState.`],
+      [/^序列 (\d+)$/, m => `Sequence ${m[1]}`],
       [/^(\d+) 个 Phase$/, m => `${m[1]} Phases`],
       [/^页 (\d+)$/, m => `Page ${m[1]}`],
       [/^确认删除工艺“(.+)”？将同时删除 (\d+) 个序列和 (\d+) 个 Phase，此操作无法撤销。$/, m => `Delete process “${m[1]}”? This also deletes ${m[2]} sequences and ${m[3]} Phases. This action cannot be undone.`],
@@ -289,7 +339,9 @@ export const translateUiText = (locale: AppLocale, text: string): string => {
       [/^(\d+) 个 Project$/, m => `${m[1]} Projects`],
       [/^(\d+) 张 PID$/, m => `${m[1]} PIDs`],
       [/^(\d+) 张$/, m => `${m[1]} selected`],
-      [/^(\d+) 实体 · (\d+) 连接$/, m => `${m[1]} entities · ${m[2]} connections`],
+      [/^([\d,]+) 实体 · ([\d,]+) 连接$/, m => `${m[1]} entities · ${m[2]} connections`],
+      [/^生成记录 (\d+)$/, m => `Generated files ${m[1]}`],
+      [/^(\d+) 页$/, m => `${m[1]} pages`],
       [/^确定删除“(.+)”？此操作无法撤销。$/, m => `Delete “${m[1]}”? This action cannot be undone.`],
       [/^确定删除“(.+)”吗？关联的 PID 图纸不会被删除。$/, m => `Delete “${m[1]}”? The assigned PID drawings will not be deleted.`],
       [/^无法打开 (.+)$/, m => `Cannot open ${m[1]}`],
@@ -306,7 +358,7 @@ export const translateUiText = (locale: AppLocale, text: string): string => {
       [/^(\d+) 个 PDF$/, m => `${m[1]} PDF files`],
       [/^(\d+) 个 PDF（ZIP）$/, m => `${m[1]} PDF files (ZIP)`],
       [/^重试失败页面（(\d+)）$/, m => `Retry failed pages (${m[1]})`],
-      [/^第 (\d+) 页：(.+)$/, m => `Page ${m[1]}: ${m[2]}`],
+      [/^第 (\d+) 页：(.+)$/, m => `Page ${m[1]}: ${translateUiText(locale, m[2])}`],
       [/^正在生成第 (\d+) \/ (\d+) 页 · 序列 (\d+) (.*?) · Phase (\d+) (.*)$/, m => `Generating page ${m[1]} / ${m[2]} · Sequence ${m[3]} ${m[4]} · Phase ${m[5]} ${m[6]}`],
       [/^报告生成失败：(\d+) 页$/, m => `Report generation failed: ${m[1]} pages`],
       [/^已选择 (\d+) 个 Sequence，(\d+) 个 Phase$/, m => `${m[1]} Sequences and ${m[2]} Phases selected`],
@@ -324,7 +376,16 @@ export const translateUiText = (locale: AppLocale, text: string): string => {
       , [/^(.+) \/ 序列 (\d+) (.+) \/ Phase (\d+) (.+) \/ (.+)$/, m => `${m[1]} / Sequence ${m[2]} ${m[3]} / Phase ${m[4]} ${m[5]} / ${m[6]}`]
     ]
     : [
-      [/^Sequence (\d+)/, m => `序列 ${m[1]}`],
+      [/^e\.g\. (.+)$/, match => `例如：${match[1]}`],
+      [/^deviceStyles\[(\d+)\] is missing a valid deviceType or deviceState\.$/, match => `deviceStyles[${match[1]}] 缺少有效的 deviceType 或 deviceState。`],
+      [/^(.+) ID must be a positive backend integer$/, match => `${match[1]} ID 必须为后台的正整数标识符`],
+      [/^(.+) must be a positive integer$/, match => `${match[1]} 必须为正整数`],
+      [/^(.+) name is required$/, match => `必须填写 ${match[1]} 名称`],
+      [/^Phase (.+) was not found$/, match => `未找到阶段 ${match[1]}`],
+      [/^Sequence (\d+)$/, m => `序列 ${m[1]}`],
+      [/^([\d,]+) entities · ([\d,]+) connections$/, m => `${m[1]} 实体 · ${m[2]} 连接`],
+      [/^Generated files (\d+)$/, m => `生成记录 ${m[1]}`],
+      [/^(\d+) pages$/, m => `${m[1]} 页`],
       [/^(\d+) Phases$/, m => `${m[1]} 个阶段`],
       [/^Phase (\d+) created$/, m => `Phase ${m[1]} 已创建`],
       [/^Phase (\d+) copied$/, m => `Phase ${m[1]} 已复制`],
@@ -354,22 +415,43 @@ export const translateUiText = (locale: AppLocale, text: string): string => {
   return text
 }
 
+const localizedSources = new WeakMap<Node, Map<string, { source: string; rendered: string }>>()
+
+const localizeValue = (node: Node, key: string, value: string, locale: AppLocale) => {
+  let entries = localizedSources.get(node)
+  if (!entries) {
+    entries = new Map()
+    localizedSources.set(node, entries)
+  }
+  const previous = entries.get(key)
+  const source = previous?.rendered === value ? previous.source : value
+  const rendered = translateUiText(locale, source)
+  entries.set(key, { source, rendered })
+  return rendered
+}
+
 export const localizeDom = (root: ParentNode, locale: AppLocale) => {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let node = walker.nextNode()
   while (node) {
     const raw = node.textContent ?? ''
     const trimmed = raw.trim()
-    if (trimmed) {
-      const translated = translateUiText(locale, trimmed)
+    if (trimmed && !node.parentElement?.closest('script, style, textarea, [contenteditable], [translate="no"]')) {
+      const translated = localizeValue(node, 'text', trimmed, locale)
       if (translated !== trimmed) node.textContent = raw.replace(trimmed, translated)
     }
     node = walker.nextNode()
   }
-  root.querySelectorAll<HTMLElement>('*').forEach(element => {
+  const elements = Array.from(root.querySelectorAll<Element>('*'))
+  if (root instanceof Element) elements.unshift(root)
+  elements.forEach(element => {
+    if (element.closest('[translate="no"]')) return
     for (const attribute of ['aria-label', 'title', 'placeholder']) {
       const value = element.getAttribute(attribute)
-      if (value) element.setAttribute(attribute, translateUiText(locale, value))
+      if (value) {
+        const translated = localizeValue(element, attribute, value, locale)
+        if (translated !== value) element.setAttribute(attribute, translated)
+      }
     }
   })
 }

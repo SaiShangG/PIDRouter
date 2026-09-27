@@ -27,7 +27,7 @@ export class AcApPngConvertor {
     const camera = view.internalCamera
 
     if (!scene || !camera || !layoutView) {
-      console.error('[PNGOUT] Scene or camera not available')
+      console.error('[PNGOUT] Scene or camera not available / 场景或相机不可用')
       return
     }
 

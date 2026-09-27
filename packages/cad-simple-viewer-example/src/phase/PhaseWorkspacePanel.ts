@@ -188,14 +188,14 @@ export class PhaseWorkspacePanel {
   }
 
   private createTankSelector() {
-    const block = this.createBlock('Tank')
+    const block = this.createBlock('Vessel')
     block.classList.add('phase-tank-section')
     const row = document.createElement('div')
     row.className = 'phase-tank-selector'
     const select = document.createElement('select')
-    select.setAttribute('aria-label', '当前 Tank')
-    select.add(new Option('全部 Tank', ''))
-    select.add(new Option('未分配 Tank', 'unassigned'))
+    select.setAttribute('aria-label', '当前 Vessel')
+    select.add(new Option('全部 Vessel', ''))
+    select.add(new Option('未分配 Vessel', 'unassigned'))
     this.tanks!.getTanks().forEach(tank => select.add(new Option(tank.name, tank.id)))
     select.value = this.tankFilter
     select.addEventListener('change', () => {
@@ -211,7 +211,7 @@ export class PhaseWorkspacePanel {
       this.render()
     })
     const locate = this.createIconButton(
-      this.tankBlinking ? '停止 Tank 闪烁' : '定位 Tank',
+      this.tankBlinking ? '停止 Vessel 闪烁' : '定位 Vessel',
       this.tankBlinking ? Square : LocateFixed,
       () => {
         if (this.tankBlinking) {
@@ -267,7 +267,9 @@ export class PhaseWorkspacePanel {
     const select = document.createElement('select')
     select.setAttribute('aria-label', '当前工艺')
     state.processes.forEach(process => {
-      select.add(new Option(process.name, process.id))
+      const option = new Option(process.name, process.id)
+      option.translate = false
+      select.add(option)
     })
     select.value = activeProcessId
     select.addEventListener('change', async () => {
@@ -417,6 +419,7 @@ export class PhaseWorkspacePanel {
     number.className = 'phase-sequence-number'
     number.textContent = String(sequence.number).padStart(2, '0')
     const name = document.createElement('strong')
+    name.translate = false
     name.textContent = sequence.name
     name.title = sequence.name
     const count = document.createElement('span')
@@ -470,7 +473,7 @@ export class PhaseWorkspacePanel {
     }
     if (sequence.phases.length > 0 && !sequence.phases.some(phase => this.matchesTank(phase))) {
       const empty = document.createElement('p')
-      empty.textContent = '此 Tank 下暂无 Phase。'
+      empty.textContent = '此 Vessel 下暂无 Phase。'
       list.append(empty)
     }
     sequence.phases.forEach((phase, index) => {
@@ -501,6 +504,7 @@ export class PhaseWorkspacePanel {
       phaseNumber.className = 'phase-tree-node-number'
       phaseNumber.textContent = String(phase.number).padStart(2, '0')
       const phaseName = document.createElement('span')
+      phaseName.translate = false
       phaseName.textContent = phase.name
       const drawingStatus = document.createElement('span')
       drawingStatus.className = 'phase-tree-drawing-status'
@@ -948,6 +952,7 @@ export class PhaseWorkspacePanel {
     const deleteIcon = createPhaseIcon(Trash2, 'phase-delete-icon')
     deletePhase.append(deleteIcon)
     const identityName = document.createElement('strong')
+    identityName.translate = false
     identityName.textContent = phase.name
     const identityActions = document.createElement('div')
     identityActions.className = 'phase-overview-identity-actions'
@@ -965,6 +970,7 @@ export class PhaseWorkspacePanel {
     drawing.className = 'phase-overview-drawing'
     const drawingName = document.createElement('span')
     drawingName.className = 'phase-overview-drawing-name'
+    drawingName.translate = phase.drawing.kind !== 'assigned'
     drawingName.textContent =
       phase.drawing.kind === 'assigned'
         ? phase.drawing.displayName
@@ -993,12 +999,12 @@ export class PhaseWorkspacePanel {
     if (this.tanks) {
       const tank = document.createElement('select')
       tank.className = 'phase-tank-assignment'
-      tank.setAttribute('aria-label', 'Phase 所属 Tank')
-      tank.add(new Option('未分配 Tank', ''))
+      tank.setAttribute('aria-label', 'Phase 所属 Vessel')
+      tank.add(new Option('未分配 Vessel', ''))
       const options = this.tanks.getTanks()
       options.forEach(option => tank.add(new Option(option.name, option.id)))
       if (phase.tankId && !options.some(option => option.id === phase.tankId)) {
-        tank.add(new Option('不可用 Tank', phase.tankId))
+        tank.add(new Option('不可用 Vessel', phase.tankId))
       }
       tank.value = phase.tankId ?? ''
       tank.addEventListener('change', async () => {
@@ -1009,7 +1015,7 @@ export class PhaseWorkspacePanel {
           this.render()
         }
       })
-      this.addDetail(details, '所属 Tank', tank)
+      this.addDetail(details, '所属 Vessel', tank)
     }
     edit.addEventListener('click', () => {
       const editor = document.createElement('div')
@@ -1027,6 +1033,7 @@ export class PhaseWorkspacePanel {
       })
       cancel.addEventListener('click', () => editor.replaceWith(drawing))
       editor.append(rename, cancel, save)
+      localizeDom(editor, this.getLocale())
       drawing.replaceWith(editor)
       rename.focus()
       rename.select()
@@ -1046,6 +1053,7 @@ export class PhaseWorkspacePanel {
       })
       cancel.addEventListener('click', () => editor.replaceWith(identityActions))
       editor.append(rename, cancel, save)
+      localizeDom(editor, this.getLocale())
       identityActions.replaceWith(editor)
       rename.focus()
       rename.select()

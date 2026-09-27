@@ -85,7 +85,7 @@ const createHarness = (
 describe('PhaseWorkspacePanel', () => {
   afterEach(() => document.body.replaceChildren())
 
-  it.each(['zh', 'en'] as const)('filters Phases by Tank and cancels blinking without clearing the filter in %s', locale => {
+  it.each(['zh', 'en'] as const)('filters Phases by Vessel and cancels blinking without clearing the filter in %s', locale => {
     const { store, panel, tanks } = createHarness(locale, [5], true)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
@@ -105,7 +105,7 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.querySelector('.phase-process-selector')!.closest('section')!.nextElementSibling)
       .toBe(panel.element.querySelector('.phase-tank-section'))
     expect(panel.element.querySelector('.phase-tank-selector select')?.getAttribute('aria-label'))
-      .toBe(locale === 'zh' ? '当前 Tank' : 'Current Tank')
+      .toBe(locale === 'zh' ? '当前 Vessel' : 'Current Vessel')
     expect(panel.element.querySelectorAll('.phase-tank-selector option')).toHaveLength(4)
     selectTank('file:5:E65')
     expect(tanks.locateTank).toHaveBeenLastCalledWith('file:5:E65')
@@ -128,7 +128,7 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!.value).toBe('')
   })
 
-  it('assigns and clears Tank ownership from the bottom of Phase details', async () => {
+  it('assigns and clears Vessel ownership from the bottom of Phase details', async () => {
     const { store, panel, tanks } = createHarness('en', [5], true)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
@@ -137,13 +137,13 @@ describe('PhaseWorkspacePanel', () => {
       name: 'Rinse', source: { kind: 'unassigned' }
     })
     panel.render()
-    let select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Tank"]')!
+    let select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Vessel"]')!
     expect(select.closest('.phase-overview-row')).toBe(panel.element.querySelector('.phase-workspace-overview')!.lastElementChild)
     select.value = 'file:5:E65'
     select.dispatchEvent(new Event('change'))
     await Promise.resolve()
     expect(tanks.assignPhaseTank).toHaveBeenCalledWith(process.id, sequence.id, phase.id, 'file:5:E65')
-    select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Tank"]')!
+    select = panel.element.querySelector<HTMLSelectElement>('[aria-label="Phase Vessel"]')!
     expect(select.value).toBe('file:5:E65')
     select.value = ''
     select.dispatchEvent(new Event('change'))
@@ -151,7 +151,7 @@ describe('PhaseWorkspacePanel', () => {
     expect(store.snapshot().processes[0].sequences[0].phases[0].tankId).toBeUndefined()
   })
 
-  it('reveals matching Phases in inactive sequences and handles empty Tanks without a drawable entity', () => {
+  it('reveals matching Phases in inactive sequences and handles empty Vessels without a drawable entity', () => {
     const { store, panel, tanks } = createHarness('en', [5], true)
     const process = store.createProcess('CIP')
     const first = process.sequences[0]
@@ -175,7 +175,7 @@ describe('PhaseWorkspacePanel', () => {
     jest.mocked(tanks.locateTank).mockReturnValue(false)
     selectTank('file:5:1B3C')
     expect(panel.element.querySelectorAll('[role="treeitem"]')).toHaveLength(0)
-    expect(panel.element.textContent).toContain('No Phases for this Tank.')
+    expect(panel.element.textContent).toContain('No Phases for this Vessel.')
     expect(panel.element.querySelector('.phase-tank-selector button')?.getAttribute('aria-pressed')).toBe('false')
   })
 
@@ -214,6 +214,64 @@ describe('PhaseWorkspacePanel', () => {
     expect(
       panel.element.querySelector('[aria-label="Add sequence"]')
     ).not.toBeNull()
+  })
+
+  it.each([
+    ['zh', 'phase'], ['en', 'phase'], ['zh', 'drawing'], ['en', 'drawing']
+  ] as const)('localizes dynamically opened %s %s rename controls', (locale, target) => {
+    const { store, panel, actions } = createHarness(locale)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const phase = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 11,
+      name: 'Phase11', source: {
+        kind: 'new',
+        drawing: { id: 'drawing-11', kind: 'blank', sourceName: 'Phase11.dwg' },
+        displayName: 'Phase11.dwg'
+      }
+    })
+    panel.render()
+    const openEditor = () => panel.element.querySelector<HTMLButtonElement>(
+      target === 'phase' ? '.phase-overview-identity-actions button' : '.phase-overview-drawing .phase-overview-edit'
+    )!.click()
+    openEditor()
+    let editor = panel.element.querySelector('.phase-overview-rename')!
+    expect([...editor.querySelectorAll('button')].map(button => button.textContent))
+      .toEqual(locale === 'en' ? ['Cancel', 'Save'] : ['取消', '保存'])
+    expect(editor.querySelector('input')?.getAttribute('aria-label'))
+      .toBe(target === 'phase'
+        ? locale === 'en' ? 'Phase name' : '阶段名称'
+        : locale === 'en' ? 'Drawing display name' : '图纸显示名')
+    expect(editor.querySelector('input')?.value).toBe(target === 'phase' ? 'Phase11' : 'Phase11.dwg')
+    editor.querySelector('button')!.click()
+    expect(actions.renamePhase).not.toHaveBeenCalled()
+    expect(actions.renameDrawing).not.toHaveBeenCalled()
+    openEditor()
+    editor = panel.element.querySelector('.phase-overview-rename')!
+    editor.querySelector('input')!.value = '清洗 Phase11'
+    editor.querySelectorAll('button')[1].click()
+    expect(target === 'phase' ? actions.renamePhase : actions.renameDrawing)
+      .toHaveBeenCalledWith(process.id, sequence.id, phase.id, '清洗 Phase11')
+  })
+
+  it.each(['zh', 'en'] as const)('preserves business names that match UI translations in %s', locale => {
+    const { store, panel } = createHarness(locale)
+    const process = store.createProcess('Save')
+    const sequence = process.sequences[0]
+    store.renameSequence(process.id, sequence.id, '取消')
+    store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: '保存', source: {
+        kind: 'new', drawing: { id: 'drawing', kind: 'blank', sourceName: 'Open' },
+        displayName: 'Open'
+      }
+    })
+    panel.render()
+    expect(panel.element.querySelector('.phase-process-selector option')?.textContent).toBe('Save')
+    expect(panel.element.querySelector('.phase-sequence-identity strong')?.textContent).toBe('取消')
+    expect(panel.element.querySelector('.phase-overview-identity-actions strong')?.textContent).toBe('保存')
+    expect(panel.element.querySelector('.phase-overview-drawing-name')?.textContent).toBe('Open')
+    expect(panel.element.querySelector('.phase-overview-drawing-name')?.getAttribute('title')).toBe('Open')
   })
 
   it('deletes the selected process through a dedicated confirmation dialog', async () => {

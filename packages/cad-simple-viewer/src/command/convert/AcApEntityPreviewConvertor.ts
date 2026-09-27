@@ -87,7 +87,7 @@ export class AcApEntityPreviewConvertor {
     const bounds =
       scene.computeEntityPreviewBounds2d(entityIds, 1.1, 'all') ?? null
     if (!bounds) {
-      console.warn('[ENTPREVIEW] Failed to compute preview bounds', entityIds)
+      console.warn('[ENTPREVIEW] Failed to compute preview bounds / 计算预览边界失败', entityIds)
       return { ok: false, reason: 'no-bounds' }
     }
 
@@ -103,8 +103,8 @@ export class AcApEntityPreviewConvertor {
     })
     if (!previewRoot) {
       console.warn(
-        '[ENTPREVIEW] Failed to build preview geometry',
-        `${entityIds.length} requested entity ids`
+        '[ENTPREVIEW] Failed to build preview geometry / 构建预览几何体失败',
+        `${entityIds.length} requested entity ids / 请求的实体 ID 数量`
       )
       return { ok: false, reason: 'no-preview-root' }
     }
@@ -135,7 +135,7 @@ export class AcApEntityPreviewConvertor {
         skippedCount
       }
     } catch (error) {
-      console.error('[ENTPREVIEW] Failed to render preview image', error)
+      console.error('[ENTPREVIEW] Failed to render preview image / 渲染预览图像失败', error)
       return { ok: false, reason: 'capture-failed' }
     } finally {
       disposePreviewSubset(previewRoot)
@@ -193,7 +193,7 @@ export class AcApEntityPreviewConvertor {
       document.body.removeChild(downloadLink)
       return true
     } catch (error) {
-      console.error('[ENTPREVIEW] Failed to download preview PNG', error)
+      console.error('[ENTPREVIEW] Failed to download preview PNG / 下载 PNG 预览图失败', error)
       return false
     }
   }

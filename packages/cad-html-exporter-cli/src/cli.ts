@@ -56,10 +56,10 @@ program
         initialView,
         viewerMode
       })
-      console.log(`Wrote ${outputPath}`)
+      console.log(`Wrote / 已写入 ${outputPath}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      console.error(`Export failed: ${message}`)
+      console.error(`Export failed / 导出失败: ${message}`)
       if (error instanceof Error && error.stack) {
         console.error(error.stack)
       }

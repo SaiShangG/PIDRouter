@@ -30,7 +30,7 @@ import type {
   SequenceDefinition
 } from '../phase/types'
 import { createModalFocusController } from '../ui/modalFocus'
-import { localizeDom } from '../uiTranslations'
+import { localizeDom, translateUiText } from '../uiTranslations'
 import { PdfPreviewModal } from './PdfPreviewModal'
 import type {
   PhaseReportExportResult,
@@ -440,7 +440,7 @@ export class ReportWorkspaceModal {
         ? `${context.process?.name ?? 'Process'} · `
         : ''
       sequence.add(new Option(
-        `${processPrefix}序列 ${String(context.sequence.number).padStart(2, '0')} · ${context.sequence.name}`,
+        `${processPrefix}${translateUiText(this.getLocale(), `序列 ${String(context.sequence.number).padStart(2, '0')}`)} · ${context.sequence.name}`,
         context.sequence.id
       ))
     })
@@ -538,7 +538,7 @@ export class ReportWorkspaceModal {
       const processPrefix = this.pdfProcessId === ALL_REPORT_PROCESSES_ID
         ? `${first.process?.name ?? 'Process'} · `
         : ''
-      sequenceIdentity.textContent = `${processPrefix}序列 ${String(first.sequence?.number ?? 0).padStart(2, '0')} · ${first.sequence?.name ?? '来源缺失'}`
+      sequenceIdentity.textContent = `${processPrefix}${translateUiText(this.getLocale(), `序列 ${String(first.sequence?.number ?? 0).padStart(2, '0')}`)} · ${first.sequence?.name ?? translateUiText(this.getLocale(), '来源缺失')}`
       const count = document.createElement('span')
       count.className = 'report-sequence-count'
       count.textContent = `${groupContexts.length} 个 Phase`
@@ -688,7 +688,7 @@ export class ReportWorkspaceModal {
       if (candidate.slot.id === context.slot.id || !candidate.phase) return
       replacement.add(
         new Option(
-          `${candidate.process?.name} / 序列 ${String(candidate.sequence?.number).padStart(2, '0')} / Phase ${String(candidate.phase.number).padStart(2, '0')} · ${candidate.phase.name}`,
+          `${candidate.process?.name} / ${translateUiText(this.getLocale(), `序列 ${String(candidate.sequence?.number).padStart(2, '0')}`)} / Phase ${String(candidate.phase.number).padStart(2, '0')} · ${candidate.phase.name}`,
           candidate.slot.id
         )
       )
@@ -753,7 +753,7 @@ export class ReportWorkspaceModal {
       const name = document.createElement('strong')
       name.textContent = report.fileName
       const metadata = document.createElement('span')
-      metadata.textContent = `${this.formatDate(report.createdAt)} · ${isZip ? 'ZIP' : 'PDF'} · ${report.pageCount} 页 · ${this.formatBytes(report.bytes.byteLength)} · 已完成`
+      metadata.textContent = `${this.formatDate(report.createdAt)} · ${isZip ? 'ZIP' : 'PDF'} · ${translateUiText(this.getLocale(), `${report.pageCount} 页`)} · ${this.formatBytes(report.bytes.byteLength)} · ${translateUiText(this.getLocale(), '已完成')}`
       identity.append(name, metadata)
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
@@ -964,7 +964,7 @@ export class ReportWorkspaceModal {
         option.append(
           checkbox,
           document.createTextNode(
-            `序列 ${String(sequence.number).padStart(2, '0')} · ${sequence.name}`
+            `${translateUiText(this.getLocale(), `序列 ${String(sequence.number).padStart(2, '0')}`)} · ${sequence.name}`
           )
         )
         selected.append(option)
@@ -1122,7 +1122,7 @@ export class ReportWorkspaceModal {
       const name = document.createElement('strong')
       name.textContent = matrix.fileName
       const metadata = document.createElement('span')
-      metadata.textContent = `${this.formatDate(matrix.createdAt)} · ${extension} · ${this.formatBytes(matrix.bytes.byteLength)} · 已完成`
+      metadata.textContent = `${this.formatDate(matrix.createdAt)} · ${extension} · ${this.formatBytes(matrix.bytes.byteLength)} · ${translateUiText(this.getLocale(), '已完成')}`
       identity.append(name, metadata)
       const actions = document.createElement('div')
       actions.className = 'report-generated-actions'
@@ -1460,7 +1460,7 @@ export class ReportWorkspaceModal {
     button.type = 'button'
     button.className = 'report-matrix-tree-toggle'
     button.setAttribute('aria-expanded', String(expanded))
-    button.setAttribute('aria-label', `${expanded ? '折叠' : '展开'} ${label}`)
+    button.setAttribute('aria-label', `${translateUiText(this.getLocale(), expanded ? '折叠' : '展开')} ${label}`)
     button.append(createPhaseIcon(ChevronDown, 'report-matrix-tree-chevron'))
     button.addEventListener('click', onToggle)
     return button

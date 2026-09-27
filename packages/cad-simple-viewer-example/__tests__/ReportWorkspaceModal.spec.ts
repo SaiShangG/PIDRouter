@@ -85,6 +85,10 @@ const createHarness = (
   return {
     modal,
     store,
+    setLocale: (next: 'en' | 'zh') => {
+      locale = next
+      modal.refreshLocale()
+    },
     exportReport: exportReport as jest.MockedFunction<ExportReport>,
     exportMatrix
   }
@@ -105,6 +109,24 @@ describe('ReportWorkspaceModal', () => {
   afterEach(() => {
     document.body.replaceChildren()
     document.body.classList.remove('report-pdf-exporting')
+  })
+
+  it('localizes generated report metadata and restores it across language switches', async () => {
+    const { setLocale } = createHarness('en')
+    openExportSettings('en')
+    buttonByText('Merge into one PDF')!.click()
+    await Promise.resolve()
+    await Promise.resolve()
+    buttonByText('Generated files 1')!.click()
+    expect(document.querySelector('.report-generated-identity span')?.textContent).toContain('2 pages')
+    expect(document.querySelector('.report-generated-identity span')?.textContent).toContain('Completed')
+    setLocale('zh')
+    expect(buttonByText('生成记录 1')).toBeDefined()
+    expect(document.querySelector('.report-generated-identity span')?.textContent).toContain('2 页')
+    expect(document.querySelector('.report-generated-identity span')?.textContent).toContain('已完成')
+    setLocale('en')
+    expect(document.querySelector('.report-generated-identity span')?.textContent).not.toMatch(/[\u3400-\u9fff]/u)
+    expect(document.querySelector('.report-generated-identity strong')?.textContent).toBe('report.pdf')
   })
 
   it('opens as an independent localized report workspace', () => {
@@ -269,7 +291,7 @@ describe('ReportWorkspaceModal', () => {
     })
     const { store } = createHarness('zh', state)
     const process = document.querySelector<HTMLSelectElement>(
-      '.report-page-browser [aria-label="PDF Process"]'
+      '.report-page-browser [aria-label="PDF 工艺"]'
     )!
 
     process.value = 'process-2'
@@ -324,15 +346,15 @@ describe('ReportWorkspaceModal', () => {
       ...document.querySelectorAll<HTMLElement>('.report-sequence-node')
     ].map(node => node.textContent)
     expect(sequenceLabels).toEqual(expect.arrayContaining([
-      expect.stringContaining('CIP · 序列 01 · Tank cleaning'),
-      expect.stringContaining('SIP · 序列 01 · Tank cleaning')
+      expect.stringContaining('CIP · Sequence 01 · Tank cleaning'),
+      expect.stringContaining('SIP · Sequence 01 · Tank cleaning')
     ]))
     const sequenceOptions = [
       ...document.querySelectorAll<HTMLOptionElement>('[aria-label="Filter by sequence"] option')
     ].map(option => option.textContent)
     expect(sequenceOptions).toEqual(expect.arrayContaining([
-      'CIP · 序列 01 · Tank cleaning',
-      'SIP · 序列 01 · Tank cleaning'
+      'CIP · Sequence 01 · Tank cleaning',
+      'SIP · Sequence 01 · Tank cleaning'
     ]))
     openExportSettings('en')
     buttonByText('Merge into one PDF')?.click()
@@ -596,10 +618,10 @@ describe('ReportWorkspaceModal', () => {
 
     const scopePanel = document.querySelector('.report-matrix-scope-panel')!
     const process = scopePanel.querySelector<HTMLSelectElement>(
-      '[aria-label="Matrix Process"]'
+      '[aria-label="Matrix 工艺"]'
     )!
     expect(document.querySelector(
-      '.report-matrix-settings-panel [aria-label="Matrix Process"]'
+      '.report-matrix-settings-panel [aria-label="Matrix 工艺"]'
     )).toBeNull()
     expect(process.parentElement?.nextElementSibling?.getAttribute('type')).toBe('search')
 
@@ -641,7 +663,7 @@ describe('ReportWorkspaceModal', () => {
     document.querySelector<HTMLButtonElement>('#matrixExportTab')?.click()
 
     const process = document.querySelector<HTMLSelectElement>(
-      '[aria-label="Matrix Process"]'
+      '[aria-label="Matrix 工艺"]'
     )!
     expect([...process.options].map(option => option.value)).toContain('all')
     process.value = 'all'
