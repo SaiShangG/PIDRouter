@@ -11,6 +11,38 @@ const value = () => ({
 })
 
 describe('HighlightStyleDialog', () => {
+  it.each(['zh', 'en'] as const)('previews the missing drawing categories when Valve already exists in %s', locale => {
+    const source = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
+    const drawing = {
+      Areas: [{
+        ControlModules: [
+          { Name: 'MX' }, { Name: 'PP' }, { Name: 'Valve' }, { Name: 'Valve1' }, { Name: ' pp ' }
+        ]
+      }]
+    }
+    const onApply = jest.fn()
+    const dialog = new HighlightStyleDialog({
+      value: { presentationProfile: source }, getLocale: () => locale,
+      getDrawingDocument: () => drawing, onApply, onClose: jest.fn()
+    })
+    dialog.open()
+    const label = locale === 'en' ? 'Add missing styles from drawing' : '根据图纸补齐'
+    dialog.element.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click()
+    const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
+    expect([...preview.querySelectorAll('.highlight-import-summary strong')]
+      .map(item => item.textContent)).toEqual(['3', '6', '0'])
+    for (const name of ['MX', 'PP', 'Valve1']) {
+      expect(preview.textContent).toContain(locale === 'en' ? `Add device: ${name}` : `新增设备类别：${name}`)
+    }
+    const confirm = [...preview.querySelectorAll<HTMLButtonElement>('button')]
+      .find(button => button.textContent === (locale === 'en' ? 'Confirm additions' : '确认补齐'))!
+    expect(confirm.disabled).toBe(false)
+    confirm.click()
+    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(9)
+    expect(source.devices.map(device => device.name)).toEqual(['Valve'])
+    expect(onApply).not.toHaveBeenCalled()
+  })
+
   it('shows Valve and Utilities when a new project returns empty backend style arrays', async () => {
     const repository = new PhaseWorkspaceRepository({
       baseUrl: '', projectId: 1,
@@ -52,13 +84,14 @@ describe('HighlightStyleDialog', () => {
     const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     expect(preview.parentElement).toBe(document.body)
     expect(preview.textContent).toContain('Valve / OPEN')
-    expect(preview.textContent).toContain(locale === 'en' ? 'No template: PP' : '未匹配模板：PP')
+    expect(preview.textContent).toContain(locale === 'en' ? 'Add device: PP' : '新增设备类别：PP')
+    expect(preview.textContent).toContain(locale === 'en' ? 'Generic ON/OFF states: PP' : '通用 ON/OFF 状态：PP')
     expect(preview.querySelector('[role="radiogroup"]')).toBeNull()
     expect(source.presentationProfile.devices).toEqual([])
     expect(onApply).not.toHaveBeenCalled()
       ;[...preview.querySelectorAll('button')].find(button => button.textContent ===
         (locale === 'en' ? 'Confirm additions' : '确认补齐'))!.click()
-    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(3)
+    expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(5)
     dialog.element.querySelector<HTMLButtonElement>(`[aria-label="${supplementLabel}"]`)!.click()
     const repeat = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     expect([...repeat.querySelectorAll('button')].find(button => button.textContent ===

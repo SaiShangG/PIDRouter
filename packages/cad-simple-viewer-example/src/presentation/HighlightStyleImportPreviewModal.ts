@@ -18,7 +18,7 @@ export interface HighlightStyleImportAnalysis {
 export interface HighlightStyleImportPreviewOptions {
   locale: AppLocale
   analysis: HighlightStyleImportAnalysis
-  defaults?: { addedStates: string[]; unknownCategories: string[] }
+  defaults?: { addedCategories: string[]; addedStates: string[]; unknownCategories: string[] }
   onConfirm(mode: HighlightStyleImportMode): void
   onClose(): void
 }
@@ -80,11 +80,12 @@ export class HighlightStyleImportPreviewModal {
     if (this.options.defaults) {
       const details = document.createElement('ul')
       details.className = 'highlight-import-issues'
-      const { addedStates, unknownCategories } = this.options.defaults
+      const { addedCategories, addedStates, unknownCategories } = this.options.defaults
       const messages = [
+        ...addedCategories.map(value => en ? `Add device: ${value}` : `新增设备类别：${value}`),
         ...addedStates.map(value => en ? `Add state: ${value}` : `新增状态：${value}`),
-        ...unknownCategories.map(value => en ? `No template: ${value}` : `未匹配模板：${value}`),
-        ...(addedStates.length ? [] : [en ? 'No missing styles to add.' : '没有可补齐的样式。'])
+        ...unknownCategories.map(value => en ? `Generic ON/OFF states: ${value}` : `通用 ON/OFF 状态：${value}`),
+        ...(addedCategories.length || addedStates.length ? [] : [en ? 'No missing styles to add.' : '没有可补齐的样式。'])
       ]
       messages.forEach(message => {
         const item = document.createElement('li')
@@ -144,7 +145,8 @@ export class HighlightStyleImportPreviewModal {
         this.close(false)
       })
     confirm.classList.add('phase-workspace-primary')
-    confirm.disabled = analysis.errors.length > 0 || this.options.defaults?.addedStates.length === 0
+    confirm.disabled = analysis.errors.length > 0 || Boolean(this.options.defaults &&
+      !this.options.defaults.addedCategories.length && !this.options.defaults.addedStates.length)
     footer.append(cancel, confirm)
     shell.append(header, body, footer)
     this.element.append(shell)

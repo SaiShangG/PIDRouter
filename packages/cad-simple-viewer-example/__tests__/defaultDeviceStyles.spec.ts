@@ -149,8 +149,8 @@ describe('default device styles', () => {
   it('generates once per category and reports unknown categories without changing its input', () => {
     const source = createDefaultPresentationProfile()
     const result = generateDefaultDeviceStyles(document, source)
-    expect(result.addedCategories).toEqual(['Valve'])
-    expect(result.addedStates).toEqual(['Valve / OPEN', 'Valve / CLOSE', 'Valve / PULSE'])
+    expect(result.addedCategories).toEqual(['Valve', 'PP', 'MX'])
+    expect(result.addedStates).toEqual(['Valve / OPEN', 'Valve / CLOSE', 'Valve / PULSE', 'PP / OPEN', 'PP / CLOSE', 'MX / OPEN', 'MX / CLOSE'])
     expect(result.unknownCategories).toEqual(['PP', 'MX'])
     expect(result.profile.devices[0].states.map(state => state.autoHighlightFlow)).toEqual([true, false, false])
     expect(source.devices).toEqual([])
@@ -183,13 +183,53 @@ describe('default device styles', () => {
       }
     })
     const ids = result.profile.devices.flatMap(device => device.states.map(state => state.id))
-    expect(new Set(ids).size).toBe(6)
+    expect(new Set(ids).size).toBe(8)
   })
 
   it('rejects invalid templates before generating styles', () => {
     expect(() => generateDefaultDeviceStyles(document, createDefaultPresentationProfile(), {
       presentationProfile: { deviceStyles: [{}], utilities: [] }
     })).toThrow('Invalid default styles')
+  })
+
+  it('adds distinct missing Name categories across areas with neutral generic states', () => {
+    const source = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
+    const drawing = {
+      Areas: [
+        { ControlModules: [{ Name: 'MX' }, { Name: 'PP' }, { Name: 'Valve' }, { Name: 'Valve1' }] },
+        { ControlModules: [{ Name: ' pp ' }, { Name: 'mx' }, { Name: 'Valve1' }, { Name: ' ' }, {}] },
+        {}
+      ]
+    }
+    const result = generateDefaultDeviceStyles(drawing, source)
+    expect(result.addedCategories).toEqual(['MX', 'PP', 'Valve1'])
+    expect(result.addedStates).toHaveLength(6)
+    expect(result.profile.devices[0]).toEqual(source.devices[0])
+    expect(result.profile.utilities).toEqual(source.utilities)
+    for (const device of result.profile.devices.slice(1)) {
+      expect(device.states.map(state => state.displayName)).toEqual(['ON', 'OFF'])
+      expect(device.states.every(state => state.flowBehavior === 'neutral' && !state.autoHighlightFlow)).toBe(true)
+    }
+    const persisted = toPersistedPresentationProfile(result.profile)
+    const restored = normalizePresentationProfile(persisted)
+    expect(restored.devices.map(device => device.name)).toEqual(['Valve', 'MX', 'PP', 'Valve1'])
+    const repeated = generateDefaultDeviceStyles(drawing, restored)
+    expect(repeated.addedCategories).toEqual([])
+    expect(repeated.addedStates).toEqual([])
+    expect(repeated.unknownCategories).toEqual([])
+    expect(repeated.profile).toEqual(restored)
+  })
+
+  it('does not add generic states to an existing category without a template', () => {
+    const source = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
+    source.devices.push({
+      id: 'custom-pump', name: 'pp', order: 1,
+      states: [{ ...source.devices[0].states[0], id: 'custom-start', key: 'START', displayName: 'Start' }]
+    })
+    const result = generateDefaultDeviceStyles({ Areas: [{ ControlModules: [{ Name: ' PP ' }] }] }, source)
+    expect(result.addedCategories).toEqual([])
+    expect(result.addedStates).toEqual([])
+    expect(result.profile).toEqual(source)
   })
 
   it('initializes with the same parsed data as import and preserves unrelated presentation settings', () => {

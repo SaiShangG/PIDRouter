@@ -53,12 +53,26 @@ const supplementDeviceStyles = (
   const addedStates: string[] = []
   const unknownCategories: string[] = []
   categories.forEach((name, category) => {
-    const template = devicesByCategory.get(category)
-    if (!template || !template.states.length) {
-      unknownCategories.push(name)
-      return
-    }
     let device = profile.devices.find(candidate => normalizeCategory(candidate.name) === category)
+    const configuredTemplate = devicesByCategory.get(category)
+    if (device && !configuredTemplate) return
+    if (!configuredTemplate) unknownCategories.push(name)
+    const template = configuredTemplate ?? {
+      id: `builtin:${encodeURIComponent(category)}`,
+      states: [
+        { key: 'OPEN', displayName: 'ON', color: 0x00c853 },
+        { key: 'CLOSE', displayName: 'OFF', color: 0xb8b8b8 }
+      ].map((state, order) => ({
+        ...state,
+        id: `builtin:${encodeURIComponent(category)}:${state.key}`,
+        lineWidthPx: 3,
+        opacity: 1,
+        enabled: true,
+        autoHighlightFlow: false,
+        flowBehavior: 'neutral' as const,
+        order
+      }))
+    }
     if (!device) {
       device = {
         id: uniqueId(template.id),
@@ -79,7 +93,7 @@ const supplementDeviceStyles = (
       addedStates.push(`${name} / ${state.key}`)
     })
   })
-  if (addedStates.length) {
+  if (addedCategories.length || addedStates.length) {
     profile.defaultStyleSeed = { status: 'generated', templateVersion: defaultTemplateVersion }
   }
   return { profile, addedCategories, addedStates, unknownCategories, templateVersion: defaultTemplateVersion }
