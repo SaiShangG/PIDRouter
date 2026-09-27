@@ -60,8 +60,8 @@ export const parseHighlightStyleDocument = (input: unknown): StyleParseResult =>
       }
     }
   }
-  ;(source.deviceStyles as unknown[]).forEach((value, index) => validate(value, `deviceStyles[${index}]`, true))
-  ;(source.utilities as unknown[]).forEach((value, index) => validate(value, `utilities[${index}]`, false))
+    ; (source.deviceStyles as unknown[]).forEach((value, index) => validate(value, `deviceStyles[${index}]`, true))
+    ; (source.utilities as unknown[]).forEach((value, index) => validate(value, `utilities[${index}]`, false))
   return errors.length
     ? { ok: false, errors }
     : { ok: true, profile: normalizePresentationProfile(source) }

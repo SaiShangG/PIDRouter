@@ -140,9 +140,9 @@ export class HighlightStyleImportPreviewModal {
     const confirm = this.button(this.options.defaults
       ? (en ? 'Confirm additions' : '确认补齐')
       : (en ? 'Confirm import' : '确认导入'), () => {
-      this.options.onConfirm(this.mode)
-      this.close(false)
-    })
+        this.options.onConfirm(this.mode)
+        this.close(false)
+      })
     confirm.classList.add('phase-workspace-primary')
     confirm.disabled = analysis.errors.length > 0 || this.options.defaults?.addedStates.length === 0
     footer.append(cancel, confirm)

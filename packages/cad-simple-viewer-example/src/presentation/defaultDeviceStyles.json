@@ -1,13 +1,55 @@
 {
   "presentationProfile": {
     "deviceStyles": [
-      { "id": "builtin:valve:OPEN", "deviceType": "Valve", "deviceState": "OPEN", "displayName": "ON", "color": "#00C853", "lineWidthPx": 3, "opacity": 0.5, "flowBehavior": "conducting", "autoHighlightFlow": true },
-      { "id": "builtin:valve:CLOSE", "deviceType": "Valve", "deviceState": "CLOSE", "displayName": "OFF", "color": "#B8B8B8", "lineWidthPx": 3, "opacity": 0.5, "flowBehavior": "blocking", "autoHighlightFlow": false },
-      { "id": "builtin:valve:PULSE", "deviceType": "Valve", "deviceState": "PULSE", "displayName": "PULSE", "color": "#00C853", "lineWidthPx": 3, "opacity": 1, "flowBehavior": "neutral", "autoHighlightFlow": false }
+      {
+        "id": "builtin:valve:OPEN",
+        "deviceType": "Valve",
+        "deviceState": "OPEN",
+        "displayName": "ON",
+        "color": "#00C853",
+        "lineWidthPx": 3,
+        "opacity": 0.5,
+        "flowBehavior": "conducting",
+        "autoHighlightFlow": true
+      },
+      {
+        "id": "builtin:valve:CLOSE",
+        "deviceType": "Valve",
+        "deviceState": "CLOSE",
+        "displayName": "OFF",
+        "color": "#B8B8B8",
+        "lineWidthPx": 3,
+        "opacity": 0.5,
+        "flowBehavior": "blocking",
+        "autoHighlightFlow": false
+      },
+      {
+        "id": "builtin:valve:PULSE",
+        "deviceType": "Valve",
+        "deviceState": "PULSE",
+        "displayName": "PULSE",
+        "color": "#00C853",
+        "lineWidthPx": 3,
+        "opacity": 1,
+        "flowBehavior": "neutral",
+        "autoHighlightFlow": false
+      }
     ],
     "utilities": [
-      { "id": "builtin:utility:1", "name": "Utility 1", "color": "#10D7DA", "lineWidthPx": 4, "opacity": 0.5 },
-      { "id": "builtin:utility:2", "name": "Utility 2", "color": "#C79C00", "lineWidthPx": 3, "opacity": 0.5 }
+      {
+        "id": "builtin:utility:1",
+        "name": "Utility 1",
+        "color": "#10D7DA",
+        "lineWidthPx": 4,
+        "opacity": 0.5
+      },
+      {
+        "id": "builtin:utility:2",
+        "name": "Utility 2",
+        "color": "#C79C00",
+        "lineWidthPx": 3,
+        "opacity": 0.5
+      }
     ]
   }
 }

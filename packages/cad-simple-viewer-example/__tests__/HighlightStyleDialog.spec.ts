@@ -31,8 +31,8 @@ describe('HighlightStyleDialog', () => {
     expect(dialog.element.querySelector<HTMLInputElement>('[aria-label="设备名称"]')?.value).toBe('Valve')
     expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="右键显示名称"]')]
       .map(input => input.value)).toEqual(['ON', 'OFF', 'PULSE'])
-    ;[...dialog.element.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-      .find(button => button.textContent === 'Utility')!.click()
+      ;[...dialog.element.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+        .find(button => button.textContent === 'Utility')!.click()
     expect([...dialog.element.querySelectorAll<HTMLInputElement>('[aria-label="Utility 名称"]')]
       .map(input => input.value)).toEqual(['Utility 1', 'Utility 2'])
     expect(onApply).not.toHaveBeenCalled()
@@ -56,8 +56,8 @@ describe('HighlightStyleDialog', () => {
     expect(preview.querySelector('[role="radiogroup"]')).toBeNull()
     expect(source.presentationProfile.devices).toEqual([])
     expect(onApply).not.toHaveBeenCalled()
-    ;[...preview.querySelectorAll('button')].find(button => button.textContent ===
-      (locale === 'en' ? 'Confirm additions' : '确认补齐'))!.click()
+      ;[...preview.querySelectorAll('button')].find(button => button.textContent ===
+        (locale === 'en' ? 'Confirm additions' : '确认补齐'))!.click()
     expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(3)
     dialog.element.querySelector<HTMLButtonElement>(`[aria-label="${supplementLabel}"]`)!.click()
     const repeat = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
@@ -97,7 +97,7 @@ describe('HighlightStyleDialog', () => {
     dialog.element.querySelector<HTMLButtonElement>('[aria-label="根据图纸补齐"]')!.click()
     const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     drawing = undefined
-    ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认补齐')!.click()
+      ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认补齐')!.click()
     expect(dialog.element.querySelectorAll('[data-state-id]')).toHaveLength(0)
     expect(dialog.element.textContent).toContain('图纸已切换')
   })
@@ -538,7 +538,7 @@ describe('HighlightStyleDialog', () => {
     const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     expect([...preview.querySelectorAll('.highlight-import-summary strong')]
       .map(item => item.textContent)).toEqual(['1', '3', '2'])
-    ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认导入')!.click()
+      ;[...preview.querySelectorAll('button')].find(button => button.textContent === '确认导入')!.click()
     const imported = (dialog as unknown as { draft: ReturnType<typeof value> }).draft.presentationProfile
     const initialized = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
     expect(imported.devices).toEqual(initialized.devices)
@@ -551,10 +551,12 @@ describe('HighlightStyleDialog', () => {
     const dialog = new HighlightStyleDialog({ value: source, getLocale: () => locale, onClose: jest.fn() })
     dialog.open()
     await (dialog as unknown as { importStyles(file: File): Promise<void> }).importStyles({
-      text: async () => JSON.stringify({ presentationProfile: {
-        ...defaultStyles.presentationProfile,
-        utilities: [{ ...defaultStyles.presentationProfile.utilities[0], opacity: 2 }]
-      } })
+      text: async () => JSON.stringify({
+        presentationProfile: {
+          ...defaultStyles.presentationProfile,
+          utilities: [{ ...defaultStyles.presentationProfile.utilities[0], opacity: 2 }]
+        }
+      })
     } as File)
     const preview = document.querySelector<HTMLElement>('.highlight-import-preview-modal')!
     expect(preview.textContent).toContain(locale === 'en'

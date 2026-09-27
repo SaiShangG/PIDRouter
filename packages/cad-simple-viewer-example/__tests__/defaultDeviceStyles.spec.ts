@@ -5,9 +5,13 @@ import templates from '../src/presentation/defaultDeviceStyles.json'
 import { findPhaseOverlayStyleWarnings } from '../src/phase/phaseOverlayStyleResolver'
 import { parseHighlightStyleDocument } from '../src/presentation/highlightStyleDocument'
 
-const document = { Areas: [{ ControlModules: [
-  { Name: 'Valve' }, { Name: ' valve ' }, { Name: 'PP' }, { Name: 'MX' }, { Name: '' }
-] }] }
+const document = {
+  Areas: [{
+    ControlModules: [
+      { Name: 'Valve' }, { Name: ' valve ' }, { Name: 'PP' }, { Name: 'MX' }, { Name: '' }
+    ]
+  }]
+}
 
 describe('default device styles', () => {
   it('parses exported styles without changing values or references', () => {
@@ -29,14 +33,16 @@ describe('default device styles', () => {
     profile.utilities[0].opacity = 2
     profile.deviceStyles[0].lineWidthPx = 13
     const result = parseHighlightStyleDocument({ presentationProfile: profile })
-    expect(result).toMatchObject({ ok: false, errors: expect.arrayContaining([
-      { code: 'value', path: 'deviceStyles[0].lineWidthPx' },
-      { code: 'duplicateId', path: 'deviceStyles[3].id' },
-      { code: 'duplicateState', path: 'deviceStyles[3].deviceState' },
-      { code: 'duplicateId', path: 'utilities[0].id' },
-      { code: 'value', path: 'utilities[0].color' },
-      { code: 'value', path: 'utilities[0].opacity' }
-    ]) })
+    expect(result).toMatchObject({
+      ok: false, errors: expect.arrayContaining([
+        { code: 'value', path: 'deviceStyles[0].lineWidthPx' },
+        { code: 'duplicateId', path: 'deviceStyles[3].id' },
+        { code: 'duplicateState', path: 'deviceStyles[3].deviceState' },
+        { code: 'duplicateId', path: 'utilities[0].id' },
+        { code: 'value', path: 'utilities[0].color' },
+        { code: 'value', path: 'utilities[0].opacity' }
+      ])
+    })
     expect(parseHighlightStyleDocument({})).toMatchObject({ ok: false })
   })
 
