@@ -79,6 +79,7 @@ import { DrawingLibraryModal } from './drawing-library/DrawingLibraryModal'
 import { injectDrawingLibraryStyles } from './drawing-library/drawingLibraryStyles'
 import { injectParsingDetailsStyles } from './drawing-library/parsingDetailsStyles'
 import { extractPdiArchive } from './drawing-library/pdiArchive'
+import { preloadDrawingParser } from './drawing-library/preloadDrawingParser'
 import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssistantDrawingRepository'
 import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
@@ -1489,6 +1490,10 @@ class CadViewerApp {
     try {
       applyUiTheme('light', this.viewerPane)
 
+      const [dwgParser, dxfParser] = await Promise.all([
+        preloadDrawingParser('drawing.dwg'),
+        preloadDrawingParser('drawing.dxf')
+      ])
       AcApDocManager.createInstance({
         container: this.container,
         busyIndicatorHost: this.container,
@@ -1506,8 +1511,8 @@ class CadViewerApp {
         },
         webworkerFileUrls: {
           mtextRender: './workers/mtext-renderer-worker.js',
-          dxfParser: './workers/dxf-parser-worker.js',
-          dwgParser: './workers/libredwg-parser-worker.js'
+          dxfParser,
+          dwgParser
         },
         htmlViewerRuntimeUrl: './viewer-runtime.iife.js'
       })
