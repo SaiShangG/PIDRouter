@@ -36,7 +36,7 @@ describe('LoginView', () => {
   it('separates the photo and login panel and localizes the image description', () => {
     setup()
     const image = document.querySelector<HTMLImageElement>('.login-media img')!
-    expect(image.getAttribute('src')).toBe('./biopharma-login.jpg')
+    expect(image.getAttribute('src')).toBe('./biopharma-login.webp')
     expect(image.alt).toBe('工业车间中的不锈钢容器与工艺管道')
     expect(document.querySelector('.login-panel form')).not.toBeNull()
     expect(document.querySelector('.login-footer')).toBeNull()

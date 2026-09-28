@@ -465,22 +465,6 @@
       display: none;
     }
 
-    .open-main-button {
-      pointer-events: auto;
-      border: 1px solid #60a5fa;
-      background: #2563eb;
-      color: #ffffff;
-      border-radius: 10px;
-      padding: 0.7rem 1.2rem;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .open-main-button:hover {
-      background: #1d4ed8;
-    }
-
     #fileInputElement {
       display: none;
     }
@@ -626,7 +610,6 @@
       <section class="viewer-canvas-area">
         <div class="empty-state" id="emptyState">
           <p id="emptyPhasePrompt" role="status" hidden></p>
-          <button type="button" class="open-main-button" id="centerOpenButton">Open File</button>
         </div>
         <input type="file" id="fileInputElement" accept=".dxf,.dwg" />
         <div id="cad-container"></div>

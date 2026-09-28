@@ -17,6 +17,7 @@ import {
   AcApOpenDatabaseOptions,
   AcApOpenViewMode,
   AcApQNewCmd,
+  AcApSettingManager,
   AcEdOpenMode,
   type AcTrView2d,
   applyUiTheme,
@@ -107,6 +108,7 @@ import {
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { resolveWorkspacePhase, shouldHotSwitchPhase } from './phase/phaseActivationUtils'
+import { WorkspaceLoading, type WorkspaceLoadingTask } from './phase/workspaceLoading'
 import {
   type PhaseConfigImportLabels,
   PhaseConfigImportModal
@@ -390,7 +392,6 @@ class CadViewerApp {
   private readonly account: AccountControls
   private container: HTMLDivElement
   private fileInput: HTMLInputElement
-  private centerOpenButton: HTMLButtonElement
   private viewerPane: HTMLElement
   private emptyState: HTMLDivElement
   private predefinedButtons: NodeListOf<HTMLButtonElement>
@@ -428,6 +429,15 @@ class CadViewerApp {
   private isInitialized = false
   private hasOpenedFile = false
   private isLoadingFile = false
+  private readonly workspaceLoading = new WorkspaceLoading({
+    show: message => AcApDocManager.instance.showBusyIndicator(message),
+    setMessage: message => AcApDocManager.instance.setBusyIndicatorMessage(message),
+    hide: () => AcApDocManager.instance.hideBusyIndicator(),
+    changed: active => {
+      if (active) this.updateEmptyStateVisibility()
+      else this.finishLoadingState()
+    }
+  })
   private openHighlightRoots = new Map<
     AcDbObjectId,
     Map<string, PreviewRoot>
@@ -518,9 +528,6 @@ class CadViewerApp {
     this.fileInput = document.getElementById(
       'fileInputElement'
     ) as HTMLInputElement
-    this.centerOpenButton = document.getElementById(
-      'centerOpenButton'
-    ) as HTMLButtonElement
     this.viewerPane = document.getElementById('viewerPane') as HTMLElement
     this.emptyState = document.getElementById('emptyState') as HTMLDivElement
     this.predefinedButtons = document.querySelectorAll(
@@ -677,10 +684,6 @@ class CadViewerApp {
     this.syncPhaseContextBar()
     this.syncDockMenuState()
     this.syncViewerToolbarMenuState()
-    this.centerOpenButton.textContent = translateUiText(
-      this.appLocale,
-      'Open File'
-    )
     this.updateEmptyStateVisibility()
     localizeDom(document, this.appLocale)
     this.account.refreshLocale()
@@ -1309,10 +1312,6 @@ class CadViewerApp {
     this.viewerToolbarButton.textContent = translateUiText(this.appLocale, 'Toolbar')
   }
 
-  private openFilePicker() {
-    this.fileInput.click()
-  }
-
   private async applyToolbarLayout(presetId: string) {
     await this.initialize()
 
@@ -1489,6 +1488,7 @@ class CadViewerApp {
 
     try {
       applyUiTheme('light', this.viewerPane)
+      AcApSettingManager.instance.set('isShowCommandLine', false)
 
       const [dwgParser, dxfParser] = await Promise.all([
         preloadDrawingParser('drawing.dwg'),
@@ -1645,6 +1645,16 @@ class CadViewerApp {
   private async loadProjectWorkspace(
     project: ProjectRecord,
     restorePhase = false
+  ): Promise<boolean> {
+    return this.workspaceLoading.run(
+      translate(this.appLocale, 'loadingProject'),
+      () => this.loadProjectWorkspaceData(project, restorePhase)
+    )
+  }
+
+  private async loadProjectWorkspaceData(
+    project: ProjectRecord,
+    restorePhase: boolean
   ): Promise<boolean> {
     const token = ++this.projectLoadToken
     const projectDetails = await this.projectRepository.get(project.id)
@@ -3557,6 +3567,29 @@ class CadViewerApp {
     phaseId: string,
     captureCurrentState = true
   ) {
+    return this.workspaceLoading.run(
+      translate(this.appLocale, 'loadingPhase'),
+      async loading => {
+        try {
+          await this.loadAndActivateWorkspacePhase(
+            processId, sequenceId, phaseId, captureCurrentState, loading
+          )
+        } catch (error) {
+          if (!loading.isCurrent()) return
+          this.invalidateLoadedPhaseBinding()
+          throw error
+        }
+      }
+    )
+  }
+
+  private async loadAndActivateWorkspacePhase(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    captureCurrentState: boolean,
+    loading: WorkspaceLoadingTask
+  ) {
     const activationToken = ++this.phaseActivationToken
     if (captureCurrentState) this.captureLoadedPhaseState()
     if (captureCurrentState && this.loadedPhase) {
@@ -3567,7 +3600,7 @@ class CadViewerApp {
         this.loadedPhase.phaseId
       )
     }
-    if (activationToken !== this.phaseActivationToken) return
+    if (activationToken !== this.phaseActivationToken || !loading.isCurrent()) return
 
     const state = this.phaseStore.snapshot()
     const process = state.processes.find(item => item.id === processId)
@@ -3581,12 +3614,12 @@ class CadViewerApp {
       state.drawingAssets,
       phaseIndex
     )
-    if (activationToken !== this.phaseActivationToken) return
+    if (activationToken !== this.phaseActivationToken || !loading.isCurrent()) return
     if (this.phaseSaveState.has(cachedPhase.id) && !this.phaseSaveState.get(cachedPhase).saved) {
       await this.saveBackendPhase(processId, sequenceId, phaseId)
-      if (activationToken !== this.phaseActivationToken) return
+      if (activationToken !== this.phaseActivationToken || !loading.isCurrent()) return
       phase = await repository.loadPhase(phaseId, state.drawingAssets, phaseIndex)
-      if (activationToken !== this.phaseActivationToken) return
+      if (activationToken !== this.phaseActivationToken || !loading.isCurrent()) return
     }
     this.phaseSaveState.accept(phase, phaseIndex + 1)
     this.phaseStore.replacePhase(processId, sequenceId, phase)
@@ -3628,7 +3661,8 @@ class CadViewerApp {
       this.invalidateLoadedPhaseBinding()
       throw new Error('Drawing asset was not found')
     }
-    const success = await this.openPhaseDrawing(drawing)
+    const success = await this.openPhaseDrawing(drawing, loading)
+    if (!loading.isCurrent()) return
     if (!success && this.pendingPhase?.token === token) {
       this.invalidateLoadedPhaseBinding()
       throw new Error(`Unable to open ${refreshedPhase.drawing.displayName}`)
@@ -3659,12 +3693,24 @@ class CadViewerApp {
     }
   }
 
-  private async openPhaseDrawing(drawing: DrawingAssetRef) {
+  private async openPhaseDrawing(drawing: DrawingAssetRef, loading: WorkspaceLoadingTask) {
     const activationToken = this.phaseActivationToken
     const repository = this.phaseRepository
-    const isCurrent = () => activationToken === this.phaseActivationToken && repository === this.phaseRepository
+    const isCurrent = () => loading.isCurrent() && activationToken === this.phaseActivationToken && repository === this.phaseRepository
     await this.initialize()
     if (!isCurrent()) return false
+    const open = async (work: () => Promise<boolean>) => {
+      if (!isCurrent()) return false
+      loading.setMessage(translate(this.appLocale, 'preparingDrawing'))
+      const progress = AcApDocManager.instance.context.doc.database.events.openProgress
+      const handoff = () => loading.handoff()
+      progress.addEventListener(handoff)
+      try {
+        return await work()
+      } finally {
+        progress.removeEventListener(handoff)
+      }
+    }
     const options: AcApOpenDatabaseOptions = {
       minimumChunkSize: 1000,
       progressiveRendering: false,
@@ -3676,18 +3722,26 @@ class CadViewerApp {
       const backendFileMatch = /^file:(\d+)$/.exec(drawing.id)
       if (backendFileMatch) {
         try {
+          loading.setMessage(translate(this.appLocale, 'downloadingDrawing'))
           const pdiContent = await this.drawingLibraryRepository.getContent(
             backendFileMatch[1]
           )
+          if (!isCurrent()) return false
+          loading.setMessage(translate(this.appLocale, 'extractingDrawing'))
+          await new Promise(resolve => setTimeout(resolve, 0))
+          if (!isCurrent()) return false
           const extracted = await extractPdiArchive(pdiContent)
+          if (!isCurrent()) return false
+          loading.setMessage(translate(this.appLocale, 'preparingDrawing'))
+          await new Promise(resolve => setTimeout(resolve, 0))
           if (!isCurrent()) return false
           useFlowConnectionDocument(extracted.flowConnectionJsonText)
           this.valveDebugFeature?.setGraphDocument(flowConnectionDocument)
-          const success = await AcApDocManager.instance.openDocument(
+          const success = await open(() => AcApDocManager.instance.openDocument(
             extracted.cadFileName,
             extracted.cadContent,
             options
-          )
+          ))
           if (!isCurrent()) return false
           if (success) {
             selectFlowConnectionDocumentAndView(
@@ -3703,25 +3757,29 @@ class CadViewerApp {
         }
       }
       const success = drawing.url
-        ? AcApDocManager.instance.openUrl(drawing.url, options)
+        ? await open(() => AcApDocManager.instance.openUrl(drawing.url!, options))
         : false
+      if (!isCurrent()) return false
       if (success) selectFlowConnectionDocumentAndView()
       return success
     }
     if (drawing.kind === 'local') {
       const stored = await this.drawingAssetStore.get(drawing.id)
-      if (!stored) return false
-      const success = await AcApDocManager.instance.openDocument(
+      if (!stored || !isCurrent()) return false
+      const success = await open(() => AcApDocManager.instance.openDocument(
         stored.fileName,
         stored.content,
         options
-      )
+      ))
+      if (!isCurrent()) return false
       if (success) selectFlowConnectionDocumentAndView()
       return success
     }
     const cmd = new AcApQNewCmd()
-    await cmd.execute(AcApDocManager.instance.context)
-    return true
+    return open(async () => {
+      await cmd.execute(AcApDocManager.instance.context)
+      return isCurrent()
+    })
   }
 
   private setupFileHandling() {
@@ -3731,10 +3789,6 @@ class CadViewerApp {
         void this.loadLocalFile(file)
       }
       this.fileInput.value = ''
-    })
-
-    this.centerOpenButton.addEventListener('click', () => {
-      this.openFilePicker()
     })
   }
 
@@ -4902,7 +4956,6 @@ class CadViewerApp {
     const needsPhase = Boolean(this.activeProject) && !this.phaseStore.snapshot().processes.some(
       process => process.sequences.some(sequence => sequence.phases.length > 0)
     )
-    this.centerOpenButton.hidden = needsPhase
     const phasePrompt = document.getElementById('emptyPhasePrompt')
     if (phasePrompt) {
       phasePrompt.hidden = !needsPhase
@@ -4910,7 +4963,7 @@ class CadViewerApp {
     }
     this.emptyState.classList.toggle(
       'hidden',
-      this.hasOpenedFile || this.isLoadingFile
+      this.hasOpenedFile || this.isLoadingFile || this.workspaceLoading.active
     )
   }
 

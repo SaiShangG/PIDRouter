@@ -29,7 +29,7 @@ export class LoginView {
   ) {
     this.element.className = 'login-page'
     this.element.setAttribute('aria-labelledby', 'login-title')
-    this.element.innerHTML = '<aside class="login-media"><img class="login-photo" src="./biopharma-login.jpg" alt="" fetchpriority="high" /></aside><div class="login-panel"><header class="login-header"><div class="login-brand"><span class="login-mark" aria-hidden="true">PID</span><strong>PID Viewer Lite</strong></div></header><section class="login-content"><div class="login-form-wrap"></div></section></div>'
+    this.element.innerHTML = '<aside class="login-media"><img class="login-photo" src="./biopharma-login.webp" alt="" fetchpriority="high" /></aside><div class="login-panel"><header class="login-header"><div class="login-brand"><span class="login-mark" aria-hidden="true">PID</span><strong>PID Viewer Lite</strong></div></header><section class="login-content"><div class="login-form-wrap"></div></section></div>'
     this.language.type = 'button'
     this.language.className = 'login-icon-button login-language'
     this.language.append(createPhaseIcon(Languages), this.languageLabel)

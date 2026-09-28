@@ -89,6 +89,11 @@ const messages = {
     phaseChangeStyles: '高亮样式配置',
     noPhase: '尚未创建 Phase',
     addPhasePrompt: '请添加 Phase',
+    loadingProject: '正在读取项目...',
+    loadingPhase: '正在读取阶段...',
+    downloadingDrawing: '正在下载 PDI 图纸...',
+    extractingDrawing: '正在解包 PDI 图纸...',
+    preparingDrawing: '正在准备解析图纸...',
     switchTo: '切换为英文',
     languageButton: '切换为英文'
   },
@@ -166,6 +171,11 @@ const messages = {
     phaseChangeStyles: 'Highlight style settings',
     noPhase: 'No Phase created',
     addPhasePrompt: 'Please add a Phase',
+    loadingProject: 'Loading project...',
+    loadingPhase: 'Loading Phase...',
+    downloadingDrawing: 'Downloading PDI drawing...',
+    extractingDrawing: 'Extracting PDI drawing...',
+    preparingDrawing: 'Preparing drawing parser...',
     switchTo: 'Switch to Chinese',
     languageButton: 'Switch to Chinese'
   }
