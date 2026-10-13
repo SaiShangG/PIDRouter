@@ -2,7 +2,6 @@
 export const NETWORK_DEFAULTS = {
   frontendHost: '127.0.0.1',
   frontendPort: 5173,
-  previewPort: 4173,
   processAssistantApiUrl: 'http://127.0.0.1:5153',
   useProxy: true,
   projectId: 1

@@ -70,14 +70,17 @@ export interface CopySequenceRequest extends NewSequenceRequest {
   sequenceId: string
 }
 
-export interface CopyPhaseRequest {
+interface CopyPhaseRequestBase {
   processId: string
   sourceSequenceId: string
   sourcePhaseId: string
   targetSequenceId: string
-  number: number
-  name: string
 }
+
+export type CopyPhaseRequest = CopyPhaseRequestBase & (
+  | { mode: 'create'; number: number; name: string }
+  | { mode: 'replace'; targetPhaseId: string }
+)
 
 export interface PhaseWorkspacePanelActions {
   createProcess(name: string): void
@@ -637,18 +640,12 @@ export class PhaseWorkspacePanel {
     source.readOnly = true
     source.value = `Phase ${String(sourcePhase.number).padStart(2, '0')} · ${sourcePhase.name}`
     source.setAttribute('aria-label', '来源 Phase')
-    const target = document.createElement('select')
-    target.required = true
-    target.setAttribute('aria-label', '目标序列')
-    process.sequences.forEach(sequence => {
-      target.add(
-        new Option(
-          `${String(sequence.number).padStart(2, '0')} · ${sequence.name}`,
-          sequence.id
-        )
-      )
-    })
-    target.value = sourceSequence.id
+    const mode = document.createElement('select')
+    mode.setAttribute('aria-label', '复制方式')
+    mode.add(new Option('创建新 Phase', 'create'))
+    mode.add(new Option('替换现有 Phase', 'replace'))
+    const targetPhase = document.createElement('select')
+    targetPhase.setAttribute('aria-label', '目标 Phase')
     const number = document.createElement('input')
     number.type = 'number'
     number.min = '1'
@@ -659,16 +656,28 @@ export class PhaseWorkspacePanel {
     name.setAttribute('aria-label', '新 Phase 名称')
     const copySuffix = this.getLocale() === 'zh' ? '副本' : 'Copy'
     name.value = `${sourcePhase.name} ${copySuffix}`
-    const setNextNumber = () => {
-      const targetSequence = process.sequences.find(
-        sequence => sequence.id === target.value
-      )
-      number.value = String(
-        Math.max(0, ...(targetSequence?.phases.map(phase => phase.number) ?? [])) + 1
-      )
+    number.value = String(Math.max(0, ...sourceSequence.phases.map(phase => phase.number)) + 1)
+    const modeField = this.createFormField('复制方式', mode)
+    const targetPhaseField = this.createFormField('目标 Phase', targetPhase)
+    const numberField = this.createModalField('新 Phase 编号', number)
+    const nameField = this.createModalField('新 Phase 名称', name)
+    const refreshTarget = () => {
+      targetPhase.replaceChildren()
+      sourceSequence.phases
+        .filter(phase => phase.id !== sourcePhase.id)
+        .forEach(phase => {
+          targetPhase.add(new Option(`Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`, phase.id))
+        })
+      const replacing = mode.value === 'replace'
+      targetPhaseField.hidden = !replacing
+      numberField.hidden = replacing
+      nameField.hidden = replacing
+      targetPhase.disabled = !replacing
+      number.disabled = replacing
+      name.disabled = replacing
     }
-    setNextNumber()
-    target.addEventListener('change', setNextNumber)
+    mode.addEventListener('change', refreshTarget)
+    refreshTarget()
 
     const actions = document.createElement('footer')
     actions.className = 'phase-workspace-modal-actions'
@@ -678,9 +687,10 @@ export class PhaseWorkspacePanel {
     actions.append(cancel, submit)
     form.append(
       this.createModalField('来源 Phase', source),
-      this.createFormField('目标序列', target),
-      this.createModalField('新 Phase 编号', number),
-      this.createModalField('新 Phase 名称', name),
+      modeField,
+      targetPhaseField,
+      numberField,
+      nameField,
       actions
     )
     dialog.append(header, form)
@@ -698,37 +708,48 @@ export class PhaseWorkspacePanel {
       if (event.key === 'Escape') closeModal()
     })
     const validate = createFormValidator(form, [
-      { element: target },
+      {
+        element: targetPhase,
+        isValid: () => mode.value !== 'replace' || Boolean(targetPhase.value)
+      },
       {
         element: number,
         isValid: () => {
-          const targetSequence = process.sequences.find(sequence => sequence.id === target.value)
+          if (mode.value === 'replace') return true
           const phaseNumber = Number(number.value)
           return Number.isInteger(phaseNumber) && phaseNumber > 0 &&
-            !targetSequence?.phases.some(phase => phase.number === phaseNumber)
+            !sourceSequence.phases.some(phase => phase.number === phaseNumber)
         }
       },
-      { element: name }
+      { element: name, isValid: () => mode.value === 'replace' || Boolean(name.value.trim()) }
     ])
     form.addEventListener('submit', async event => {
       event.preventDefault()
       if (submit.disabled || !validate()) return
       const phaseNumber = Number(number.value)
       const phaseName = name.value.trim()
-      const targetSequence = process.sequences.find(
-        sequence => sequence.id === target.value
-      )
-      if (!targetSequence) return
       submit.disabled = true
       try {
-        await this.actions.copyPhase({
+        const common = {
           processId: process.id,
           sourceSequenceId: sourceSequence.id,
           sourcePhaseId: sourcePhase.id,
-          targetSequenceId: targetSequence.id,
-          number: phaseNumber,
-          name: phaseName
-        })
+          targetSequenceId: sourceSequence.id
+        }
+        if (mode.value === 'replace') {
+          const selected = sourceSequence.phases.find(phase => phase.id === targetPhase.value)
+          if (!selected) return
+          const confirmed = await this.phaseDeleteConfirmation.confirm({
+            title: '替换 Phase？',
+            message: `${translateUiText(this.getLocale(), '目标 Phase')} ${String(selected.number).padStart(2, '0')} · ${selected.name}：${translateUiText(this.getLocale(), '名称和内容将被来源 Phase 替换，编号和 ID 保持不变。原有内容无法撤销。')}`,
+            confirmLabel: '确认替换 Phase',
+            tone: 'danger'
+          })
+          if (!confirmed) return
+          await this.actions.copyPhase({ ...common, mode: 'replace', targetPhaseId: selected.id })
+        } else {
+          await this.actions.copyPhase({ ...common, mode: 'create', number: phaseNumber, name: phaseName })
+        }
         modal.remove()
         this.render()
       } finally {
@@ -737,7 +758,7 @@ export class PhaseWorkspacePanel {
     })
     this.element.append(modal)
     localizeDom(modal, this.getLocale())
-    target.focus()
+    mode.focus()
   }
 
   private openSequenceEditorModal(

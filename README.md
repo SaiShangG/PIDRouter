@@ -91,9 +91,8 @@ All local addresses and ports can be set in `packages/cad-simple-viewer-example/
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `PID_FRONTEND_HOST` | `127.0.0.1` | Host used by the development and preview servers |
+| `PID_FRONTEND_HOST` | `127.0.0.1` | Development server host |
 | `PID_FRONTEND_PORT` | `5173` | Development server port |
-| `PID_PREVIEW_PORT` | `4173` | Production preview server port |
 | `VITE_PROCESS_ASSISTANT_API_URL` | `http://127.0.0.1:5153` | ProcessAssistant backend URL and development proxy target |
 | `VITE_PROCESS_ASSISTANT_USE_PROXY` | `true` | Send development API requests through Vite; set `false` for direct browser requests |
 | `VITE_PROCESS_ASSISTANT_PROJECT_ID` | `1` | Backend Project ID that owns the Procedure; must be a positive integer |

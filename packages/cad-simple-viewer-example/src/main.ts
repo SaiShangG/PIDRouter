@@ -2968,6 +2968,57 @@ class CadViewerApp {
   private async copyWorkspacePhase(request: CopyPhaseRequest) {
     try {
       this.captureLoadedPhaseState()
+      if (request.mode === 'replace') {
+        const wasLoaded = this.loadedPhase?.phaseId === request.targetPhaseId
+        if (this.phaseRepository) {
+          this.cancelBackendPhaseSave(request.targetPhaseId)
+          await this.phaseSaveTasks.get(request.targetPhaseId)?.catch(() => undefined)
+          const draft = new PhaseWorkspaceStore(this.phaseStore.snapshot())
+          const replacement = draft.copyPhaseOver(
+            request.processId,
+            request.sourceSequenceId,
+            request.sourcePhaseId,
+            request.targetSequenceId,
+            request.targetPhaseId
+          )
+          const targetSequence = this.phaseStore.snapshot().processes
+            .find(process => process.id === request.processId)?.sequences
+            .find(sequence => sequence.id === request.targetSequenceId)
+          const targetIndex = targetSequence?.phases.findIndex(phase => phase.id === request.targetPhaseId) ?? -1
+          if (targetIndex < 0) throw new Error('Target Phase was not found')
+          await this.phaseRepository.updatePhase(
+            request.targetSequenceId,
+            replacement,
+            targetIndex + 1
+          )
+          if (wasLoaded) this.invalidateLoadedPhaseBinding()
+          this.phaseStore.replacePhase(request.processId, request.targetSequenceId, replacement)
+          this.phaseSaveState.accept(replacement, targetIndex + 1)
+          await this.reloadBackendWorkspace(
+            request.processId,
+            request.targetSequenceId,
+            request.targetPhaseId
+          )
+        } else {
+          this.phaseStore.copyPhaseOver(
+            request.processId,
+            request.sourceSequenceId,
+            request.sourcePhaseId,
+            request.targetSequenceId,
+            request.targetPhaseId
+          )
+          if (wasLoaded) this.invalidateLoadedPhaseBinding()
+          this.phaseStore.persist()
+        }
+        await this.activateWorkspacePhase(
+          request.processId,
+          request.targetSequenceId,
+          request.targetPhaseId,
+          false
+        )
+        this.showMessage('Phase 已替换', 'success')
+        return
+      }
       if (this.phaseRepository) {
         const source = this.phaseStore
           .snapshot()

@@ -1150,6 +1150,41 @@ export class PhaseWorkspaceStore {
     return clonePhase(phase)
   }
 
+  copyPhaseOver(
+    processId: string,
+    sourceSequenceId: string,
+    sourcePhaseId: string,
+    targetSequenceId: string,
+    targetPhaseId: string
+  ): PhaseSnapshot {
+    if (sourceSequenceId === targetSequenceId && sourcePhaseId === targetPhaseId) {
+      throw new Error('A Phase cannot replace itself')
+    }
+    const process = this.requireProcess(processId)
+    const source = this.requirePhase(processId, sourceSequenceId, sourcePhaseId)
+    const sequence = this.requireSequence(processId, targetSequenceId)
+    const index = sequence.phases.findIndex(phase => phase.id === targetPhaseId)
+    if (index < 0) throw new Error('Target Phase was not found')
+    if (source.drawing.kind === 'assigned') this.requireDrawing(source.drawing.assetId)
+
+    const target = sequence.phases[index]
+    const timestamp = this.now()
+    const replacement: PhaseSnapshot = {
+      ...clonePhase(source),
+      id: target.id,
+      number: target.number,
+      sourcePhaseId: source.id,
+      createdAt: target.createdAt,
+      updatedAt: timestamp
+    }
+    sequence.phases[index] = replacement
+    sequence.activePhaseId = target.id
+    sequence.updatedAt = timestamp
+    process.activeSequenceId = sequence.id
+    process.updatedAt = timestamp
+    return clonePhase(replacement)
+  }
+
   updatePhaseState(
     processId: string,
     sequenceId: string,

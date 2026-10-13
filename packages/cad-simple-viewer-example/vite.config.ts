@@ -65,15 +65,6 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
-    preview: {
-      host: frontendHost,
-      port: readPort(
-        env.PID_PREVIEW_PORT,
-        'PID_PREVIEW_PORT',
-        NETWORK_DEFAULTS.previewPort
-      ),
-      strictPort: true
-    },
     build: {
       modulePreload: false,
       minify: true,

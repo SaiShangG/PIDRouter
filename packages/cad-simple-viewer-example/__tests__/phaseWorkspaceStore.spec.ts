@@ -336,6 +336,48 @@ describe('PhaseWorkspaceStore', () => {
     ).toThrow('Phase 3 already exists')
   })
 
+  it('replaces Phase content and name while retaining the target ID and number', () => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const source = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 1,
+      name: 'Source rinse',
+      source: { kind: 'new', drawing, displayName: 'Source.dwg' }
+    })
+    store.updatePhaseState(process.id, sequence.id, source.id, {
+      flowState: flowState(['1a']),
+      textNotes: []
+    })
+    const target = store.createPhase({
+      processId: process.id,
+      sequenceId: sequence.id,
+      number: 2,
+      name: 'Old target',
+      source: { kind: 'unassigned' }
+    })
+
+    const replacement = store.copyPhaseOver(
+      process.id, sequence.id, source.id, sequence.id, target.id
+    )
+    expect(replacement).toMatchObject({
+      id: target.id,
+      number: target.number,
+      name: source.name,
+      drawing: source.drawing,
+      sourcePhaseId: source.id,
+      createdAt: target.createdAt
+    })
+    expect(store.snapshot().processes[0].sequences[0].phases.map(phase => phase.id))
+      .toEqual([source.id, target.id])
+    replacement.flowState.flowPaths[0].handleKeys.push('changed')
+    expect(store.snapshot().processes[0].sequences[0].phases[0].flowState.flowPaths[0].handleKeys)
+      .toEqual(['1a'])
+    expect(() => store.copyPhaseOver(process.id, sequence.id, source.id, sequence.id, source.id))
+      .toThrow('A Phase cannot replace itself')
+  })
+
   it('keeps phase numbering and ordering scoped to each sequence', () => {
     const store = createStore()
     const { process, sequence: first } = createProcessContext(store)

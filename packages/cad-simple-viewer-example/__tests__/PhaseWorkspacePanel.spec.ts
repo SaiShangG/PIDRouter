@@ -704,7 +704,7 @@ describe('PhaseWorkspacePanel', () => {
     )
   })
 
-  it('copies a Phase to a selected sequence with editable defaults', async () => {
+  it('copies a Phase into its sequence with editable defaults', async () => {
     const { store, panel, actions } = createHarness()
     const process = store.createProcess('CIP')
     const sourceSequence = process.sequences[0]
@@ -715,10 +715,9 @@ describe('PhaseWorkspacePanel', () => {
       name: '预冲洗',
       source: { kind: 'unassigned' }
     })
-    const targetSequence = store.createSequence(process.id, 2, '碱洗')
     store.createPhase({
       processId: process.id,
-      sequenceId: targetSequence.id,
+      sequenceId: sourceSequence.id,
       number: 7,
       name: '循环',
       source: { kind: 'unassigned' }
@@ -729,20 +728,12 @@ describe('PhaseWorkspacePanel', () => {
     panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="来源 Phase"]')!.value)
       .toContain('Phase 04 · 预冲洗')
-    expect(panel.element.querySelector<HTMLSelectElement>('[aria-label="目标序列"]')!.value)
-      .toBe(sourceSequence.id)
+    expect(panel.element.querySelector('[aria-label="目标序列"]')).toBeNull()
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value)
-      .toBe('5')
+      .toBe('8')
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 名称"]')!.value)
       .toBe('预冲洗 副本')
 
-    const target = panel.element.querySelector<HTMLSelectElement>(
-      '[aria-label="目标序列"]'
-    )!
-    target.value = targetSequence.id
-    target.dispatchEvent(new Event('change'))
-    expect(panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value)
-      .toBe('8')
     panel.element.querySelector<HTMLInputElement>('[aria-label="新 Phase 编号"]')!.value = '7'
     panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
@@ -755,12 +746,52 @@ describe('PhaseWorkspacePanel', () => {
     await Promise.resolve()
 
     expect(actions.copyPhase).toHaveBeenCalledWith({
+      mode: 'create',
       processId: process.id,
       sourceSequenceId: sourceSequence.id,
       sourcePhaseId: sourcePhase.id,
-      targetSequenceId: targetSequence.id,
+      targetSequenceId: sourceSequence.id,
       number: 8,
       name: '预冲洗复制'
+    })
+  })
+
+  it('confirms replacement of an existing Phase and keeps its identity in the request', async () => {
+    const { store, panel, actions } = createHarness()
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const source = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Source', source: { kind: 'unassigned' }
+    })
+    const target = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 2,
+      name: 'Target', source: { kind: 'unassigned' }
+    })
+    store.activate(process.id, sequence.id, source.id)
+    panel.render()
+
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
+    const mode = panel.element.querySelector<HTMLSelectElement>('[aria-label="复制方式"]')!
+    mode.value = 'replace'
+    mode.dispatchEvent(new Event('change'))
+    expect(panel.element.querySelector<HTMLSelectElement>('[aria-label="目标 Phase"]')!.value)
+      .toBe(target.id)
+    panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+    expect(actions.copyPhase).not.toHaveBeenCalled()
+    const confirmation = document.querySelector<HTMLElement>('.confirmation-modal:not([hidden])')!
+    expect(confirmation.textContent).toContain('编号和 ID 保持不变')
+    confirmation.querySelector<HTMLButtonElement>('.confirmation-modal-confirm')!.click()
+    await Promise.resolve()
+    expect(actions.copyPhase).toHaveBeenCalledWith({
+      mode: 'replace',
+      processId: process.id,
+      sourceSequenceId: sequence.id,
+      sourcePhaseId: source.id,
+      targetSequenceId: sequence.id,
+      targetPhaseId: target.id
     })
   })
 
