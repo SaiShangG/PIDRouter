@@ -1,3 +1,10 @@
+import {
+  NETWORK_DEFAULTS,
+  readHttpUrl,
+  readPositiveInteger,
+  readProxySetting
+} from '../networkConfig'
+
 export interface ProcessAssistantConfig {
   baseUrl: string
   projectId: number
@@ -12,35 +19,30 @@ declare global {
 }
 
 const runtimeApiUrl =
-  typeof window === 'undefined'
+  import.meta.env.DEV || typeof window === 'undefined'
     ? ''
     : window.PID_VIEWER_CONFIG?.processAssistantApiUrl?.trim() || ''
 
-export const PROCESS_ASSISTANT_TARGET_URL =
-  runtimeApiUrl ||
-  import.meta.env.VITE_PROCESS_ASSISTANT_API_URL?.trim() ||
-  'http://127.0.0.1:5153'
+export const PROCESS_ASSISTANT_TARGET_URL = readHttpUrl(
+  runtimeApiUrl || import.meta.env.VITE_PROCESS_ASSISTANT_API_URL,
+  runtimeApiUrl
+    ? 'PID_VIEWER_CONFIG.processAssistantApiUrl'
+    : 'VITE_PROCESS_ASSISTANT_API_URL'
+)
 
 export const PROCESS_ASSISTANT_API_URL =
   import.meta.env.DEV &&
-    import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY !== 'false'
+  readProxySetting(import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY)
     ? ''
     : PROCESS_ASSISTANT_TARGET_URL
 
-export const PROCESS_ASSISTANT_PROJECT_ID = Number(
-  import.meta.env.VITE_PROCESS_ASSISTANT_PROJECT_ID?.trim() || '1'
+export const PROCESS_ASSISTANT_PROJECT_ID = readPositiveInteger(
+  import.meta.env.VITE_PROCESS_ASSISTANT_PROJECT_ID,
+  'VITE_PROCESS_ASSISTANT_PROJECT_ID',
+  NETWORK_DEFAULTS.projectId
 )
 
 export function getProcessAssistantConfig(): ProcessAssistantConfig {
-  if (
-    !Number.isInteger(PROCESS_ASSISTANT_PROJECT_ID) ||
-    PROCESS_ASSISTANT_PROJECT_ID < 1
-  ) {
-    throw new Error(
-      'VITE_PROCESS_ASSISTANT_PROJECT_ID must be a positive integer'
-    )
-  }
-
   return {
     baseUrl: PROCESS_ASSISTANT_API_URL,
     projectId: PROCESS_ASSISTANT_PROJECT_ID

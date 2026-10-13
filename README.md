@@ -38,7 +38,6 @@ Drawing parsing, geometry processing, and rendering are primarily performed loca
 | `packages/cad-pdf-plugin`            | PDF import and export                              |
 | `packages/cad-svg-plugin`            | SVG export                                         |
 | `packages/cad-agent-plugin`          | CAD intelligent assistant plugin                   |
-| `start-frontend.bat`                 | One-click Windows script for starting the frontend |
 
 ## Prerequisites
 
@@ -72,7 +71,7 @@ If dependencies and workspace build artifacts are already available, run the fol
 pnpm dev:simple
 ```
 
-Vite serves the application at `http://127.0.0.1:5173` by default.
+The frontend address is listed in [Network Configuration](#network-configuration).
 
 ### First-Time Setup
 
@@ -86,37 +85,22 @@ pnpm dev:simple
 
 The build step creates workspace package outputs required by the development server, including `packages/cad-html-plugin/dist/viewer-runtime.iife.js`. You do not need to repeat the install and build steps for normal daily startup unless dependencies change, build artifacts are cleaned, or the development server reports a missing artifact.
 
-## Backend Configuration
+## Network Configuration
 
-By default, the application connects to the ProcessAssistant API at:
+All local addresses and ports can be set in `packages/cad-simple-viewer-example/.env.local`. Copy `packages/cad-simple-viewer-example/.env.example` as a starting point. The defaults below are defined once in `packages/cad-simple-viewer-example/src/networkConfig.ts` and shared by the Vite server and browser application.
 
-```text
-http://localhost:5153
-```
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `PID_FRONTEND_HOST` | `127.0.0.1` | Host used by the development and preview servers |
+| `PID_FRONTEND_PORT` | `5173` | Development server port |
+| `PID_PREVIEW_PORT` | `4173` | Production preview server port |
+| `VITE_PROCESS_ASSISTANT_API_URL` | `http://127.0.0.1:5153` | ProcessAssistant backend URL and development proxy target |
+| `VITE_PROCESS_ASSISTANT_USE_PROXY` | `true` | Send development API requests through Vite; set `false` for direct browser requests |
+| `VITE_PROCESS_ASSISTANT_PROJECT_ID` | `1` | Backend Project ID that owns the Procedure; must be a positive integer |
 
-The example development configuration is located at `packages/cad-simple-viewer-example/.env.example`:
+The development URL is `http://127.0.0.1:5173` with these defaults. Vite fails if the configured port is occupied instead of silently switching ports. Restart Vite after editing `.env.local`.
 
-```dotenv
-VITE_PROCESS_ASSISTANT_API_URL=http://localhost:5153
-VITE_PROCESS_ASSISTANT_USE_PROXY=true
-VITE_PROCESS_ASSISTANT_PROJECT_ID=1
-```
-
-To override the defaults, create `.env.local` under `packages/cad-simple-viewer-example`:
-
-```dotenv
-VITE_PROCESS_ASSISTANT_API_URL=http://192.168.1.100:5153
-VITE_PROCESS_ASSISTANT_USE_PROXY=true
-VITE_PROCESS_ASSISTANT_PROJECT_ID=1
-```
-
-| Setting                             | Description                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| `VITE_PROCESS_ASSISTANT_API_URL`    | ProcessAssistant backend URL                                              |
-| `VITE_PROCESS_ASSISTANT_USE_PROXY`  | Whether to proxy development requests through Vite; `true` is recommended |
-| `VITE_PROCESS_ASSISTANT_PROJECT_ID` | Backend Project ID that owns the Procedure; must be a positive integer    |
-
-Restart the development server after changing environment variables.
+For a deployed build, edit `dist/config.js` and set `window.PID_VIEWER_CONFIG.processAssistantApiUrl` to the deployed backend URL. A nonempty runtime value overrides the build-time backend URL in production; leaving it empty uses the build-time setting and then the shared default. The development proxy reads `.env.local` when Vite starts and does not use `config.js`. When frontend and backend origins differ, allow the frontend origin in the backend CORS configuration.
 
 ## Production Build
 
@@ -144,15 +128,7 @@ Preview the production build locally:
 pnpm preview:simple
 ```
 
-After deployment, edit `dist/config.js` to change the backend URL without rebuilding:
-
-```javascript
-window.PID_VIEWER_CONFIG = {
-  processAssistantApiUrl: 'http://192.168.1.100:5153'
-}
-```
-
-When the frontend and backend use different domains, protocols, or ports, the backend must allow CORS requests from the frontend origin.
+Deployment network settings are described in [Network Configuration](#network-configuration).
 
 ## Common Commands
 
@@ -168,7 +144,7 @@ When the frontend and backend use different domains, protocols, or ports, the ba
 ## Basic Workflow
 
 1. Start the ProcessAssistant backend and the PID Viewer Lite frontend.
-2. Open `http://127.0.0.1:5173` in a browser and sign in.
+2. Open the configured frontend address in a browser and sign in.
 3. Create or select a Project and associate P&ID drawings with it.
 4. Open the **Processes & Phases** panel and create a procedure and phases.
 5. Select a Project P&ID, local drawing, remote drawing, or blank drawing for the phase.
@@ -179,11 +155,11 @@ When the frontend and backend use different domains, protocols, or ports, the ba
 
 ### The Page Cannot Be Reached
 
-Check the startup terminal for errors and verify that port `5173` is not being used by another application. When starting manually, use the actual URL printed by Vite.
+Check the startup terminal for errors and verify that the configured frontend port is available.
 
 ### The Backend Cannot Be Reached
 
-Confirm that the ProcessAssistant service is running and check `VITE_PROCESS_ASSISTANT_API_URL`. Enabling the proxy in development is recommended to avoid browser CORS restrictions.
+Confirm that the ProcessAssistant service is running and check the backend URL in [Network Configuration](#network-configuration).
 
 ### `viewer-runtime.iife.js` Is Missing
 

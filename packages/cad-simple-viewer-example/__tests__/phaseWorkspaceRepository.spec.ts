@@ -1,3 +1,4 @@
+import { NETWORK_DEFAULTS } from '../src/networkConfig'
 import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
@@ -328,7 +329,7 @@ describe('PhaseWorkspaceRepository', () => {
       }
     })
     expect(workspace.drawingAssets['file:5'].url).toBe(
-      'http://localhost/api/v1/File/download/stored%20drawing.dwg'
+      `http://${NETWORK_DEFAULTS.frontendHost}:${NETWORK_DEFAULTS.frontendPort}/api/v1/File/download/stored%20drawing.dwg`
     )
     expect(workspace.processes[0].sequences[1].phases[0].flowState).toEqual({
       flowPaths: []

@@ -10,6 +10,10 @@ tsconfig.tsbuildinfo
 # dependencies
 node_modules
 
+# Local PID Viewer Lite network overrides
+/packages/cad-simple-viewer-example/.env.local
+/packages/cad-simple-viewer-example/.env.*.local
+
 # Vue
 components.d.ts
 auto-imports.d.ts

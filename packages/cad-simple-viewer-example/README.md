@@ -51,7 +51,7 @@ cd packages/cad-simple-viewer-example
 pnpm dev
 ```
 
-Vite prints the local URL (default `http://localhost:5173`).
+Vite prints the local URL. For host, port, backend, and proxy settings, see the root [Network Configuration](../../README.md#network-configuration).
 
 ### Production
 
@@ -64,20 +64,7 @@ The build copies parser workers and `viewer-runtime.iife.js` into `dist/` (see `
 
 ### Backend API
 
-The ProcessAssistant API address can be changed after deployment without
-rebuilding the application. Edit `dist/config.js` and set the server protocol,
-IP address, and port:
-
-```js
-window.PID_VIEWER_CONFIG = {
-  processAssistantApiUrl: 'http://192.168.1.100:5153'
-}
-```
-
-A non-empty runtime value takes precedence over
-`VITE_PROCESS_ASSISTANT_API_URL`. Keep the value empty to use the build-time
-setting (default: `http://localhost:5153`). The backend must allow the deployed
-frontend origin through CORS when they use different origins.
+Development and deployment network settings, including the runtime API override, are documented in the root [Network Configuration](../../README.md#network-configuration).
 
 ## Usage
 

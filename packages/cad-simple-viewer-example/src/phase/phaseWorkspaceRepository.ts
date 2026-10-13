@@ -8,6 +8,7 @@ import type {
   ProcedureDto,
   UploadFileDto
 } from '../api/processAssistantTypes'
+import { NETWORK_DEFAULTS } from '../networkConfig'
 import {
   parsePhasePidOverlay,
   type PhasePidOverlay
@@ -472,7 +473,7 @@ export class PhaseWorkspaceRepository {
     const baseUrl =
       this.options.baseUrl.trim() ||
       globalThis.location?.href ||
-      'http://localhost/'
+      `http://${NETWORK_DEFAULTS.frontendHost}:${NETWORK_DEFAULTS.frontendPort}/`
     return new URL(path, `${baseUrl.replace(/\/$/, '')}/`).href
   }
 
