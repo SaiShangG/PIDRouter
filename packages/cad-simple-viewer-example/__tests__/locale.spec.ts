@@ -44,14 +44,15 @@ describe('app locale', () => {
     }
   })
 
-  it('defaults invalid or missing values to Chinese', () => {
-    expect(loadAppLocale({ getItem: () => null })).toBe('zh')
-    expect(loadAppLocale({ getItem: () => 'tr' })).toBe('zh')
+  it('defaults invalid or missing values to English', () => {
+    expect(loadAppLocale({ getItem: () => null })).toBe('en')
+    expect(loadAppLocale({ getItem: () => 'tr' })).toBe('en')
   })
 
-  it('loads and saves English', () => {
+  it('loads and saves either supported language', () => {
     const setItem = jest.fn()
     expect(loadAppLocale({ getItem: () => 'en' })).toBe('en')
+    expect(loadAppLocale({ getItem: () => 'zh' })).toBe('zh')
     saveAppLocale('en', { setItem })
     expect(setItem).toHaveBeenCalledWith(APP_LOCALE_STORAGE_KEY, 'en')
   })

@@ -16,7 +16,7 @@ function assertViewerRuntimeExists(): void {
   if (!existsSync(runtimePath)) {
     throw new Error(
       'viewer-runtime.iife.js was not found. Build @mlightcad/cad-html-plugin first ' +
-        '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
+      '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
     )
   }
 }
@@ -25,11 +25,12 @@ export default defineConfig(({ mode }) => {
   assertViewerRuntimeExists()
   const env = loadEnv(mode, __dirname, '')
   const processAssistantTarget =
-    env.VITE_PROCESS_ASSISTANT_API_URL || 'http://localhost:5153'
+    env.VITE_PROCESS_ASSISTANT_API_URL || 'http://127.0.0.1:5153'
 
   return {
     base: './',
     server: {
+      host: '127.0.0.1',
       proxy: {
         '/api': {
           target: processAssistantTarget,

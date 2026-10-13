@@ -143,6 +143,27 @@ describe('authentication flow', () => {
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps settings available without a user or logout controls', () => {
+    const openSettings = jest.fn()
+    const reload = jest.fn()
+    const controls = new AccountControls(undefined, undefined, reload, openSettings)
+    document.body.append(controls.element)
+    const settings = controls.element.querySelector('button')!
+    expect(settings.hidden).toBe(false)
+    expect(settings.title).toBe('Feature settings')
+    expect(settings.getAttribute('aria-label')).toBe('Feature settings')
+    expect(document.querySelector('.auth-account-name')).toBeNull()
+    expect(document.querySelector('.auth-account-menu')).toBeNull()
+    expect(document.querySelector('.auth-account-logout')).toBeNull()
+    settings.click()
+    expect(openSettings).toHaveBeenCalledTimes(1)
+    expect(reload).not.toHaveBeenCalled()
+    saveAppLocale('zh')
+    controls.refreshLocale()
+    expect(settings.title).toBe('功能配置')
+    expect(settings.getAttribute('aria-label')).toBe('功能配置')
+  })
+
   it('opens settings from the user menu and supports Escape', () => {
     const openSettings = jest.fn()
     const controls = new AccountControls(createDemoAuthService({ enabled: true }), { id: '1', name: 'operator' }, jest.fn(), openSettings)

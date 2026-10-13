@@ -17,8 +17,8 @@ export class AccountControls {
   private readonly confirmation = new ConfirmationModal(loadAppLocale)
 
   constructor(
-    private readonly service: AuthService,
-    private readonly user: AuthUser,
+    private readonly service?: AuthService,
+    private readonly user?: AuthUser,
     private readonly reload: () => void = () => window.location.reload(),
     private readonly openSettings?: () => void
   ) {
@@ -41,6 +41,13 @@ export class AccountControls {
       this.closeMenu()
       this.openSettings?.()
     })
+    if (!this.user) {
+      this.settings.className = 'auth-account-trigger'
+      this.settings.removeAttribute('role')
+      this.element.append(this.settings)
+      this.refreshLocale()
+      return
+    }
     this.trigger.addEventListener('click', () => {
       if (!this.menu.hidden) return this.closeMenu()
       this.menu.hidden = false
@@ -78,6 +85,12 @@ export class AccountControls {
 
   refreshLocale() {
     const locale = loadAppLocale()
+    if (!this.user) {
+      this.settings.replaceChildren(createPhaseIcon(Settings))
+      this.settings.title = translateUiText(locale, '功能配置')
+      this.settings.setAttribute('aria-label', this.settings.title)
+      return
+    }
     this.name.textContent = this.user.name
     this.name.title = `${translate(locale, 'loginUser')}: ${this.user.name}`
     this.trigger.title = this.name.title
@@ -96,7 +109,7 @@ export class AccountControls {
   }
 
   private async signOut() {
-    if (this.logout.disabled) return
+    if (!this.service || this.logout.disabled) return
     this.logout.disabled = true
     const locale = loadAppLocale()
     try {

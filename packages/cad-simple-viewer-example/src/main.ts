@@ -60,6 +60,7 @@ import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { AccountControls } from './auth/AccountControls'
+import { injectLoginStyles } from './auth/loginStyles'
 import { PhaseSaveState, phaseSaveStatusText } from './phase/phaseSaveState'
 import { loadToolbarPreferences, saveToolbarPreferences, type ToolbarPreferences } from './toolbarPreferences'
 import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
@@ -520,8 +521,10 @@ class CadViewerApp {
   private brushHighlightFeature?: BrushHighlightFeature
   private brushStyleSelection?: StyleSourceSelection
 
-  constructor(authService: AuthService, user: AuthUser) {
-    this.toolbarPreferenceUserId = authService.mode === 'demo' ? `demo:${user.name}` : `remote:${user.id}`
+  constructor(authService?: AuthService, user?: AuthUser) {
+    this.toolbarPreferenceUserId = authService && user
+      ? authService.mode === 'demo' ? `demo:${user.name}` : `remote:${user.id}`
+      : 'local:default'
     this.toolbarPreferences = loadToolbarPreferences(this.toolbarPreferenceUserId, { getItem: key => localStorage.getItem(key) })
     registerSimpleUiI18n()
     this.container = document.getElementById('cad-container') as HTMLDivElement
@@ -4990,6 +4993,7 @@ class CadViewerApp {
 }
 
 export function prepareWorkspaceStyles(): void {
+  injectLoginStyles()
   injectAppShellResponsiveStyles()
   injectConfirmationModalStyles()
   injectParsingDetailsStyles()
@@ -4998,7 +5002,7 @@ export function prepareWorkspaceStyles(): void {
   injectPhaseWorkspaceStyles()
 }
 
-export async function bootstrap(authService: AuthService, user: AuthUser): Promise<void> {
+export async function bootstrap(authService?: AuthService, user?: AuthUser): Promise<void> {
   prepareWorkspaceStyles()
   const app = new CadViewerApp(authService, user)
   await app.ready

@@ -19,7 +19,7 @@ const runtimeApiUrl =
 export const PROCESS_ASSISTANT_TARGET_URL =
   runtimeApiUrl ||
   import.meta.env.VITE_PROCESS_ASSISTANT_API_URL?.trim() ||
-  'http://localhost:5153'
+  'http://127.0.0.1:5153'
 
 export const PROCESS_ASSISTANT_API_URL =
   import.meta.env.DEV &&

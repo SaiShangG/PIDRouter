@@ -4,7 +4,7 @@ export const APP_LOCALE_STORAGE_KEY = 'cad-simple-viewer-example-locale'
 
 export const loadAppLocale = (
   storage: Pick<Storage, 'getItem'> = localStorage
-): AppLocale => storage.getItem(APP_LOCALE_STORAGE_KEY) === 'en' ? 'en' : 'zh'
+): AppLocale => storage.getItem(APP_LOCALE_STORAGE_KEY) === 'zh' ? 'zh' : 'en'
 
 export const saveAppLocale = (
   locale: AppLocale,
