@@ -1,3 +1,10 @@
+import {
+  ManualHighlightCorrectionsValidationError,
+  normalizeFlowPathStyleSource,
+  normalizeManualHighlightCorrections
+} from './manualHighlightCorrections'
+import type { FlowPathStatus, FlowPathStyleSource, HighlightStyle, ManualHighlightCorrections } from './types'
+
 export enum TextAttachmentPoint {
   TopLeft = 1,
   TopCenter = 2,
@@ -17,7 +24,10 @@ export interface PhasePidOverlayDrawing {
 
 export interface PhasePidOverlayFlowPath {
   handleKey: string
-  highlightStyleRefId: string
+  highlightStyleRefId?: string
+  styleSource: FlowPathStyleSource
+  style: HighlightStyle
+  geometry?: 'bounds'
 }
 
 export interface PhasePidOverlayDeviceState {
@@ -58,11 +68,16 @@ export interface PhasePidOverlay {
   tankId?: string
   drawing?: PhasePidOverlayDrawing
   flowPaths: PhasePidOverlayFlowPath[]
+  autoFlowPaths: FlowPathStatus[]
+  activeFlowPathId?: string
   deviceStates: PhasePidOverlayDeviceState[]
+  manualCorrections?: ManualHighlightCorrections
   textNotes: PhasePidOverlayTextNote[]
 }
 
 export type PhasePidOverlayWarningCode =
+  | 'invalid-auto-flow-path'
+  | 'invalid-manual-corrections'
   | 'invalid-drawing'
   | 'invalid-flow-path'
   | 'duplicate-flow-path'
@@ -132,13 +147,61 @@ const readDrawing = (value: unknown): PhasePidOverlayDrawing | undefined => {
 }
 
 const readFlowPath = (value: unknown): PhasePidOverlayFlowPath | undefined => {
-  if (!isRecord(value) || !isNonEmptyString(value.highlightStyleRefId)) {
+  if (!isRecord(value)) return undefined
+  const handleKey = normalizeHandleKey(value.handleKey)
+  if (!handleKey || (value.geometry !== undefined && value.geometry !== 'bounds')) return undefined
+  try {
+    const styleSource = normalizeFlowPathStyleSource(value.styleSource)
+    const resolved = normalizeFlowPathStyleSource({ kind: 'custom', style: value.style })
+    if (resolved.kind !== 'custom') return undefined
+    return {
+      handleKey,
+      styleSource,
+      style: resolved.style,
+      ...(isNonEmptyString(value.highlightStyleRefId)
+        ? { highlightStyleRefId: value.highlightStyleRefId.trim() } : {}),
+      ...(value.geometry === 'bounds' ? { geometry: 'bounds' } : {})
+    }
+  } catch (error) {
+    if (!(error instanceof ManualHighlightCorrectionsValidationError)) throw error
     return undefined
   }
-  const handleKey = normalizeHandleKey(value.handleKey)
-  return handleKey
-    ? { handleKey, highlightStyleRefId: value.highlightStyleRefId.trim() }
-    : undefined
+}
+
+const readAutoFlowPath = (value: unknown): FlowPathStatus | undefined => {
+  if (!isRecord(value) || !isNonEmptyString(value.id) ||
+    typeof value.name !== 'string' || !Array.isArray(value.handleKeys) ||
+    (value.priority !== undefined && (typeof value.priority !== 'number' || !Number.isFinite(value.priority)))) {
+    return undefined
+  }
+  const handleKeys = value.handleKeys.map(normalizeHandleKey)
+  if (handleKeys.some(key => key === undefined)) return undefined
+  const ownerHandleKey = value.ownerHandleKey === undefined
+    ? undefined : normalizeHandleKey(value.ownerHandleKey)
+  if (value.ownerHandleKey !== undefined && ownerHandleKey === undefined) return undefined
+  try {
+    const styleSource = normalizeFlowPathStyleSource(value.styleSource)
+    if (value.styleOverride !== undefined) {
+      if (!isRecord(value.styleOverride)) return undefined
+      normalizeFlowPathStyleSource({
+        kind: 'custom',
+        style: { color: 0, lineWidthPx: 1, opacity: 1, visible: true, ...value.styleOverride }
+      })
+    }
+    return {
+      id: value.id,
+      name: value.name,
+      handleKeys: handleKeys.filter((key): key is string => key !== undefined),
+      ...(ownerHandleKey !== undefined ? { ownerHandleKey } : {}),
+      ...(typeof value.priority === 'number' ? { priority: value.priority } : {}),
+      styleSource,
+      ...(styleSource.kind === 'utility' && styleSource.utilityId ? { utilityId: styleSource.utilityId } : {}),
+      ...(isRecord(value.styleOverride) ? { styleOverride: value.styleOverride } : {})
+    }
+  } catch (error) {
+    if (!(error instanceof ManualHighlightCorrectionsValidationError)) throw error
+    return undefined
+  }
 }
 
 const readDeviceState = (
@@ -238,6 +301,7 @@ export const parsePhasePidOverlay = (
     !isNonEmptyString(value.Name) ||
     (value.Comment !== null && typeof value.Comment !== 'string') ||
     (value.flowPaths !== null && !Array.isArray(value.flowPaths)) ||
+    !Array.isArray(value.autoFlowPaths) ||
     (value.deviceStates !== null && !Array.isArray(value.deviceStates)) ||
     (value.textNotes !== null && !Array.isArray(value.textNotes))
   ) {
@@ -245,6 +309,32 @@ export const parsePhasePidOverlay = (
   }
 
   const warnings: PhasePidOverlayWarning[] = []
+  const autoFlowPaths: FlowPathStatus[] = []
+  const autoIds = new Set<string>()
+  value.autoFlowPaths.forEach((candidate, index) => {
+    const flowPath = readAutoFlowPath(candidate)
+    if (!flowPath || autoIds.has(flowPath.id)) {
+      warnings.push({ code: 'invalid-auto-flow-path', path: `autoFlowPaths[${index}]` })
+      return
+    }
+    autoIds.add(flowPath.id)
+    autoFlowPaths.push(flowPath)
+  })
+  let manualCorrections: ManualHighlightCorrections | undefined
+  if (value.manualCorrections !== undefined) {
+    try {
+      manualCorrections = normalizeManualHighlightCorrections(
+        value.manualCorrections,
+        normalizeHandleKey
+      )
+    } catch (error) {
+      if (!(error instanceof ManualHighlightCorrectionsValidationError)) throw error
+      warnings.push({
+        code: 'invalid-manual-corrections',
+        path: 'manualCorrections'
+      })
+    }
+  }
   const drawing = value.drawing === undefined ? undefined : readDrawing(value.drawing)
   if (value.drawing !== undefined && !drawing) {
     warnings.push({ code: 'invalid-drawing', path: 'drawing' })
@@ -262,7 +352,7 @@ export const parsePhasePidOverlay = (
       })
       return
     }
-    const key = flowPath.handleKey
+    const key = `${flowPath.handleKey}:${flowPath.geometry ?? 'entity'}`
     if (flowPathKeys.has(key)) {
       warnings.push({
         code: 'duplicate-flow-path',
@@ -329,7 +419,10 @@ export const parsePhasePidOverlay = (
       Comment: typeof value.Comment === 'string' ? value.Comment : null,
       ...(drawing ? { drawing } : {}),
       flowPaths,
+      autoFlowPaths,
+      ...(isNonEmptyString(value.activeFlowPathId) ? { activeFlowPathId: value.activeFlowPathId } : {}),
       deviceStates,
+      ...(manualCorrections ? { manualCorrections } : {}),
       textNotes
     },
     warnings

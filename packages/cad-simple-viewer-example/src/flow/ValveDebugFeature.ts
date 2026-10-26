@@ -488,7 +488,7 @@ export class ValveDebugFeature {
     this.renderPanel()
   }
 
-  restoreOpenStates(handleKeys: readonly string[]) {
+  restoreOpenStates(handleKeys: readonly string[], options: { recompute?: boolean } = {}) {
     this.states.clear()
     handleKeys.forEach(key => {
       const valveKey = this.resolveValveKey(key)
@@ -496,7 +496,13 @@ export class ValveDebugFeature {
     })
     const restoredKeys = [...this.states.keys()]
     this.activeKey = restoredKeys[restoredKeys.length - 1]
-    this.recomputeResults()
+    if (options.recompute !== false) {
+      this.recomputeResults()
+    } else {
+      this.results.clear()
+      this.disposePathOverlay()
+      this.renderPanel()
+    }
   }
 
   setLocale(locale: ValveDebugLocale) {

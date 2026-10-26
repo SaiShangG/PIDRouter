@@ -2,6 +2,7 @@ import type {
   DeviceState,
   FlowPathStatus,
   HighlightStyle,
+  ManualHighlightAddition,
   PresentationProfile
 } from '../phase/types'
 import {
@@ -16,9 +17,10 @@ export interface FlowHighlightLayer {
   id: string
   renderOrder: number
   style: ResolvedEntityPresentation
+  geometry?: 'bounds'
 }
 
-export const resolveFlowHighlightLayers = (
+const resolveAutomaticFlowHighlightLayers = (
   profile: PresentationProfile,
   flowPaths: readonly FlowPathStatus[],
   deviceState?: DeviceState,
@@ -62,4 +64,44 @@ export const resolveFlowHighlightLayers = (
       style: primaryFlow.style
     }]
     : []
+}
+
+export interface ManualEntityHighlight {
+  addition?: ManualHighlightAddition
+  excluded: boolean
+  device: boolean
+}
+
+export const resolveFlowHighlightLayers = (
+  profile: PresentationProfile,
+  flowPaths: readonly FlowPathStatus[],
+  deviceState?: DeviceState,
+  diagnosticStyle?: HighlightStyle,
+  activeFlowPathId?: string,
+  manual?: ManualEntityHighlight
+): FlowHighlightLayer[] => {
+  const device = Boolean(deviceState || manual?.device || manual?.addition?.geometry === 'bounds')
+  const addition = manual?.excluded ? undefined : manual?.addition
+  const automaticLayers = resolveAutomaticFlowHighlightLayers(
+    profile,
+    manual?.excluded || (addition && !device) ? [] : flowPaths,
+    deviceState,
+    diagnosticStyle,
+    activeFlowPathId
+  )
+  if (!addition) return automaticLayers
+  const manualLayer: FlowHighlightLayer = {
+    id: `manual:${device ? 'device' : 'flow'}:${addition.handleKey}`,
+    renderOrder: 20000,
+    style: resolveEntityPresentation(profile, {
+      flowPath: {
+        id: `manual:${addition.handleKey}`,
+        name: 'Manual correction',
+        handleKeys: [addition.handleKey],
+        styleSource: addition.styleSource
+      }
+    }),
+    ...(device ? { geometry: 'bounds' as const } : {})
+  }
+  return device ? [...automaticLayers, manualLayer] : [manualLayer]
 }

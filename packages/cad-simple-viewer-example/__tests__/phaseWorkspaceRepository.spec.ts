@@ -85,7 +85,8 @@ describe('PhaseWorkspaceRepository', () => {
       Name: 'Transfer',
       Comment: null,
       drawing: { fileId: 5, displayName: 'Supply PID' },
-      flowPaths: null,
+      autoFlowPaths: [],
+      flowPaths: [],
       deviceStates: null,
       textNotes: []
     })
@@ -253,10 +254,12 @@ describe('PhaseWorkspaceRepository', () => {
                   Name: 'Transfer',
                   Comment: null,
                   drawing: { fileId: 5, displayName: 'Supply PID' },
-                  flowPaths: [
-                    { handleKey: '26', highlightStyleRefId: 'utility-water' },
-                    { handleKey: 'invalid', highlightStyleRefId: 'utility-water' }
-                  ],
+                  autoFlowPaths: [{
+                    id: 'flow-1', name: 'Main', ownerHandleKey: '26',
+                    handleKeys: ['26'],
+                    styleSource: { kind: 'utility', utilityId: 'utility-water' }
+                  }],
+                  flowPaths: [],
                   deviceStates: [{
                     handleKey: '26',
                     stateKey: 'Open',
@@ -274,10 +277,13 @@ describe('PhaseWorkspaceRepository', () => {
             : [
               {
                 id: 21,
-                name: 'Broken state',
+                name: 'Empty state',
                 index: 1,
                 operationId: 11,
-                jsonData: '{invalid'
+                jsonData: JSON.stringify({
+                  Index: 1, OrderId: 1, Name: 'Empty state', Comment: null,
+                  autoFlowPaths: [], flowPaths: [], deviceStates: [], textNotes: []
+                })
               }
             ]
         )
@@ -372,6 +378,7 @@ describe('PhaseWorkspaceRepository', () => {
             Comment: null,
             drawing: { fileId: 5, displayName: 'Supply PID' },
             flowPaths: null,
+            autoFlowPaths: [],
             deviceStates: null,
             textNotes: []
           })
@@ -459,9 +466,16 @@ describe('PhaseWorkspaceRepository', () => {
       Name: 'Transfer',
       Comment: null,
       drawing: { fileId: 5, displayName: 'PID' },
+      autoFlowPaths: [{
+        id: 'flow-1', name: 'Main', handleKeys: ['26', '43'],
+        utilityId: 'utility-water',
+        styleSource: { kind: 'utility', utilityId: 'utility-water' }
+      }],
       flowPaths: [{
         handleKey: '43',
-        highlightStyleRefId: 'utility-water'
+        highlightStyleRefId: 'utility-water',
+        styleSource: { kind: 'utility', utilityId: 'utility-water' },
+        style: expect.objectContaining({ visible: true })
       }],
       deviceStates: [{
         handleKey: '26',
@@ -542,4 +556,3 @@ describe('PhaseWorkspaceRepository', () => {
     }))
   })
 })
-

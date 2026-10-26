@@ -98,12 +98,13 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace-modal-dialog h2 { margin: 0; font-size: 16px; }
     .phase-workspace .phase-workspace-modal-close, .phase-workspace-modal .phase-workspace-modal-close { min-width: 30px; width: 30px; min-height: 30px; height: 30px; }
     .phase-workspace-modal-form { display: grid; gap: 10px; padding: 16px; }
-    .phase-drawing-association-dialog { width: min(560px, 100%); overflow: hidden; }
+    .phase-drawing-association-dialog { width: min(560px, 100%); overflow: auto; }
     .phase-drawing-association-form { gap: 14px; padding: 18px; }
     .phase-drawing-association-form .phase-modal-field { gap: 6px; }
     .phase-drawing-association-form .phase-modal-field > input, .phase-drawing-association-form .phase-modal-field > select { min-height: 38px; }
     .phase-drawing-association-form .phase-drawing-source-field { padding-bottom: 14px; border-bottom: 1px solid #e1e7e8; }
     .phase-drawing-association-form .phase-drawing-name-field { margin-top: 2px; }
+    .phase-drawing-association-hint { margin: 0; color: var(--app-text-muted, #52656c); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
     .phase-drawing-association-form .phase-workspace-modal-actions { margin: 2px -18px -18px; padding: 12px 18px; border-top: 1px solid #dbe3e5; background: #f5f8f8; }
     .phase-operation-dialog { width: min(440px, 100%); }
     .phase-sequence-modal-form { gap: 14px; }

@@ -33,7 +33,7 @@ describe('resolveEntityHighlight', () => {
     }
   })
 
-  it('prefers active flow, then brush, selection, hover, and ordinary styles', () => {
+  it('prefers manual brush correction, then flow, selection, hover, and ordinary styles', () => {
     expect(resolveEntityHighlight({
       flowStyles: [
         { flowPathId: 'low', priority: 1, style: ordinaryStyle },
@@ -45,6 +45,10 @@ describe('resolveEntityHighlight', () => {
       hoverStyle,
       selected: true,
       hovered: true
+    }, 'low')).toMatchObject({ source: 'brush', style: brushStyle })
+
+    expect(resolveEntityHighlight({
+      flowStyles: [{ flowPathId: 'low', priority: 1, style: ordinaryStyle }]
     }, 'low')).toMatchObject({ source: 'flow', style: ordinaryStyle })
 
     expect(resolveEntityHighlight({

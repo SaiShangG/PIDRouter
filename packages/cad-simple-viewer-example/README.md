@@ -68,6 +68,89 @@ Development and deployment network settings, including the runtime API override,
 
 ## Usage
 
+### Manual highlight correction data
+
+Phase JSON separates three sources and a derived final snapshot:
+
+- `deviceStates`: equipment states, never edited by the brush/eraser.
+- `autoFlowPaths`: complete automatic route records (`id`, `name`, `handleKeys`,
+  optional `ownerHandleKey`, priority and style source). Route IDs and ownership
+  survive round trips; restoration does not infer owners or run routing.
+- `manualCorrections`: `additions` store brush handles and Utility/custom style
+  sources; `exclusions` store erased flow handles. Valve additions also preserve
+  `geometry: "bounds"` so their marks do not replace state colors.
+- `flowPaths`: derived final visible flow entries, composed from automatic routes
+  and corrections using the same layering resolver as the viewer. Entries include
+  `handleKey`, `styleSource`, resolved `style`, optional Utility
+  `highlightStyleRefId`, and optional `geometry: "bounds"`. Device-state indicators
+  remain in `deviceStates`, not in this array.
+
+The runtime's `flowState.flowPaths` contains automatic results only and maps to
+backend `autoFlowPaths`. Final `flowPaths` is generated at save/copy serialization
+time, never read as a routing input. All fields are submitted in one Phase JSON
+snapshot. The new backend contract requires `autoFlowPaths` and `flowPaths` arrays;
+there is no fallback from a missing automatic field to the final snapshot and no
+old backend-data migration. Deploy the updated backend before using this frontend.
+
+Internal handles are hexadecimal; backend handles, including automatic route
+owners and members, are decimal strings and retain large integer precision.
+Explicit empty correction arrays clear corrections. Duplicate additions use the last style,
+and exclusions win if imported data contains both operations for one handle.
+Missing Utility references and unresolved handles are retained for later resolution.
+
+The store clones corrections during phase copying/inheritance, preserves them on
+flow-only updates and same-drawing reassociation, and clears them when a drawing
+is replaced or removed. Malformed correction data is reported by the overlay
+parser and rejected by the repository to prevent saving a lossy snapshot.
+Correction-only edits participate in the existing unsaved-highlight status.
+Both local and backend drawing-association commands use the same store rules:
+selecting another drawing clears corrections, selecting the same drawing retains
+them, and associating a marked Phase copies its flow/device state and corrections
+independently of the source. The association dialog explains these effects before
+confirmation. Loading blocks brush edits throughout association, saving and
+restoration so old drawing strokes cannot overwrite the reassociated data.
+
+The brush and eraser now edit this independent correction state:
+
+- Painting adds or recolors a manual highlight and removes an exclusion for the
+  same handle. Utility references are retained per object; device presets are
+  copied as appearance-only custom styles, never as device states.
+- Erasing removes the manual addition and excludes any currently visible
+  automatic flow contribution. Erasing an empty object or device-state-only
+  highlight creates no exclusion. Exclusions apply to all flows at that handle.
+- Device states and routing inputs remain unchanged. A marked valve has an
+  external bounds frame instead of replacing its state color. Erasing a flow
+  contribution never hides the valve's state indicator.
+- Automatic recomputation preserves corrections; closing a valve can therefore
+  leave manually supplemented pipe segments visible. Painting an excluded object
+  makes it visible again.
+- Phase restoration reads manual handles directly without creating route roots.
+  Unresolved handles and missing Utility references are retained and reported.
+- The brush component only samples hits. The application owns one correction
+  state and one highlight-rendering path; completed/interrupted strokes submit
+  state once, including Escape, pointer cancellation and tool/phase changes.
+  Loading a workspace ends the active stroke and blocks new brush activation.
+- The correction bar shows addition/exclusion counts, including retained
+  unresolved handles. Its correction-specific Undo/Redo buttons operate on
+  complete strokes, not samples, and never undo device states or automatic flows.
+  No-op strokes preserve redo; a new changed stroke discards it. History resets
+  on phase/drawing restoration and is not persisted or copied between phases.
+  Global CAD undo shortcuts are not intercepted.
+- Clear corrections requires confirmation, removes additions and exclusions,
+  and clears correction history without changing device states or automatic
+  results. It cannot be undone. A confirmation from an earlier phase activation
+  cannot clear another phase, including after switching away and back.
+  Correction actions are disabled during drawing strokes and workspace loading.
+- Brush rendering deduplicates affected objects into one animation frame and
+  updates only those highlight roots. Stroke completion flushes pending rendering;
+  resets and scope changes cancel old pending work.
+
+Existing persisted flow records are not reclassified as manual corrections.
+Real backend retention of `manualCorrections` and visual validation against a
+customer drawing remain deployment acceptance requirements; automated tests cover
+model composition, correction controls/history, rendering scheduling and mocked
+backend round trips, not a full authenticated drawing workflow.
+
 ### Default Device Styles / 默认设备样式
 
 - Built-in defaults are maintained in [defaultDeviceStyles.json](src/presentation/defaultDeviceStyles.json), using the same `presentationProfile.deviceStyles` / `utilities` format as exported files. The file can be imported directly, or replaced with a valid export; changes require rebuilding. Initialization, import, and drawing supplementation share [parseHighlightStyleDocument](src/presentation/highlightStyleDocument.ts). It validates required fields, hex colors, line widths (1-12 px), opacity (0-1), flow rules, and duplicate IDs/states before normalization. Historical backend data still uses the existing compatibility reader.

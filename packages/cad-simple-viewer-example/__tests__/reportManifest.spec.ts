@@ -10,7 +10,7 @@ const createWorkspace = (
     drawing: { id: 'drawing', kind: 'blank' as const, sourceName: 'Blank.dwg' }
   }
   return {
-    version: 4,
+    version: 5,
     drawingAssets,
     processes: [
       {

@@ -1,4 +1,8 @@
 import {
+  cloneManualHighlightCorrections,
+  ManualHighlightCorrectionsValidationError
+} from './manualHighlightCorrections'
+import {
   type CreatePhaseInput,
   type DeviceState,
   type DeviceStateStyleDefinition,
@@ -201,6 +205,7 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
   flowState: cloneFlowState(phase.flowState),
+  manualCorrections: cloneManualHighlightCorrections(phase.manualCorrections),
   textNotes: phase.textNotes?.map(note => ({
     ...note,
     location: { ...note.location }
@@ -238,10 +243,14 @@ const cloneState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object'
 
-const isWorkspaceState = (value: unknown): value is PhaseWorkspaceState => {
+type V4PhaseWorkspaceState = Omit<PhaseWorkspaceState, 'version'> & { version: 4 }
+
+const isWorkspaceState = (
+  value: unknown
+): value is PhaseWorkspaceState | V4PhaseWorkspaceState => {
   if (!isRecord(value)) return false
   return (
-    value.version === PHASE_WORKSPACE_SCHEMA_VERSION &&
+    (value.version === PHASE_WORKSPACE_SCHEMA_VERSION || value.version === 4) &&
     (value.presentationProfile === undefined || isRecord(value.presentationProfile)) &&
     Array.isArray(value.processes) &&
     value.processes.every(
@@ -593,12 +602,11 @@ const normalizeFlowPaths = (
   profile: PresentationProfile
 ): FlowPathStatus[] => {
   if (!Array.isArray(value)) return []
-  const utilityIds = new Set(profile.utilities.map(utility => utility.id))
   return value.flatMap((candidate, index) => {
     if (!isRecord(candidate)) return []
     const utilityId =
-      typeof candidate.utilityId === 'string' && utilityIds.has(candidate.utilityId)
-        ? candidate.utilityId
+      typeof candidate.utilityId === 'string' && candidate.utilityId.trim()
+        ? candidate.utilityId.trim()
         : undefined
     const styleOverride = isRecord(candidate.styleOverride)
       ? normalizeStyle(candidate.styleOverride, profile.defaultFlowStyle)
@@ -614,9 +622,8 @@ const normalizeFlowPaths = (
           ? {
             kind: 'utility' as const,
             utilityId:
-              typeof source.utilityId === 'string' &&
-                utilityIds.has(source.utilityId)
-                ? source.utilityId
+              typeof source.utilityId === 'string' && source.utilityId.trim()
+                ? source.utilityId.trim()
                 : undefined
           }
           : undefined
@@ -629,6 +636,8 @@ const normalizeFlowPaths = (
         typeof candidate.name === 'string' && candidate.name.trim()
           ? candidate.name.trim()
           : `${DEFAULT_FLOW_PATH_NAME} ${index + 1}`,
+      ...(typeof candidate.ownerHandleKey === 'string' && candidate.ownerHandleKey.trim()
+        ? { ownerHandleKey: candidate.ownerHandleKey.trim() } : {}),
       handleKeys: Array.isArray(candidate.handleKeys)
         ? candidate.handleKeys.filter(
           (handle): handle is string => typeof handle === 'string'
@@ -822,6 +831,7 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
           number: phase.number,
           name: phase.name,
           tankId: typeof phase.tankId === 'string' ? phase.tankId.trim() || undefined : undefined,
+          manualCorrections: cloneManualHighlightCorrections(phase.manualCorrections),
           flowState: {
             flowPaths: normalizeFlowPaths(
               phase.flowState.flowPaths,
@@ -869,7 +879,12 @@ export class PhaseWorkspaceStore {
       const raw = storage.getItem(PHASE_WORKSPACE_STORAGE_KEY)
       if (!raw) return new PhaseWorkspaceStore()
       const parsed: unknown = JSON.parse(raw)
-      if (isWorkspaceState(parsed)) return new PhaseWorkspaceStore(parsed)
+      if (isWorkspaceState(parsed)) {
+        return new PhaseWorkspaceStore({
+          ...parsed,
+          version: PHASE_WORKSPACE_SCHEMA_VERSION
+        })
+      }
       if (isV3WorkspaceState(parsed)) {
         return new PhaseWorkspaceStore(migrateV3State(parsed))
       }
@@ -880,7 +895,8 @@ export class PhaseWorkspaceStore {
         return new PhaseWorkspaceStore(migrateLegacyState(parsed))
       }
       return new PhaseWorkspaceStore()
-    } catch {
+    } catch (error) {
+      if (error instanceof ManualHighlightCorrectionsValidationError) throw error
       return new PhaseWorkspaceStore()
     }
   }
@@ -1098,6 +1114,7 @@ export class PhaseWorkspaceStore {
       flowState: sourcePhase
         ? cloneFlowState(sourcePhase.flowState)
         : { flowPaths: [] },
+      manualCorrections: cloneManualHighlightCorrections(sourcePhase?.manualCorrections),
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -1189,14 +1206,27 @@ export class PhaseWorkspaceStore {
     processId: string,
     sequenceId: string,
     phaseId: string,
-    state: Pick<PhaseSnapshot, 'flowState' | 'textNotes'>
+    state: Pick<PhaseSnapshot, 'flowState' | 'textNotes' | 'manualCorrections'>
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
+    const corrections = cloneManualHighlightCorrections(state.manualCorrections)
     phase.flowState = cloneFlowState(state.flowState)
+    if (corrections !== undefined) phase.manualCorrections = corrections
     phase.textNotes = state.textNotes?.map(note => ({
       ...note,
       location: { ...note.location }
     }))
+    phase.updatedAt = this.now()
+  }
+
+  updateManualCorrections(
+    processId: string,
+    sequenceId: string,
+    phaseId: string,
+    corrections: NonNullable<PhaseSnapshot['manualCorrections']>
+  ) {
+    const phase = this.requirePhase(processId, sequenceId, phaseId)
+    phase.manualCorrections = cloneManualHighlightCorrections(corrections)
     phase.updatedAt = this.now()
   }
 
@@ -1245,6 +1275,7 @@ export class PhaseWorkspaceStore {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     const previousAssetId =
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
+    if (previousAssetId !== drawing.id) phase.manualCorrections = undefined
     this.state.drawingAssets[drawing.id] = { ...drawing }
     phase.drawing = {
       kind: 'assigned',
@@ -1280,6 +1311,7 @@ export class PhaseWorkspaceStore {
     phase.drawing = { ...sourcePhase.drawing }
     phase.sourcePhaseId = sourcePhase.id
     phase.flowState = cloneFlowState(sourcePhase.flowState)
+    phase.manualCorrections = cloneManualHighlightCorrections(sourcePhase.manualCorrections)
     phase.updatedAt = this.now()
     return previousAssetId
       ? this.removeUnusedDrawing(previousAssetId)
@@ -1295,6 +1327,7 @@ export class PhaseWorkspaceStore {
     const previousAssetId =
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
     phase.drawing = { kind: 'unassigned' }
+    phase.manualCorrections = undefined
     phase.updatedAt = this.now()
     return previousAssetId
       ? this.removeUnusedDrawing(previousAssetId)

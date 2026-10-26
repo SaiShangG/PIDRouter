@@ -1,10 +1,16 @@
 import type {
   DeviceState,
   FlowPathStatus,
+  ManualHighlightCorrections,
   PresentationProfile
 } from './types'
 
 export type PhaseOverlayStyleWarning =
+  | {
+    kind: 'missing-manual-utility'
+    handleKey: string
+    styleRefId: string
+  }
   | {
     kind: 'missing-flow-utility'
     flowPathId: string
@@ -31,13 +37,26 @@ export type PhaseOverlayStyleWarning =
 export const findPhaseOverlayStyleWarnings = (
   profile: PresentationProfile,
   flowPaths: readonly FlowPathStatus[],
-  deviceStates: Readonly<Record<string, DeviceState>> = {}
+  deviceStates: Readonly<Record<string, DeviceState>> = {},
+  manualCorrections?: ManualHighlightCorrections
 ): PhaseOverlayStyleWarning[] => {
   const utilityIds = new Set(profile.utilities.map(utility => utility.id))
   const deviceStyles = profile.devices.flatMap(device =>
     device.states.map(state => ({ device, state }))
   )
   const warnings: PhaseOverlayStyleWarning[] = []
+  manualCorrections?.additions.forEach(addition => {
+    const styleRefId = addition.styleSource.kind === 'utility'
+      ? addition.styleSource.utilityId
+      : undefined
+    if (styleRefId && !utilityIds.has(styleRefId)) {
+      warnings.push({
+        kind: 'missing-manual-utility',
+        handleKey: addition.handleKey,
+        styleRefId
+      })
+    }
+  })
 
   flowPaths.forEach(flowPath => {
     const styleRefId = flowPath.styleSource?.kind === 'utility'

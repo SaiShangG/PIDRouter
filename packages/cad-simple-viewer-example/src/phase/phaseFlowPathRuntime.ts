@@ -26,9 +26,9 @@ export const retainUnresolvedFlowPaths = (
   flowPaths
     .map(flowPath => ({
       ...flowPath,
-      handleKeys: flowPath.handleKeys.filter(handleKey =>
-        !canResolveHandle(handleKey)
-      )
+      handleKeys: flowPath.ownerHandleKey && !canResolveHandle(flowPath.ownerHandleKey)
+        ? [...flowPath.handleKeys]
+        : flowPath.handleKeys.filter(handleKey => !canResolveHandle(handleKey))
     }))
     .filter(flowPath => flowPath.handleKeys.length > 0)
 

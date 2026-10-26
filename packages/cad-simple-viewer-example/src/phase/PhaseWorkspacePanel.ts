@@ -1180,6 +1180,10 @@ export class PhaseWorkspacePanel {
     const projectDrawingField = this.createFormField('Project PID', projectDrawing)
     const markedPhaseField = this.createFormField('已标记 Phase', markedPhase)
     const displayNameField = this.createFormField('图纸显示名', displayName)
+    const correctionHint = document.createElement('p')
+    correctionHint.id = `phaseDrawingCorrectionHint-${phaseId}`
+    correctionHint.className = 'phase-drawing-association-hint'
+    modal.setAttribute('aria-describedby', correctionHint.id)
     sourceField.classList.add('phase-drawing-source-field')
     displayNameField.classList.add('phase-drawing-name-field')
     const footer = document.createElement('footer')
@@ -1196,6 +1200,7 @@ export class PhaseWorkspacePanel {
       projectDrawingField,
       markedPhaseField,
       displayNameField,
+      correctionHint,
       footer
     )
     dialog.append(header, form)
@@ -1220,6 +1225,9 @@ export class PhaseWorkspacePanel {
     const syncFields = () => {
       projectDrawingField.hidden = source.value !== 'project'
       markedPhaseField.hidden = source.value !== 'marked'
+      correctionHint.textContent = this.t(source.value === 'marked'
+        ? '将复制来源 Phase 的设备状态、自动流路和人工修正，并替换当前 Phase 的对应数据。'
+        : '更换为不同图纸会清除当前 Phase 的人工修正；重新关联同一图纸则保留。')
       if (source.value === 'marked') {
         const markedSource = markedSources[Number(markedPhase.value)]
         if (markedSource?.phase.drawing.kind === 'assigned') {

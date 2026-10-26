@@ -82,17 +82,19 @@ describe('resolveFlowHighlightLayers', () => {
 
   it('collapses flow layers when a configured device style has precedence', () => {
     const { profile, water, steam } = createFixture()
-    profile.deviceStyles.valve.open = {
-      color: 0x2e7d32,
-      lineWidthPx: 4,
-      opacity: 0.9,
-      visible: true
-    }
+    profile.devices.push({
+      id: 'valve', name: 'Valve', order: 0,
+      states: [{
+        id: 'open', key: 'OPEN', displayName: 'Open',
+        color: 0x2e7d32, lineWidthPx: 4, opacity: 0.9, enabled: true,
+        flowBehavior: 'conducting', autoHighlightFlow: true, order: 0
+      }]
+    })
 
     expect(resolveFlowHighlightLayers(
       profile,
       [water, steam],
-      { key: 'valve-1', label: 'XV-1', mode: 'open' }
+      { key: 'valve-1', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'open' }
     )).toEqual([{
       id: 'device:valve-1',
       renderOrder: 10000,

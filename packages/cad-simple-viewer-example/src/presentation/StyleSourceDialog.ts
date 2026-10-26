@@ -155,6 +155,11 @@ export class StyleSourceDialog {
       sourceGroup.append(this.sourceButton('device-state', '设备样式预设'))
     }
     body.append(sourceGroup, this.renderSourceControls(), this.renderPreview())
+    if (this.options.mode === 'brush') {
+      const hint = document.createElement('p')
+      hint.textContent = '仅修正高亮外观，不改变设备状态或触发自动找路。橡皮可排除错误的流路高亮。'
+      body.append(hint)
+    }
 
     const footer = document.createElement('footer')
     footer.className = 'phase-workspace-modal-actions style-source-actions'

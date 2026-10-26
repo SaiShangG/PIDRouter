@@ -1,34 +1,31 @@
 /** @jest-environment jsdom */
 
 import type { AcEdBaseView } from '@mlightcad/cad-simple-viewer'
-import type { AcDbObjectId } from '@mlightcad/data-model'
 
 import {
   BrushHighlightFeature,
   type BrushOperation
 } from '../src/brush/BrushHighlightFeature'
-import type { ResolvedEntityPresentation } from '../src/presentation/presentationStyleResolver'
+import { HighlightRenderScheduler } from '../src/brush/HighlightRenderScheduler'
+import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
+import type { FlowPathStyleSource } from '../src/phase/types'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
   AcEdCorsorType: { Crosshair: 0 },
   AcEdViewMode: { SELECTION: 0, PAN: 1, BRUSH: 2 }
 }))
 
-const SELECTION_VIEW_MODE = 0
-const BRUSH_VIEW_MODE = 2
-
-const createPointerEvent = (
+const pointer = (
   type: string,
-  clientX: number,
-  clientY: number,
-  buttons: number
+  x = 0,
+  buttons = 1
 ) => {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperties(event, {
     button: { value: 0 },
     buttons: { value: buttons },
-    clientX: { value: clientX },
-    clientY: { value: clientY },
+    clientX: { value: x },
+    clientY: { value: 0 },
     isPrimary: { value: true },
     pointerId: { value: 1 },
     pointerType: { value: 'mouse' }
@@ -38,372 +35,222 @@ const createPointerEvent = (
 
 const createView = () => {
   const canvas = document.createElement('canvas')
-  const selectedIds = new Set<AcDbObjectId>()
-  const selectionRemovedListeners = new Set<
-    (args: { ids: AcDbObjectId[] }) => void
-  >()
-  const selectionSet = {
-    has: (id: AcDbObjectId) => selectedIds.has(id),
-    add: (id: AcDbObjectId) => selectedIds.add(id),
-    remove: (id: AcDbObjectId) => {
-      selectedIds.delete(id)
-      selectionRemovedListeners.forEach(listener => listener({ ids: [id] }))
-    },
-    events: {
-      selectionRemoved: {
-        addEventListener: (listener: (args: { ids: AcDbObjectId[] }) => void) =>
-          selectionRemovedListeners.add(listener),
-        removeEventListener: (listener: (args: { ids: AcDbObjectId[] }) => void) =>
-          selectionRemovedListeners.delete(listener)
-      }
-    }
-  }
-  const overlays: Array<{
-    ids: AcDbObjectId[]
-    style: ResolvedEntityPresentation
-    disposed: boolean
-  }> = []
-  let mode = SELECTION_VIEW_MODE
-  let cursor = 0
-
+  let captured = false
+  canvas.setPointerCapture = jest.fn(() => { captured = true })
+  canvas.hasPointerCapture = jest.fn(() => captured)
+  canvas.releasePointerCapture = jest.fn(() => {
+    captured = false
+    canvas.dispatchEvent(pointer('lostpointercapture'))
+  })
+  const selectedIds = new Set(['A'])
   const view = {
     canvas,
-    editor: { get currentCursor() { return cursor } },
-    get mode() {
-      return mode
-    },
-    set mode(value: number) {
-      mode = value
-    },
-    selectionSet,
+    mode: 0,
+    editor: { currentCursor: 0 },
+    selectionSet: { has: (id: string) => selectedIds.has(id) },
     viewportToCanvas: (point: { x: number; y: number }) => point,
     screenToWorld: (point: { x: number; y: number }) => point,
-    pick: (point: { x: number; y: number }) => {
-      if (point.x < 8) return [{ id: 'A' }]
-      if (point.x < 16) return [{ id: 'B' }]
-      return [{ id: 'C' }]
-    },
+    pick: (point: { x: number; y: number }) =>
+      [{ id: point.x < 8 ? 'A' : point.x < 16 ? 'B' : 'C' }],
     setCursor: (value: number) => {
-      cursor = value
       canvas.style.cursor = value === 0 ? 'crosshair' : `cursor-${value}`
     }
   } as unknown as AcEdBaseView
-
-  canvas.addEventListener('mousedown', event => {
-    if (event.button === 1) canvas.style.cursor = 'grab'
-  })
   canvas.addEventListener('mouseup', event => {
     if (event.button === 1) view.setCursor(0)
   })
+  return { canvas, view, selectedIds }
+}
 
-  return { canvas, view, overlays, selectionSet }
+const stroke = (canvas: HTMLCanvasElement, x: number) => {
+  canvas.dispatchEvent(pointer('pointerdown', x))
+  canvas.dispatchEvent(pointer('pointerup', x, 0))
 }
 
 describe('BrushHighlightFeature', () => {
-  it('uses an operation-specific cursor and restores it after deactivation', () => {
+  it('restores operation cursors after pan and returns to selection on exit', () => {
     const { canvas, view } = createView()
-    const cursors: Record<BrushOperation, string> = {
-      paint: 'brush-cursor',
-      erase: 'eraser-cursor'
-    }
     const feature = new BrushHighlightFeature({
       getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'purple-flow',
-        color: 0x9c27b0,
-        lineWidthPx: 3.5,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: () => null,
-      setOperationCursor: (cursorView, operation) => {
-        cursorView.canvas.style.cursor = cursors[operation]
+      onEntitiesChanged: jest.fn(),
+      setOperationCursor: (target, operation) => {
+        target.canvas.style.cursor = `${operation}-cursor`
       }
     })
-
     expect(feature.activate('paint')).toBe(true)
-    expect(canvas.style.cursor).toBe('brush-cursor')
-
-    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 1 }))
-    expect(canvas.style.cursor).toBe('grab')
+    expect(view.mode).toBe(2)
+    expect(canvas.style.cursor).toBe('paint-cursor')
     canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
-    expect(canvas.style.cursor).toBe('brush-cursor')
-    expect(feature.isActive).toBe(true)
-    expect(view.mode).toBe(BRUSH_VIEW_MODE)
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-    expect(feature.highlightedIds).toEqual(['A'])
-
-    expect(feature.activate('erase')).toBe(true)
-    expect(canvas.style.cursor).toBe('eraser-cursor')
-
-    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 1 }))
-    canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
-    expect(canvas.style.cursor).toBe('eraser-cursor')
-
-    feature.deactivate()
-    expect(canvas.style.cursor).toBe('crosshair')
-    canvas.dispatchEvent(new MouseEvent('mouseup', { button: 1 }))
-    expect(canvas.style.cursor).toBe('crosshair')
-    feature.dispose()
-  })
-
-  it('highlights interpolated hits and erases only brush highlights', () => {
-    const { canvas, view, overlays } = createView()
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'purple-flow',
-        color: 0x9c27b0,
-        lineWidthPx: 3.5,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: (ids, style) => {
-        const overlay = { ids: [...ids], style, disposed: false }
-        overlays.push(overlay)
-        return { dispose: () => { overlay.disposed = true } }
-      }
-    })
-
-    expect(feature.activate('paint')).toBe(true)
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointermove', 20, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 20, 0, 0))
-
-    expect(feature.highlightedIds).toEqual(['A', 'B', 'C'])
-    const activeOverlay = overlays.filter(item => !item.disposed)
-    expect(activeOverlay[activeOverlay.length - 1]).toMatchObject({
-      ids: ['A', 'B', 'C'],
-      style: { color: 0x9c27b0, lineWidthPx: 3.5 }
-    })
-    expect(view.mode).toBe(BRUSH_VIEW_MODE)
-
-    expect(feature.activate('erase')).toBe(true)
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
-
-    expect(feature.highlightedIds).toEqual(['A', 'C'])
-    const activeOverlayAfterErase = overlays.filter(item => !item.disposed)
-    expect(activeOverlayAfterErase[activeOverlayAfterErase.length - 1]?.ids).toEqual(['A', 'C'])
-    feature.deactivate()
-    expect(view.mode).toBe(SELECTION_VIEW_MODE)
-  })
-
-  it('toggles off without clearing highlights and notifies the toolbar on every state change', () => {
-    const { canvas, view } = createView()
-    const onActiveChanged = jest.fn()
-    const disposeOverlay = jest.fn()
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'flow',
-        color: 0x112233,
-        lineWidthPx: 3,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: () => ({ dispose: disposeOverlay }),
-      onActiveChanged
-    })
-
-    feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-    expect(feature.activate('paint')).toBe(false)
-    expect(feature.isActive).toBe(false)
-    expect(view.mode).toBe(SELECTION_VIEW_MODE)
-    expect(onActiveChanged).toHaveBeenCalledTimes(2)
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
-    expect(feature.highlightedIds).toEqual(['A'])
-    expect(disposeOverlay).not.toHaveBeenCalled()
-
-    feature.activate('paint')
-    expect(feature.isActive).toBe(true)
-    expect(onActiveChanged).toHaveBeenCalledTimes(3)
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    expect(feature.isActive).toBe(false)
-    expect(onActiveChanged).toHaveBeenCalledTimes(4)
-    feature.dispose()
-  })
-
-  it('reports painted and erased hit objects to the host', () => {
-    const { canvas, view } = createView()
-    const changes: Array<{ operation: BrushOperation; ids: AcDbObjectId[] }> = []
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'purple-flow',
-        color: 0x9c27b0,
-        lineWidthPx: 3.5,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: () => null,
-      onEntitiesChanged: (operation, ids) => {
-        changes.push({ operation, ids: [...ids] })
-      }
-    })
-
-    feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-
+    expect(canvas.style.cursor).toBe('paint-cursor')
     feature.activate('erase')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
+    expect(canvas.style.cursor).toBe('erase-cursor')
+    feature.deactivate()
+    expect(canvas.style.cursor).toBe('crosshair')
+    expect(view.mode).toBe(0)
+    feature.dispose()
+  })
 
-    expect(changes).toEqual([
-      { operation: 'paint', ids: ['A'] },
-      { operation: 'erase', ids: ['B'] }
+  it('interpolates and reports each hit once per stroke without owning highlight state', () => {
+    const { canvas, view } = createView()
+    const onEntitiesChanged = jest.fn()
+    const onStrokeStarted = jest.fn()
+    const onStrokeEnded = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged, onStrokeStarted, onStrokeEnded
+    })
+    feature.activate('paint')
+    canvas.dispatchEvent(pointer('pointerdown', 0))
+    canvas.dispatchEvent(pointer('pointermove', 20))
+    canvas.dispatchEvent(pointer('pointerup', 20, 0))
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['paint', ['B']], ['paint', ['C']]
+    ])
+    expect(onStrokeStarted).toHaveBeenCalledWith('paint')
+    expect(onStrokeEnded).toHaveBeenCalledTimes(1)
+    expect(canvas.releasePointerCapture).toHaveBeenCalledTimes(1)
+    feature.dispose()
+  })
+
+  it('reports an existing object again on a new stroke so it can be recolored', () => {
+    const { canvas, view } = createView()
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({ getView: () => view, onEntitiesChanged })
+    feature.activate('paint')
+    stroke(canvas, 0)
+    stroke(canvas, 0)
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['paint', ['A']]
     ])
     feature.dispose()
   })
 
-  it('does not remove a normal selection highlight while erasing', () => {
-    const { canvas, view, overlays, selectionSet } = createView()
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'purple-flow',
-        color: 0x9c27b0,
-        lineWidthPx: 3.5,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: (ids, style) => {
-        const overlay = { ids: [...ids], style, disposed: false }
-        overlays.push(overlay)
-        return { dispose: () => { overlay.disposed = true } }
-      }
-    })
-
-    feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-    selectionSet.add('A')
-
+  it('reports unpainted eraser hits to the correction model without changing selection', () => {
+    const { canvas, view, selectedIds } = createView()
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({ getView: () => view, onEntitiesChanged })
     feature.activate('erase')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-
-    expect(feature.highlightedIds).toEqual([])
-    expect(overlays.filter(item => !item.disposed)).toHaveLength(0)
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).toHaveBeenCalledWith('erase', ['A'])
+    expect([...selectedIds]).toEqual(['A'])
     feature.dispose()
   })
 
-  it('exits on Escape and keeps painted highlights', () => {
-    const { canvas, view, overlays } = createView()
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: 'purple-flow',
-        color: 0x9c27b0,
-        lineWidthPx: 3.5,
-        opacity: 1,
-        visible: true,
-        source: 'default'
-      }),
-      createOverlay: (ids, style) => {
-        const overlay = { ids: [...ids], style, disposed: false }
-        overlays.push(overlay)
-        return { dispose: () => { overlay.disposed = true } }
+  it.each(['pointercancel', 'lostpointercapture', 'escape', 'deactivate', 'reset'])(
+    'finishes the current stroke exactly once on %s',
+    end => {
+      const { canvas, view } = createView()
+      const onStrokeEnded = jest.fn()
+      const feature = new BrushHighlightFeature({
+        getView: () => view, onEntitiesChanged: jest.fn(), onStrokeEnded
+      })
+      feature.activate('paint')
+      canvas.dispatchEvent(pointer('pointerdown'))
+      if (end === 'escape') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      } else if (end === 'deactivate') {
+        feature.deactivate()
+      } else if (end === 'reset') {
+        feature.reset()
+      } else {
+        canvas.dispatchEvent(pointer(end))
       }
-    })
-
-    feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 20, 0, 1))
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-
-    expect(feature.isActive).toBe(false)
-    expect(feature.highlightedIds).toEqual(['C'])
-    expect(view.mode).toBe(SELECTION_VIEW_MODE)
-    const activeOverlay = overlays.filter(item => !item.disposed)
-    expect(activeOverlay[activeOverlay.length - 1]?.style.color).toBe(0x9c27b0)
-    feature.dispose()
-  })
-
-  it('freezes the style for each stroke when presets change', () => {
-    const { canvas, view, overlays } = createView()
-    let color = 0x112233
-    const feature = new BrushHighlightFeature({
-      getView: () => view,
-      getHighlightStyle: () => ({
-        key: color.toString(16),
-        color,
-        lineWidthPx: 3,
-        opacity: 1,
-        visible: true,
-        source: 'utility'
-      }),
-      createOverlay: (ids, style) => {
-        const overlay = { ids: [...ids], style, disposed: false }
-        overlays.push(overlay)
-        return { dispose: () => { overlay.disposed = true } }
-      }
-    })
-
-    feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 0, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 0, 0, 0))
-    color = 0x445566
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
-
-    const activeOverlays = overlays.filter(item => !item.disposed)
-    expect(activeOverlays).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ ids: ['A'], style: expect.objectContaining({ color: 0x112233 }) }),
-        expect.objectContaining({ ids: ['B'], style: expect.objectContaining({ color: 0x445566 }) })
-      ])
-    )
-    feature.dispose()
-  })
-
-  it('uses an object-specific valve style while painting the surrounding flow', () => {
-    const { canvas, view, overlays } = createView()
-    const flowStyle: ResolvedEntityPresentation = {
-      key: 'flow',
-      color: 0x112233,
-      lineWidthPx: 3,
-      opacity: 1,
-      visible: true,
-      source: 'utility'
+      canvas.dispatchEvent(pointer('pointerup', 0, 0))
+      feature.dispose()
+      expect(onStrokeEnded).toHaveBeenCalledTimes(1)
     }
-    const valveStyle: ResolvedEntityPresentation = {
-      key: 'valve',
-      color: 0x445566,
-      lineWidthPx: 4,
-      opacity: 1,
-      visible: true,
-      source: 'device'
+  )
+
+  it('finishes painting before changing to erasing and ignores movement until the next stroke', () => {
+    const { canvas, view } = createView()
+    const events: string[] = []
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      onStrokeStarted: operation => events.push(`start:${operation}`),
+      onStrokeEnded: () => events.push('end'),
+      onEntitiesChanged: operation => events.push(`hit:${operation}`)
+    })
+    feature.activate('paint')
+    canvas.dispatchEvent(pointer('pointerdown'))
+    feature.activate('erase')
+    canvas.dispatchEvent(pointer('pointermove', 10))
+    stroke(canvas, 10)
+    expect(events).toEqual([
+      'start:paint', 'hit:paint', 'end', 'start:erase', 'hit:erase', 'end'
+    ])
+    feature.dispose()
+  })
+
+  it('toggles off and detaches disposed listeners', () => {
+    const { canvas, view } = createView()
+    const onActiveChanged = jest.fn()
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged, onActiveChanged
+    })
+    feature.activate('paint')
+    expect(feature.activate('paint')).toBe(false)
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).not.toHaveBeenCalled()
+    expect(onActiveChanged).toHaveBeenCalledTimes(2)
+    feature.dispose()
+    expect(feature.activate('paint')).toBe(false)
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).not.toHaveBeenCalled()
+  })
+
+  it('freezes a style source per stroke and submits only once at stroke completion', () => {
+    const { canvas, view } = createView()
+    const state = new ManualHighlightCorrectionState()
+    let utilityId = 'water'
+    let strokeStyle: FlowPathStyleSource = { kind: 'utility' }
+    const submit = jest.fn()
+    const render = jest.fn()
+    const scheduleFrame = jest.fn(() => 1)
+    const cancelFrame = jest.fn()
+    const scheduler = new HighlightRenderScheduler<string>(render, scheduleFrame, cancelFrame)
+    const apply = (operation: BrushOperation, ids: readonly string[]) => {
+      const changed = operation === 'paint'
+        ? state.paint(ids, strokeStyle)
+        : state.erase(ids.map(handleKey => ({ handleKey, hasAutomaticFlow: false })))
+      if (changed) scheduler.schedule(ids)
     }
     const feature = new BrushHighlightFeature({
       getView: () => view,
-      getHighlightStyle: (objectId, fallbackStyle) =>
-        objectId === 'B' ? valveStyle : fallbackStyle ?? flowStyle,
-      createOverlay: (ids, style) => {
-        const overlay = { ids: [...ids], style, disposed: false }
-        overlays.push(overlay)
-        return { dispose: () => { overlay.disposed = true } }
+      onStrokeStarted: () => {
+        state.beginStroke()
+        strokeStyle = { kind: 'utility', utilityId }
+      },
+      onEntitiesChanged: apply,
+      onStrokeEnded: () => {
+        scheduler.flush()
+        if (state.endStroke()) submit(state.snapshot())
       }
     })
-
     feature.activate('paint')
-    canvas.dispatchEvent(createPointerEvent('pointerdown', 10, 0, 1))
-    canvas.dispatchEvent(createPointerEvent('pointerup', 10, 0, 0))
-
-    const activeOverlays = overlays.filter(item => !item.disposed)
-    expect(activeOverlays).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ids: ['B'], style: valveStyle })
-    ]))
-    expect(feature.highlightedIds).toEqual(['B'])
+    canvas.dispatchEvent(pointer('pointerdown', 0))
+    expect(feature.isDrawing).toBe(true)
+    utilityId = 'steam'
+    canvas.dispatchEvent(pointer('pointermove', 10))
+    expect(submit).not.toHaveBeenCalled()
+    expect(render).not.toHaveBeenCalled()
+    expect(scheduleFrame).toHaveBeenCalledTimes(1)
+    canvas.dispatchEvent(pointer('pointerup', 10, 0))
+    expect(feature.isDrawing).toBe(false)
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(render).toHaveBeenCalledTimes(1)
+    expect([...render.mock.calls[0][0]]).toEqual(['A', 'B'])
+    expect(state.snapshot().additions.map(item => item.styleSource)).toEqual([
+      { kind: 'utility', utilityId: 'water' },
+      { kind: 'utility', utilityId: 'water' }
+    ])
+    stroke(canvas, 0)
+    expect(state.getAddition('A')?.styleSource).toEqual({ kind: 'utility', utilityId: 'steam' })
+    expect(state.getAddition('B')?.styleSource).toEqual({ kind: 'utility', utilityId: 'water' })
+    expect(state.undo()).toBe(true)
+    expect(state.getAddition('A')?.styleSource).toEqual({ kind: 'utility', utilityId: 'water' })
+    expect(state.undo()).toBe(true)
+    expect(state.additionCount).toBe(0)
+    expect(state.canUndo).toBe(false)
     feature.dispose()
   })
 })

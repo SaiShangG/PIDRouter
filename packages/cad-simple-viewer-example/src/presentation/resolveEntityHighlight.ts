@@ -44,12 +44,12 @@ export const resolveEntityHighlight = (
   state: EntityHighlightState,
   activeFlowPathId?: string
 ): EntityHighlightResolution | undefined => {
+  if (state.brushStyle) return { source: 'brush', style: state.brushStyle }
   const flow = resolvePrimaryFlowHighlight(
     state.flowStyles ?? [],
     activeFlowPathId
   )
   if (flow) return { source: 'flow', style: flow.style }
-  if (state.brushStyle) return { source: 'brush', style: state.brushStyle }
   if (state.selected && state.selectionStyle) {
     return { source: 'selection', style: state.selectionStyle }
   }

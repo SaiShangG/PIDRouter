@@ -9,12 +9,15 @@ import type {
   UploadFileDto
 } from '../api/processAssistantTypes'
 import { NETWORK_DEFAULTS } from '../networkConfig'
+import { composeFinalFlowPaths } from './composeFinalFlowPaths'
+import { normalizeManualHighlightCorrections } from './manualHighlightCorrections'
 import {
   parsePhasePidOverlay,
   type PhasePidOverlay
 } from './phasePidOverlay'
 import {
   createDefaultPresentationProfile,
+  normalizePresentationProfile,
   PhaseWorkspaceStore
 } from './phaseWorkspaceStore'
 
@@ -97,6 +100,7 @@ export interface PhaseWorkspaceRepositoryOptions {
   baseUrl: string
   projectId: number
   projectConfigure?: Record<string, unknown>
+  getPresentationProfile?: () => PresentationProfile
   files: Pick<ProcessAssistantFileApi, 'list' | 'upload'>
   procedures: Pick<
     ProcessAssistantProcedureApi,
@@ -222,10 +226,15 @@ export class PhaseWorkspaceRepository {
         drawing
       }
     }
-    const persistedPhase = this.toPersistedPhaseData(phase)
+    const changedDrawing = drawing && (
+      phase.drawing.kind !== 'assigned' ||
+      this.readFileId(phase.drawing.assetId) !== drawing.fileId
+    )
     return {
-      ...persistedPhase,
-      drawing: drawing ?? persistedPhase.drawing
+      ...this.toPersistedPhaseData(changedDrawing
+        ? { ...phase, manualCorrections: undefined }
+        : phase),
+      ...(drawing ? { drawing } : {})
     }
   }
 
@@ -429,6 +438,11 @@ export class PhaseWorkspaceRepository {
     drawingAssets: Record<string, DrawingAssetRef>
   ): PhaseSnapshot {
     const parsed = parsePhasePidOverlay(phase.jsonData ?? '')
+    if (parsed.status !== 'valid' || parsed.warnings.some(warning =>
+      warning.code === 'invalid-manual-corrections' || warning.code === 'invalid-auto-flow-path' ||
+      warning.code === 'invalid-flow-path')) {
+      throw new Error(`Phase ${phase.id} contains invalid highlight snapshot data`)
+    }
     const timestamp = this.now()
     const overlay = parsed.status === 'valid' ? parsed.overlay : undefined
     return {
@@ -438,6 +452,19 @@ export class PhaseWorkspaceRepository {
       tankId: overlay?.tankId,
       drawing: this.readDrawing(overlay?.drawing, drawingAssets),
       flowState: overlay ? this.readFlowState(overlay) : { flowPaths: [] },
+      ...(overlay?.manualCorrections
+        ? {
+          manualCorrections: normalizeManualHighlightCorrections({
+            additions: overlay.manualCorrections.additions.map(addition => ({
+              ...addition,
+              handleKey: this.fromPersistedHandleKey(addition.handleKey)
+            })),
+            exclusions: overlay.manualCorrections.exclusions.map(handleKey =>
+              this.fromPersistedHandleKey(handleKey)
+            )
+          })
+        }
+        : {}),
       textNotes: overlay ? this.readTextNotes(overlay) : [],
       createdAt: timestamp,
       updatedAt: timestamp
@@ -484,9 +511,7 @@ export class PhaseWorkspaceRepository {
     const profile = isRecord(configure?.presentationProfile)
       ? configure.presentationProfile
       : configure
-    return profile
-      ? (profile as unknown as PresentationProfile)
-      : createDefaultPresentationProfile()
+    return profile ? normalizePresentationProfile(profile) : createDefaultPresentationProfile()
   }
 
   private readDrawing(
@@ -509,18 +534,13 @@ export class PhaseWorkspaceRepository {
   }
 
   private readFlowState(overlay: PhasePidOverlay): FlowStateSnapshot {
-    const flowPaths: FlowPathStatus[] = overlay.flowPaths.map(
-      (flowPath, index) => {
-        const handleKey = this.fromPersistedHandleKey(flowPath.handleKey)
+    const flowPaths: FlowPathStatus[] = overlay.autoFlowPaths.map(
+      flowPath => {
         return {
-          id: `persisted-flow-${index + 1}`,
-          name: handleKey,
-          handleKeys: [handleKey],
-          utilityId: flowPath.highlightStyleRefId,
-          styleSource: {
-            kind: 'utility',
-            utilityId: flowPath.highlightStyleRefId
-          }
+          ...flowPath,
+          handleKeys: flowPath.handleKeys.map(handle => this.fromPersistedHandleKey(handle)),
+          ...(flowPath.ownerHandleKey !== undefined
+            ? { ownerHandleKey: this.fromPersistedHandleKey(flowPath.ownerHandleKey) } : {})
         }
       }
     )
@@ -543,6 +563,7 @@ export class PhaseWorkspaceRepository {
       : undefined
     return {
       flowPaths,
+      activeFlowPathId: overlay.activeFlowPathId,
       ...(deviceStates ? { deviceStates } : {})
     }
   }
@@ -563,7 +584,8 @@ export class PhaseWorkspaceRepository {
       OrderId: 1,
       Name: '',
       Comment: null,
-      flowPaths: null,
+      flowPaths: [],
+      autoFlowPaths: [],
       deviceStates: null,
       textNotes: []
     }
@@ -577,29 +599,19 @@ export class PhaseWorkspaceRepository {
       phase.drawing.kind === 'assigned'
         ? this.readFileId(phase.drawing.assetId)
         : undefined
-    const deviceStateHandles = new Set(
-      Object.values(phase.flowState.deviceStates ?? {}).map(deviceState =>
-        this.toPersistedHandleKey(deviceState.key)
-      )
-    )
-    const persistedFlowPathKeys = new Set<string>()
-    const flowPaths = phase.flowState.flowPaths.flatMap(flowPath => {
-      const highlightStyleRefId = flowPath.utilityId ??
-        (flowPath.styleSource?.kind === 'utility'
-          ? flowPath.styleSource.utilityId
-          : undefined)
-      if (!highlightStyleRefId) return []
-      return flowPath.handleKeys.flatMap(handleKey => {
-        const persistedHandleKey = this.toPersistedHandleKey(handleKey)
-        if (!persistedHandleKey || deviceStateHandles.has(persistedHandleKey)) {
-          return []
-        }
-        const key = `${persistedHandleKey}:${highlightStyleRefId}`
-        if (persistedFlowPathKeys.has(key)) return []
-        persistedFlowPathKeys.add(key)
-        return [{ handleKey: persistedHandleKey, highlightStyleRefId }]
-      })
-    })
+    const profile = this.options.getPresentationProfile?.() ?? this.readPresentationProfile()
+    const autoFlowPaths = phase.flowState.flowPaths.map(path => ({
+      ...path,
+      handleKeys: [...new Set(path.handleKeys.map(handle => this.requirePersistedHandleKey(handle)))],
+      ...(path.ownerHandleKey !== undefined
+        ? { ownerHandleKey: this.requirePersistedHandleKey(path.ownerHandleKey) } : {}),
+      styleSource: path.styleSource ?? (path.styleOverride
+        ? { kind: 'custom' as const, style: { ...profile.defaultFlowStyle, ...path.styleOverride } }
+        : { kind: 'utility' as const, utilityId: path.utilityId })
+    }))
+    const flowPaths = composeFinalFlowPaths(phase, profile).map(path => ({
+      ...path, handleKey: this.requirePersistedHandleKey(path.handleKey)
+    }))
     const deviceStates = Object.values(phase.flowState.deviceStates ?? {}).flatMap(
       deviceState => {
         const handleKey = this.toPersistedHandleKey(deviceState.key)
@@ -614,6 +626,14 @@ export class PhaseWorkspaceRepository {
           : []
       }
     )
+    const manualCorrections = phase.manualCorrections === undefined
+      ? undefined
+      : normalizeManualHighlightCorrections(
+        phase.manualCorrections,
+        value => typeof value === 'string'
+          ? this.toPersistedHandleKey(value)
+          : undefined
+      )
     return {
       Index: phase.number,
       OrderId: orderIndex,
@@ -627,8 +647,11 @@ export class PhaseWorkspaceRepository {
             displayName: phase.drawing.displayName
           }
           : undefined,
-      flowPaths: flowPaths.length > 0 ? flowPaths : null,
+      flowPaths,
+      autoFlowPaths,
+      ...(phase.flowState.activeFlowPathId ? { activeFlowPathId: phase.flowState.activeFlowPathId } : {}),
       deviceStates: deviceStates.length > 0 ? deviceStates : null,
+      ...(manualCorrections ? { manualCorrections } : {}),
       textNotes: phase.textNotes?.flatMap(note => {
         const linkedObjectHandleKey = note.linkedObjectHandleKey === undefined
           ? undefined
@@ -661,6 +684,12 @@ export class PhaseWorkspaceRepository {
     return /^[0-9A-F]+$/.test(handleKey)
       ? BigInt(`0x${handleKey}`).toString(10)
       : undefined
+  }
+
+  private requirePersistedHandleKey(value: string): string {
+    const handleKey = this.toPersistedHandleKey(value)
+    if (handleKey === undefined) throw new Error(`Invalid CAD highlight handle: ${value}`)
+    return handleKey
   }
 
   private resolvePersistedDeviceType(

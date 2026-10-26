@@ -8,7 +8,7 @@ export type {
   PhasePidOverlayTextNote
 } from './phasePidOverlay'
 
-export const PHASE_WORKSPACE_SCHEMA_VERSION = 4
+export const PHASE_WORKSPACE_SCHEMA_VERSION = 5
 
 export interface HighlightStyle {
   color: number
@@ -66,6 +66,17 @@ export type FlowPathStyleSource =
   | { kind: 'utility'; utilityId?: string }
   | { kind: 'custom'; style: HighlightStyle }
 
+export interface ManualHighlightAddition {
+  handleKey: string
+  styleSource: FlowPathStyleSource
+  geometry?: 'bounds'
+}
+
+export interface ManualHighlightCorrections {
+  additions: ManualHighlightAddition[]
+  exclusions: string[]
+}
+
 export interface PresentationProfile {
   defaultStyleSeed?: {
     status: 'pending' | 'generated' | 'configured'
@@ -86,6 +97,7 @@ export interface PresentationProfile {
 export interface FlowPathStatus {
   id: string
   name: string
+  ownerHandleKey?: string
   handleKeys: string[]
   priority?: number
   styleSource?: FlowPathStyleSource
@@ -110,6 +122,7 @@ export interface DeviceState {
 }
 
 export interface FlowStateSnapshot {
+  // Automatic results only; the persisted final flowPaths snapshot is derived.
   flowPaths: FlowPathStatus[]
   activeFlowPathId?: string
   deviceStates?: Record<string, DeviceState>
@@ -127,6 +140,7 @@ export interface PhaseSnapshot {
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
   flowState: FlowStateSnapshot
+  manualCorrections?: ManualHighlightCorrections
   textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]
   pidOverlayPersistence?:
   | { status: 'invalid'; reason: 'invalid-json' | 'invalid-root' }

@@ -246,6 +246,36 @@ export function injectUiReferenceThemeStyles() {
     .phase-context-status[data-state='idle'] { color: var(--app-text-muted); border-color: var(--app-border); background: var(--app-surface); }
     .phase-context-save.has-unsaved-changes:not(:disabled) { border-color: var(--app-danger, #b42318); background: var(--app-danger, #b42318); }
 
+    #manualCorrectionControls { flex: 0 0 auto; min-width: 0; }
+    .manual-correction-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--reference-line);
+      background: var(--app-surface, #ffffff);
+      color: var(--reference-muted);
+      font-size: 12px;
+    }
+    .manual-correction-summary { margin-right: auto; }
+    .manual-correction-controls button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 30px;
+      padding: 4px 8px;
+      border: 1px solid var(--reference-line);
+      border-radius: 4px;
+      background: var(--app-surface, #ffffff);
+      color: var(--app-text, #25343b);
+      cursor: pointer;
+    }
+    .manual-correction-controls button:hover:not(:disabled) { border-color: var(--app-accent); }
+    .manual-correction-controls button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+    .manual-correction-controls button:disabled { opacity: .5; cursor: default; }
+    .manual-correction-controls svg { width: 14px; height: 14px; }
+
     .viewer-canvas-area { background: var(--app-surface-canvas); }
 
     .dev-toolbar {

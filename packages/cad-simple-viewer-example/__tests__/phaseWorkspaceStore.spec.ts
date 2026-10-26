@@ -157,7 +157,7 @@ describe('PhaseWorkspaceStore', () => {
     const process = snapshot.processes[0]
     const sequence = process.sequences[0]
 
-    expect(snapshot.version).toBe(4)
+    expect(snapshot.version).toBe(5)
     expect(snapshot.presentationProfile.defaultFlowStyle.color).toBe(0x00c853)
     expect(process).not.toHaveProperty('presentationProfile')
     expect(process.activeSequenceId).toBe('sequence-default-process-1')
@@ -525,7 +525,7 @@ describe('PhaseWorkspaceStore', () => {
     }
 
     const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
-    expect(snapshot.version).toBe(4)
+    expect(snapshot.version).toBe(5)
     expect(snapshot.presentationProfile.defaultFlowStyle).toEqual({
       color: 0x00c853,
       lineWidthPx: 3,

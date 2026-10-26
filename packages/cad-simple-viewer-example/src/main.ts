@@ -36,7 +36,6 @@ import {
 } from '@mlightcad/data-model'
 import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save } from 'lucide'
 import type { Object3D } from 'three'
-import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
@@ -67,9 +66,10 @@ import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
 import type { AuthService, AuthUser } from './auth/authService'
 import {
   BrushHighlightFeature,
-  type BrushHighlightOverlay,
   type BrushOperation
 } from './brush/BrushHighlightFeature'
+import { HighlightRenderScheduler } from './brush/HighlightRenderScheduler'
+import { ManualCorrectionControls } from './brush/ManualCorrectionControls'
 import { setupCompactPhaseSidebar } from './compactPhaseSidebar'
 import { createDemoDockTabPanel } from './demoDockTabPanel'
 import {
@@ -108,6 +108,7 @@ import {
   translate
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
+import { ManualHighlightCorrectionState } from './phase/manualHighlightCorrections'
 import { resolveWorkspacePhase, shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import { WorkspaceLoading, type WorkspaceLoadingTask } from './phase/workspaceLoading'
 import {
@@ -150,6 +151,7 @@ import type {
   DeviceStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
+  FlowPathStyleSource,
   FlowStateSnapshot,
   PhaseSnapshot,
   PhaseWorkspaceState,
@@ -435,8 +437,11 @@ class CadViewerApp {
     setMessage: message => AcApDocManager.instance.setBusyIndicatorMessage(message),
     hide: () => AcApDocManager.instance.hideBusyIndicator(),
     changed: active => {
-      if (active) this.updateEmptyStateVisibility()
-      else this.finishLoadingState()
+      if (active) {
+        this.brushHighlightFeature?.deactivate()
+        this.syncManualCorrectionControls()
+        this.updateEmptyStateVisibility()
+      } else this.finishLoadingState()
     }
   })
   private openHighlightRoots = new Map<
@@ -450,8 +455,14 @@ class CadViewerApp {
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
   private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
-  private readonly manualHighlightedIds = new Set<AcDbObjectId>()
-  private readonly manualHiddenIds = new Set<AcDbObjectId>()
+  private readonly manualCorrections = new ManualHighlightCorrectionState()
+  private brushStrokeStyleSource?: FlowPathStyleSource
+  private manualCorrectionControls?: ManualCorrectionControls
+  private manualCorrectionScope = 0
+  private readonly manualHighlightRender = new HighlightRenderScheduler<AcDbObjectId>(ids => {
+    this.syncOpenHighlightRoots(ids)
+    this.syncManualCorrectionControls()
+  })
   private readonly phasePresentationController = new PhasePresentationController()
   private phaseStore = new PhaseWorkspaceStore()
   private readonly projectPresentationProfiles = new Map<
@@ -1667,6 +1678,7 @@ class CadViewerApp {
       baseUrl: config.baseUrl,
       projectId: projectDetails.id,
       projectConfigure: projectDetails.configure,
+      getPresentationProfile: () => this.phaseStore.snapshot().presentationProfile,
       files: this.processAssistantFileApi,
       procedures: this.processAssistantProcedureApi,
       operations: this.processAssistantOperationApi,
@@ -1991,23 +2003,26 @@ class CadViewerApp {
 
   private setupBrushHighlightFeature() {
     this.brushHighlightFeature = new BrushHighlightFeature({
-      getView: () => AcApDocManager.instance.curView,
-      getHighlightStyle: (objectId, fallbackStyle) => {
-        const primaryValveHandle = objectId
-          ? this.getPrimaryFlowHandleForObject(objectId)
-          : undefined
-        if (primaryValveHandle) {
-          return this.resolveBrushDeviceHighlightStyle() ?? fallbackStyle ??
-            this.resolveBrushFlowHighlightStyle()
-        }
-        return fallbackStyle ?? this.resolveBrushFlowHighlightStyle()
-      },
-      createOverlay: (objectIds, style) =>
-        this.createBrushHighlightOverlay(objectIds, style),
+      getView: () => this.workspaceLoading.active || this.isLoadingFile || this.pendingPhase
+        ? undefined
+        : AcApDocManager.instance.curView,
       setOperationCursor: (view, operation) => {
         view.canvas.style.cursor = this.createBrushCursor(operation)
       },
       onActiveChanged: () => this.getSimpleUiPlugin()?.refreshToolbar(),
+      onStrokeStarted: operation => {
+        this.manualCorrections.beginStroke()
+        this.brushStrokeStyleSource = operation === 'paint'
+          ? this.resolveBrushStyleSource()
+          : undefined
+        this.syncManualCorrectionControls()
+      },
+      onStrokeEnded: () => {
+        this.brushStrokeStyleSource = undefined
+        this.manualHighlightRender.flush()
+        if (this.manualCorrections.endStroke()) this.captureLoadedPhaseState()
+        this.syncManualCorrectionControls()
+      },
       onEntitiesChanged: (operation, objectIds) => {
         this.handleBrushEntitiesChanged(operation, objectIds)
       }
@@ -2113,34 +2128,31 @@ class CadViewerApp {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`
   }
 
-  private resolveBrushFlowHighlightStyle() {
+  private resolveBrushStyleSource(): FlowPathStyleSource {
     const profile = this.getActivePresentationProfile()
     const selection =
       this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
-    const flowPath: FlowPathStatus = {
-      id: 'brush-current',
-      name: 'Brush',
-      handleKeys: [],
-      styleSource: {
-        kind: 'utility',
-        utilityId: selection.utilityId
-      }
+    if (selection.kind === 'device-state') {
+      const style = resolveDevicePresetStyle(
+        profile, selection.deviceId ?? '', selection.stateId ?? ''
+      )
+      if (style) return { kind: 'custom', style }
+      this.showMessage(
+        translateUiText(this.appLocale, '画笔样式已失效，已使用默认流路样式'),
+        'warning'
+      )
+      return { kind: 'utility' }
     }
-    return resolveEntityPresentation(profile, { flowPath })
-  }
-
-  private resolveBrushDeviceHighlightStyle() {
-    const profile = this.getActivePresentationProfile()
-    const selection =
-      this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
-    const style = resolveDevicePresetStyle(
-      profile,
-      selection.deviceId ?? '',
-      selection.stateId ?? ''
+    const utility = profile.utilities.find(
+      item => item.id === selection.utilityId && item.enabled
     )
-    return style
-      ? resolveEntityPresentation(profile, { diagnosticStyle: style })
-      : undefined
+    if (selection.utilityId && !utility) {
+      this.showMessage(
+        translateUiText(this.appLocale, '画笔样式已失效，已使用默认流路样式'),
+        'warning'
+      )
+    }
+    return { kind: 'utility', utilityId: utility?.id }
   }
 
   private handleBrushEntitiesChanged(
@@ -2148,50 +2160,47 @@ class CadViewerApp {
     objectIds: readonly AcDbObjectId[]
   ) {
     const profile = this.getActivePresentationProfile()
-    const selection =
-      this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
-    const utility = profile.utilities.find(
-      candidate => candidate.id === selection.utilityId && candidate.enabled
-    )
-    const device = profile.devices.find(
-      candidate => candidate.id === selection.deviceId
-    )
-    const deviceState = device?.states.find(
-      candidate => candidate.id === selection.stateId && candidate.enabled
-    )
-    objectIds.forEach(objectId => {
-      if (operation === 'paint') {
-        this.manualHighlightedIds.add(objectId)
-        this.manualHiddenIds.delete(objectId)
-        const handleKey = this.getHighlightHandleKeys([objectId])[0]
-        if (!handleKey) return
-        const valveHandle = this.getPrimaryFlowHandleForObject(objectId)
-        if (valveHandle && device && deviceState) {
-          this.valveDeviceStates.set(objectId, {
-            key: handleKey,
-            stateKey: deviceState.key,
-            deviceType: device.name,
-            highlightStyleRefId: deviceState.id
-          })
-          return
-        }
-        if (utility) {
-          this.openHighlightPaths.set(objectId, {
-            id: `brush-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
-            name: this.appLocale === 'zh' ? '手工高亮' : 'Manual highlight',
-            handleKeys: [handleKey],
-            styleSource: { kind: 'utility', utilityId: utility.id }
-          })
-        }
-      } else {
-        this.manualHighlightedIds.delete(objectId)
-        this.manualHiddenIds.add(objectId)
-        this.openHighlightPaths.delete(objectId)
-        this.valveDeviceStates.delete(objectId)
+    const hits = objectIds.flatMap(objectId => {
+      const handleKey = this.getManualHighlightHandleKey(objectId)
+      if (!handleKey) {
+        log.warn('[ManualHighlight] Object has no persistent handle:', objectId)
+        return []
       }
+      return [{
+        handleKey,
+        hasAutomaticFlow: this.getAutomaticFlowPathsForObject(objectId).some(flowPath => {
+          const style = resolveEntityPresentation(profile, { flowPath })
+          return style.visible && style.opacity > 0
+        })
+      }]
     })
-    this.syncOpenHighlightRoots()
-    this.captureLoadedPhaseState()
+    const changed = operation === 'paint'
+      ? this.manualCorrections.paint(
+        hits.map(hit => hit.handleKey),
+        this.brushStrokeStyleSource ?? this.resolveBrushStyleSource(),
+        new Set(objectIds.flatMap(objectId => {
+          const handleKey = this.getManualHighlightHandleKey(objectId)
+          return handleKey && (this.valveDeviceStates.has(objectId) ||
+            this.getPrimaryFlowHandleForObject(objectId) !== undefined) ? [handleKey] : []
+        }))
+      )
+      : this.manualCorrections.erase(hits)
+    if (!changed) return
+    this.manualHighlightRender.schedule(objectIds)
+  }
+
+  private getManualHighlightHandleKey(objectId: AcDbObjectId) {
+    return normalizeFlowHandle(this.getHighlightHandleKeys([objectId])[0])
+  }
+
+  private getAutomaticFlowPathsForObject(objectId: AcDbObjectId) {
+    const paths: FlowPathStatus[] = []
+    this.openHighlightGroups.forEach((group, ownerId) => {
+      if (!group.has(objectId)) return
+      const path = this.openHighlightPaths.get(ownerId)
+      if (path) paths.push(path)
+    })
+    return paths
   }
 
   private getPrimaryFlowHandleForObject(objectId: AcDbObjectId) {
@@ -2210,41 +2219,51 @@ class CadViewerApp {
   }
 
   private clearManualBrushState() {
-    this.manualHighlightedIds.clear()
-    this.manualHiddenIds.clear()
     this.brushHighlightFeature?.reset()
+    this.manualHighlightRender.cancel()
+    this.manualCorrections.restore()
+    this.manualCorrectionScope++
+    this.syncManualCorrectionControls()
   }
 
-  private createBrushHighlightOverlay(
-    objectIds: readonly AcDbObjectId[],
-    style: ResolvedEntityPresentation
-  ): BrushHighlightOverlay | null {
-    const view = AcApDocManager.instance.curView
-    const layout = view?.cadScene.activeLayout
-    if (!view || !layout || objectIds.length === 0) return null
+  private changeManualCorrectionHistory(operation: 'undo' | 'redo') {
+    if (!this.canEditManualCorrections()) return
+    const changed = operation === 'undo'
+      ? this.manualCorrections.undo()
+      : this.manualCorrections.redo()
+    if (!changed) return
+    this.manualHighlightRender.cancel()
+    this.syncOpenHighlightRoots()
+    this.captureLoadedPhaseState()
+    this.syncManualCorrectionControls()
+  }
 
-    const root = layout.createEntityPreviewRoot([...new Set(objectIds)], {
-      missingEntity: 'skip'
-    }) as PreviewRoot | null
-    if (!root) return null
+  private clearManualCorrections() {
+    if (!this.canEditManualCorrections()) return
+    this.brushHighlightFeature?.deactivate()
+    this.manualHighlightRender.cancel()
+    this.manualCorrections.clear()
+    this.manualCorrectionScope++
+    this.syncOpenHighlightRoots()
+    this.captureLoadedPhaseState()
+    this.syncManualCorrectionControls()
+  }
 
-    root.name = 'BrushHighlight'
-    upgradePreviewWideLines(root, style, view.width, view.height)
-    this.phasePresentationController.apply(
-      root as unknown as Parameters<PhasePresentationController['apply']>[0],
-      style,
-      20000
-    )
-      ; (layout.internalObject as LayoutObjectHost).add(root)
-    view.isDirty = true
+  private canEditManualCorrections() {
+    return this.hasOpenedFile && !this.workspaceLoading.active && !this.isLoadingFile &&
+      !this.pendingPhase && !this.brushHighlightFeature?.isDrawing &&
+      (!this.activeProject || this.loadedPhase !== undefined)
+  }
 
-    return {
-      dispose: () => {
-        root.removeFromParent()
-        this.disposePreviewRoot(root)
-        view.isDirty = true
-      }
-    }
+  private syncManualCorrectionControls() {
+    this.manualCorrectionControls?.update({
+      scopeKey: `${this.projectLoadToken}:${this.phaseActivationToken}:${this.manualCorrectionScope}`,
+      enabled: this.canEditManualCorrections(),
+      additions: this.manualCorrections.additionCount,
+      exclusions: this.manualCorrections.exclusionCount,
+      canUndo: this.manualCorrections.canUndo,
+      canRedo: this.manualCorrections.canRedo
+    })
   }
 
   private createValveDebugOverlay(
@@ -2259,54 +2278,6 @@ class CadViewerApp {
       missingEntity: 'skip'
     }) as PreviewRoot | null
     if (!root) return null
-
-    // Adjacent P&ID segments often share an endpoint and the same layer name
-    // (for example, several entries named `0`). The locator line alone can
-    // therefore look like one continuous line at the current zoom. Add a
-    // short-lived cyan bounds frame for a locator so the selected entity is
-    // unambiguous without changing the CAD camera.
-    if (kind === 'locator' && objectIds.length === 1) {
-      const bounds = layout.computeEntityPreviewBounds2d([...objectIds], 1)
-      if (
-        bounds &&
-        Number.isFinite(bounds.min.x) &&
-        Number.isFinite(bounds.min.y) &&
-        Number.isFinite(bounds.max.x) &&
-        Number.isFinite(bounds.max.y)
-      ) {
-        const width = Math.abs(bounds.max.x - bounds.min.x)
-        const height = Math.abs(bounds.max.y - bounds.min.y)
-        const padding = Math.max(Math.max(width, height) * 0.06, 1)
-        const minX = bounds.min.x - padding
-        const minY = bounds.min.y - padding
-        const maxX = bounds.max.x + padding
-        const maxY = bounds.max.y + padding
-        const frameGeometry = new LineSegmentsGeometry()
-        frameGeometry.setPositions([
-          minX, minY, 0,
-          maxX, minY, 0,
-          maxX, minY, 0,
-          maxX, maxY, 0,
-          maxX, maxY, 0,
-          minX, maxY, 0,
-          minX, maxY, 0,
-          minX, minY, 0
-        ])
-        const frameMaterial = new LineMaterial({
-          color: 0x00bcd4,
-          linewidth: 5,
-          transparent: true,
-          opacity: 1,
-          depthTest: false,
-          depthWrite: false
-        })
-        frameMaterial.resolution.set(Math.max(1, view.width), Math.max(1, view.height))
-        const frame = new LineSegments2(frameGeometry, frameMaterial)
-        frame.name = 'ValveDebugLocatorBounds'
-        frame.userData.disposeGeometryOnRemove = true
-          ; (root as unknown as THREE.Object3D).add(frame)
-      }
-    }
 
     const style: ResolvedEntityPresentation =
       kind === 'path'
@@ -2327,6 +2298,10 @@ class CadViewerApp {
           source: 'flow'
         }
 
+    if (kind === 'locator' && objectIds.length === 1) {
+      const frame = this.createHighlightBoundsFrame(objectIds[0], style)
+      if (frame) root.add(frame)
+    }
     root.name = kind === 'path' ? 'ValveDebugPathHighlight' : 'ValveDebugLocator'
     upgradePreviewWideLines(root, style, view.width, view.height)
     this.phasePresentationController.apply(
@@ -2397,15 +2372,25 @@ class CadViewerApp {
     const importButton = document.getElementById(
       'phaseConfigImport'
     ) as HTMLButtonElement | null
+    const correctionHost = document.getElementById('manualCorrectionControls')
     if (
       !processSelect ||
       !sequenceSelect ||
       !phaseSelect ||
       !saveButton ||
-      !importButton
+      !importButton ||
+      !correctionHost
     ) {
       throw new Error('Phase context controls were not found')
     }
+    this.manualCorrectionControls = new ManualCorrectionControls({
+      getLocale: () => this.appLocale,
+      undo: () => this.changeManualCorrectionHistory('undo'),
+      redo: () => this.changeManualCorrectionHistory('redo'),
+      clear: () => this.clearManualCorrections()
+    })
+    correctionHost.replaceChildren(this.manualCorrectionControls.element)
+    this.syncManualCorrectionControls()
     importButton.prepend(createPhaseIcon(FileUp))
     importButton.addEventListener('click', async () => {
       if (this.activeProjectId === undefined) {
@@ -2632,6 +2617,7 @@ class CadViewerApp {
     statusElement.setAttribute('aria-live', 'polite')
     statusElement.title = status.textContent
     this.syncAppToolbarContext()
+    this.syncManualCorrectionControls()
   }
 
   private syncAppToolbarContext() {
@@ -3454,50 +3440,55 @@ class CadViewerApp {
   private async associateWorkspaceDrawing(
     request: DrawingAssociationRequest
   ) {
-    try {
-      this.captureLoadedPhaseState()
-      if (this.phaseRepository) {
-        await this.associateBackendDrawing(request)
-        return
-      }
-      let removed: DrawingAssetRef | undefined
-      if (request.sourceKind === 'marked') {
-        if (
-          !request.sourceProcessId ||
-          !request.sourceSequenceId ||
-          !request.sourcePhaseId
-        ) {
-          throw new Error('请选择已标记 Phase')
+    return this.workspaceLoading.run(
+      translate(this.appLocale, 'loadingPhase'),
+      async () => {
+        try {
+          this.captureLoadedPhaseState()
+          if (this.phaseRepository) {
+            await this.associateBackendDrawing(request)
+            return
+          }
+          let removed: DrawingAssetRef | undefined
+          if (request.sourceKind === 'marked') {
+            if (
+              !request.sourceProcessId ||
+              !request.sourceSequenceId ||
+              !request.sourcePhaseId
+            ) {
+              throw new Error('请选择已标记 Phase')
+            }
+            removed = this.phaseStore.associateMarkedPhase(
+              request.processId,
+              request.sequenceId,
+              request.phaseId,
+              request.sourceProcessId,
+              request.sourceSequenceId,
+              request.sourcePhaseId
+            )
+          } else {
+            throw new Error('Project PID association requires a backend Project')
+          }
+          this.phaseStore.persist()
+          if (removed?.kind === 'local') {
+            await this.drawingAssetStore.delete(removed.id)
+          }
+          this.phasePanel?.render()
+          this.syncPhaseContextBar()
+          await this.activateWorkspacePhase(
+            request.processId,
+            request.sequenceId,
+            request.phaseId,
+            false
+          )
+          this.showMessage('阶段图纸已关联', 'success')
+        } catch (error) {
+          log.error('Failed to associate phase drawing:', error)
+          this.showMessage(String(error), 'error')
+          throw error
         }
-        removed = this.phaseStore.associateMarkedPhase(
-          request.processId,
-          request.sequenceId,
-          request.phaseId,
-          request.sourceProcessId,
-          request.sourceSequenceId,
-          request.sourcePhaseId
-        )
-      } else {
-        throw new Error('Project PID association requires a backend Project')
       }
-      this.phaseStore.persist()
-      if (removed?.kind === 'local') {
-        await this.drawingAssetStore.delete(removed.id)
-      }
-      this.phasePanel?.render()
-      this.syncPhaseContextBar()
-      await this.activateWorkspacePhase(
-        request.processId,
-        request.sequenceId,
-        request.phaseId,
-        false
-      )
-      this.showMessage('阶段图纸已关联', 'success')
-    } catch (error) {
-      log.error('Failed to associate phase drawing:', error)
-      this.showMessage(String(error), 'error')
-      throw error
-    }
+    )
   }
 
   private async associateBackendDrawing(
@@ -3550,18 +3541,34 @@ class CadViewerApp {
     }
 
     this.cancelBackendPhaseSave(request.phaseId)
-    this.phaseStore.replacePhase(
-      request.processId,
-      request.sequenceId,
-      {
-        ...phase,
-        drawing: {
-          kind: 'assigned',
-          assetId: `file:${fileId}`,
-          displayName
-        }
+    if (request.sourceKind === 'marked') {
+      if (
+        !request.sourceProcessId ||
+        !request.sourceSequenceId ||
+        !request.sourcePhaseId
+      ) {
+        throw new Error('请选择已标记 Phase')
       }
-    )
+      this.phaseStore.associateMarkedPhase(
+        request.processId,
+        request.sequenceId,
+        request.phaseId,
+        request.sourceProcessId,
+        request.sourceSequenceId,
+        request.sourcePhaseId
+      )
+      this.phaseStore.renameDrawing(
+        request.processId, request.sequenceId, request.phaseId, displayName
+      )
+    } else {
+      this.phaseStore.associateDrawing(
+        request.processId,
+        request.sequenceId,
+        request.phaseId,
+        state.drawingAssets[`file:${fileId}`],
+        displayName
+      )
+    }
     this.phaseStore.persist()
     this.phasePanel?.render()
     await this.saveBackendPhase(request.processId, request.sequenceId, request.phaseId)
@@ -3645,6 +3652,7 @@ class CadViewerApp {
     loading: WorkspaceLoadingTask
   ) {
     const activationToken = ++this.phaseActivationToken
+    this.brushHighlightFeature?.deactivate()
     if (captureCurrentState) this.captureLoadedPhaseState()
     if (captureCurrentState && this.loadedPhase) {
       this.cancelBackendPhaseSave(this.loadedPhase.phaseId)
@@ -3981,6 +3989,7 @@ class CadViewerApp {
       this.openHighlightPaths.set(ownerId, {
         id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
         name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
+        ownerHandleKey: handleKey,
         handleKeys: this.getHighlightHandleKeys(highlightedIds),
         styleSource: { kind: 'utility', utilityId: utility.id }
       })
@@ -4021,6 +4030,8 @@ class CadViewerApp {
 
   private recomputeOpenHighlightGroups() {
     ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
+      const flowPath = this.openHighlightPaths.get(ownerId)
+      if (!flowPath?.ownerHandleKey) return
       const traversal = this.isFlowBoundaryObject(ownerId)
         ? this.getFlowConnectionTraversal(ownerId)
         : { connectedHandles: new Set<number>() }
@@ -4030,7 +4041,6 @@ class CadViewerApp {
         traversal.connectedHandles
       )
       this.openHighlightGroups.set(ownerId, highlightedIds)
-      const flowPath = this.openHighlightPaths.get(ownerId)
       if (flowPath) {
         this.openHighlightPaths.set(ownerId, {
           ...flowPath,
@@ -4041,14 +4051,24 @@ class CadViewerApp {
     this.syncOpenHighlightRoots()
   }
 
-  private syncOpenHighlightRoots() {
+  private syncOpenHighlightRoots(affectedIds?: ReadonlySet<AcDbObjectId>) {
     const view = AcApDocManager.instance.curView
     const layout = view.cadScene.activeLayout
     if (!layout) return
 
-    const desiredIds = this.getReferencedOpenHighlightIds()
+    const desiredIds = affectedIds
+      ? new Set([...affectedIds].filter(id => {
+        if (this.valveDeviceStates.has(id)) return true
+        const handleKey = this.getManualHighlightHandleKey(id)
+        if (handleKey && this.manualCorrections.getAddition(handleKey)) return true
+        for (const group of this.openHighlightGroups.values()) {
+          if (group.has(id)) return true
+        }
+        return false
+      }))
+      : this.getReferencedOpenHighlightIds()
     const idsToRemove = findStaleHighlightRootIds(
-      this.openHighlightRoots.keys(),
+      affectedIds ?? this.openHighlightRoots.keys(),
       desiredIds
     )
     let changedHighlight = false
@@ -4081,9 +4101,11 @@ class CadViewerApp {
       desiredLayers.forEach(layer => {
         let root = roots.get(layer.id)
         if (!root) {
-          const createdRoot = layout.createEntityPreviewRoot([id], {
-            missingEntity: 'skip'
-          }) as PreviewRoot | null
+          const createdRoot = layer.geometry === 'bounds'
+            ? this.createHighlightBoundsFrame(id, layer.style)
+            : layout.createEntityPreviewRoot([id], {
+              missingEntity: 'skip'
+            }) as PreviewRoot | null
           if (!createdRoot) return
 
           root = createdRoot
@@ -4115,7 +4137,52 @@ class CadViewerApp {
       group.forEach(id => ids.add(id))
     })
     this.valveDeviceStates.forEach((_, id) => ids.add(id))
+    this.manualCorrections.additionHandleKeys.forEach(handleKey => {
+      const objectId = this.resolveObjectIdByHandleKey(handleKey)
+      if (objectId !== undefined) ids.add(objectId)
+    })
     return ids
+  }
+
+  private createHighlightBoundsFrame(
+    objectId: AcDbObjectId,
+    style: ResolvedEntityPresentation
+  ): PreviewRoot | null {
+    const view = AcApDocManager.instance.curView
+    const bounds = view.cadScene.activeLayout?.computeEntityPreviewBounds2d([objectId], 1)
+    if (!bounds || ![
+      bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y
+    ].every(Number.isFinite)) {
+      log.warn('[ManualHighlight] Unable to create device bounds marker:', objectId)
+      return null
+    }
+    const padding = Math.max(
+      Math.max(bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y) * 0.06,
+      1
+    )
+    const minX = bounds.min.x - padding
+    const minY = bounds.min.y - padding
+    const maxX = bounds.max.x + padding
+    const maxY = bounds.max.y + padding
+    const geometry = new LineSegmentsGeometry()
+    geometry.setPositions([
+      minX, minY, 0, maxX, minY, 0,
+      maxX, minY, 0, maxX, maxY, 0,
+      maxX, maxY, 0, minX, maxY, 0,
+      minX, maxY, 0, minX, minY, 0
+    ])
+    const material = new LineMaterial({
+      color: style.color,
+      linewidth: style.lineWidthPx,
+      opacity: style.opacity,
+      transparent: style.opacity < 1,
+      depthTest: false,
+      depthWrite: false
+    })
+    material.resolution.set(Math.max(1, view.width), Math.max(1, view.height))
+    const frame = new LineSegments2(geometry, material)
+    frame.userData.disposeGeometryOnRemove = true
+    return frame
   }
 
   private getHighlightStyleDraft(): HighlightStyleDraft {
@@ -4348,39 +4415,21 @@ class CadViewerApp {
     objectId: AcDbObjectId,
     draft = this.getLoadedHighlightStyleDraft()
   ): FlowHighlightLayer[] {
-    if (this.manualHiddenIds.has(objectId)) return []
     const profile =
-      draft?.presentationProfile ?? createDefaultPresentationProfile()
-    if (this.manualHighlightedIds.has(objectId)) {
-      const primaryValveHandle = this.getPrimaryFlowHandleForObject(objectId)
-      if (primaryValveHandle) {
-        const style = this.resolveBrushDeviceHighlightStyle() ??
-          this.resolveBrushFlowHighlightStyle()
-        return [{
-          id: `manual:valve:${objectId}`,
-          renderOrder: 20000,
-          style
-        }]
-      }
-      return [{
-        id: `manual:brush:${objectId}`,
-        renderOrder: 20000,
-        style: this.resolveBrushFlowHighlightStyle()
-      }]
-    }
+      draft?.presentationProfile ?? this.getActivePresentationProfile()
     const deviceState = this.valveDeviceStates.get(objectId)
-    const flowPaths: FlowPathStatus[] = []
-    this.openHighlightGroups.forEach((group, ownerId) => {
-      if (!group.has(objectId)) return
-      const flowPath = this.openHighlightPaths.get(ownerId)
-      if (flowPath) flowPaths.push(flowPath)
-    })
+    const handleKey = this.getManualHighlightHandleKey(objectId)
     return resolveFlowHighlightLayers(
       profile,
-      flowPaths,
+      this.getAutomaticFlowPathsForObject(objectId),
       deviceState,
       undefined,
-      this.activeFlowPathId
+      this.activeFlowPathId,
+      {
+        addition: handleKey ? this.manualCorrections.getAddition(handleKey) : undefined,
+        excluded: handleKey ? this.manualCorrections.isExcluded(handleKey) : false,
+        device: this.getPrimaryFlowHandleForObject(objectId) !== undefined
+      }
     )
   }
 
@@ -4434,10 +4483,16 @@ class CadViewerApp {
       ...retainedDeviceStates,
       ...capturedDeviceStates
     }
-    const flowPaths = retainedFlowPaths.concat(capturedFlowPaths).map(flowPath => ({
-      ...flowPath,
-      handleKeys: [...new Set(flowPath.handleKeys)]
-    })).filter(flowPath => flowPath.handleKeys.length > 0)
+    const flowPathsById = new Map<string, FlowPathStatus>()
+    retainedFlowPaths.concat(capturedFlowPaths).forEach(flowPath => {
+      const previous = flowPathsById.get(flowPath.id)
+      flowPathsById.set(flowPath.id, {
+        ...flowPath,
+        handleKeys: [...new Set([...(previous?.handleKeys ?? []), ...flowPath.handleKeys])]
+      })
+    })
+    const flowPaths = [...flowPathsById.values()].filter(flowPath => flowPath.handleKeys.length > 0)
+    const manualCorrections = this.manualCorrections.snapshot()
     const nextState = {
       flowState: {
         flowPaths,
@@ -4448,13 +4503,19 @@ class CadViewerApp {
           ? { deviceStates }
           : {})
       },
-      textNotes
+      textNotes,
+      ...(currentPhase.manualCorrections ||
+        manualCorrections.additions.length > 0 || manualCorrections.exclusions.length > 0
+        ? { manualCorrections }
+        : {})
     }
     const stateChanged =
       JSON.stringify(currentPhase.flowState) !==
       JSON.stringify(nextState.flowState) ||
       JSON.stringify(currentPhase.textNotes ?? []) !==
-      JSON.stringify(nextState.textNotes)
+      JSON.stringify(nextState.textNotes) ||
+      JSON.stringify(currentPhase.manualCorrections ?? { additions: [], exclusions: [] }) !==
+      JSON.stringify(manualCorrections)
     if (!stateChanged) return
     this.phaseStore.updatePhaseState(
       this.loadedPhase.processId,
@@ -4462,7 +4523,12 @@ class CadViewerApp {
       this.loadedPhase.phaseId,
       nextState
     )
-    this.phaseStore.persist()
+    if (!this.phaseStore.persist()) {
+      this.showMessage(
+        translateUiText(this.appLocale, '阶段本地保存失败，请保存到后台'),
+        'error'
+      )
+    }
     this.scheduleBackendPhaseSave(
       this.loadedPhase.processId,
       this.loadedPhase.sequenceId,
@@ -4568,7 +4634,8 @@ class CadViewerApp {
     const styleWarnings = findPhaseOverlayStyleWarnings(
       state.presentationProfile,
       phase.flowState.flowPaths,
-      phase.flowState.deviceStates
+      phase.flowState.deviceStates,
+      phase.manualCorrections
     )
     if (styleWarnings.length > 0) {
       styleWarnings.forEach(warning => {
@@ -4610,84 +4677,61 @@ class CadViewerApp {
           stateKey: deviceState.stateKey
         })
       }
-      if (!configuredState) return
       log.info('[PhasePidOverlay] Restored valve:', {
         phaseId,
         handleKey: deviceState.key,
         stateKey: deviceState.stateKey,
-        color: `#${configuredState.color.toString(16).padStart(6, '0').toUpperCase()}`,
-        colorValue: configuredState.color
+        color: configuredState
+          ? `#${configuredState.color.toString(16).padStart(6, '0').toUpperCase()}`
+          : undefined,
+        colorValue: configuredState?.color
       })
       this.valveDeviceStates.set(ownerId, { ...deviceState })
-      if (configuredState.flowBehavior === 'conducting') {
+      if (configuredState?.flowBehavior === 'conducting') {
         restoredValveKeys.add(deviceState.key)
       }
     })
     this.activeFlowPathId = phase.flowState.activeFlowPathId
+    const missingAutomaticHandles = new Set<string>()
     phase.flowState.flowPaths.forEach(flowPath => {
-      const ownerHandleKeys = flowPath.handleKeys.filter(handleKey => {
-        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-        return ownerId !== undefined && this.isFlowBoundaryObject(ownerId)
+      const ids = flowPath.handleKeys.flatMap(handleKey => {
+        const id = this.resolveObjectIdByHandleKey(handleKey)
+        if (id === undefined) missingAutomaticHandles.add(handleKey)
+        return id === undefined ? [] : [id]
       })
-      const restoredDeviceOwnerHandleKeys = [...this.valveDeviceStates.values()]
-        .filter(deviceState =>
-          resolveDeviceStateDefinition(state.presentationProfile, deviceState)
-            ?.state.flowBehavior === 'conducting'
-        )
-        .filter(deviceState => {
-          const ownerId = this.resolveObjectIdByHandleKey(deviceState.key)
-          if (!ownerId || !this.isFlowBoundaryObject(ownerId)) return false
-          const traversal = this.getFlowConnectionTraversal(ownerId)
-          return flowPath.handleKeys.some(handleKey => {
-            const handleId = Number.parseInt(handleKey, 16)
-            return Number.isFinite(handleId) && traversal.connectedHandles.has(handleId)
-          })
-        })
-        .map(deviceState => deviceState.key)
-      const restoreHandleKeys = ownerHandleKeys.length > 0
-        ? ownerHandleKeys
-        : restoredDeviceOwnerHandleKeys.length > 0
-          ? restoredDeviceOwnerHandleKeys
-          : flowPath.handleKeys
-      restoreHandleKeys.forEach(handleKey => {
-        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-        if (!ownerId) {
-          log.warn(`Unable to restore phase highlight handle: ${handleKey}`)
-          return
-        }
-        const traversal = this.isFlowBoundaryObject(ownerId)
-          ? this.getFlowConnectionTraversal(ownerId)
-          : { connectedHandles: new Set<number>() }
-        this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-        this.openHighlightGroups.set(
-          ownerId,
-          this.getOpenHighlightObjectIds(ownerId, traversal.connectedHandles)
-        )
-        this.openHighlightPaths.set(ownerId, {
-          ...flowPath,
-          handleKeys: [handleKey],
-          styleSource:
-            flowPath.styleSource?.kind === 'custom'
-              ? {
-                kind: 'custom',
-                style: { ...flowPath.styleSource.style }
-              }
-              : flowPath.styleSource
-                ? { ...flowPath.styleSource }
-                : undefined
-        })
-        if (this.isFlowBoundaryObject(ownerId)) {
-          const deviceState = this.valveDeviceStates.get(ownerId)
-          if (deviceState &&
-            resolveDeviceStateDefinition(state.presentationProfile, deviceState)
-              ?.state.flowBehavior === 'conducting') {
-            restoredValveKeys.add(handleKey)
-          }
-        }
+      const ownerId = flowPath.ownerHandleKey
+        ? this.resolveObjectIdByHandleKey(flowPath.ownerHandleKey)
+        : ids[0]
+      if (ownerId === undefined) {
+        if (flowPath.ownerHandleKey) missingAutomaticHandles.add(flowPath.ownerHandleKey)
+        log.warn('[PhasePidOverlay] Automatic flow owner is unavailable; record retained:', flowPath.id)
+        return
+      }
+      this.openHighlightConnections.set(ownerId, new Set())
+      this.openHighlightGroups.set(ownerId, new Set(ids))
+      this.openHighlightPaths.set(ownerId, {
+        ...flowPath,
+        handleKeys: [...flowPath.handleKeys]
       })
     })
-    this.recomputeOpenHighlightGroups()
-    this.valveDebugFeature?.restoreOpenStates([...restoredValveKeys])
+    if (missingAutomaticHandles.size > 0) {
+      log.warn('[PhasePidOverlay] Unresolved automatic handles retained:', [...missingAutomaticHandles])
+      this.showMessage(translateUiText(this.appLocale, '部分自动流路对象不存在，记录已保留'), 'warning')
+    }
+    this.manualCorrections.restore(phase.manualCorrections)
+    const missingManualHandles = [
+      ...this.manualCorrections.additionHandleKeys,
+      ...this.manualCorrections.snapshot().exclusions
+    ].filter(handleKey => this.resolveObjectIdByHandleKey(handleKey) === undefined)
+    if (missingManualHandles.length > 0) {
+      log.warn('[ManualHighlight] Unresolved correction handles retained:', missingManualHandles)
+      this.showMessage(
+        translateUiText(this.appLocale, '部分人工修正对象不存在，记录已保留'),
+        'warning'
+      )
+    }
+    this.syncOpenHighlightRoots()
+    this.valveDebugFeature?.restoreOpenStates([...restoredValveKeys], { recompute: false })
     this.restoreTextNotes(phaseId, phase.textNotes ?? [])
     this.loadedPhase = {
       processId,
@@ -4986,6 +5030,10 @@ class CadViewerApp {
   }
 
   private invalidateLoadedPhaseBinding() {
+    this.brushHighlightFeature?.deactivate()
+    this.manualHighlightRender.cancel()
+    this.manualCorrections.clearHistory()
+    this.manualCorrectionScope++
     this.tankLocator.stop()
     this.tankOptions = []
     this.phasePanel?.resetTankSelection()
@@ -4993,10 +5041,12 @@ class CadViewerApp {
     this.loadedDrawingAssetId = undefined
     this.pendingPhase = undefined
     this.phaseActivationToken++
+    this.syncManualCorrectionControls()
   }
 
   private setLoadingState(loading: boolean) {
     this.isLoadingFile = loading
+    this.syncManualCorrectionControls()
     this.updateEmptyStateVisibility()
   }
 

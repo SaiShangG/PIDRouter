@@ -9,7 +9,13 @@ const createValidOverlay = () => ({
   Name: ' S1-1 ',
   Comment: null,
   drawing: { fileId: 5, displayName: ' PID-1001.dwg ' },
-  flowPaths: [{ handleKey: ' 43794 ', highlightStyleRefId: ' utility-1 ' }],
+  autoFlowPaths: [],
+  flowPaths: [{
+    handleKey: ' 43794 ',
+    highlightStyleRefId: ' utility-1 ',
+    styleSource: { kind: 'utility', utilityId: 'utility-1' },
+    style: { color: 65280, lineWidthPx: 3, opacity: 1, visible: true }
+  }],
   deviceStates: [{
     handleKey: ' 52532 ',
     stateKey: 'Open',
@@ -44,7 +50,9 @@ describe('parsePhasePidOverlay', () => {
     expect(result.overlay.Name).toBe('S1-1')
     expect(result.overlay.flowPaths[0]).toEqual({
       handleKey: '43794',
-      highlightStyleRefId: 'utility-1'
+      highlightStyleRefId: 'utility-1',
+      styleSource: { kind: 'utility', utilityId: 'utility-1' },
+      style: { color: 65280, lineWidthPx: 3, opacity: 1, visible: true }
     })
     expect(result.overlay.deviceStates[0]).toEqual({
       handleKey: '52532',
@@ -94,8 +102,8 @@ describe('parsePhasePidOverlay', () => {
   it('skips invalid and duplicate entries while retaining valid entries', () => {
     const overlay = createValidOverlay()
     overlay.flowPaths.push(
-      { handleKey: 'not-a-handle', highlightStyleRefId: 'utility-2' },
-      { handleKey: '43794', highlightStyleRefId: 'utility-2' }
+      { ...overlay.flowPaths[0], handleKey: 'not-a-handle', highlightStyleRefId: 'utility-2' },
+      { ...overlay.flowPaths[0], handleKey: '43794', highlightStyleRefId: 'utility-2' }
     )
     overlay.deviceStates.push({
       handleKey: '52532',

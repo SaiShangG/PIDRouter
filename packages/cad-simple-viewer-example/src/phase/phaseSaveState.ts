@@ -8,7 +8,11 @@ export type PhaseChangeKind = 'details' | 'drawing' | 'highlights' | 'devices' |
 const values = (phase: PhaseSnapshot): Record<Exclude<PhaseChangeKind, 'order' | 'styles'>, unknown> => ({
   details: { name: phase.name, number: phase.number, tankId: phase.tankId ?? null },
   drawing: phase.drawing,
-  highlights: { flowPaths: phase.flowState.flowPaths, activeFlowPathId: phase.flowState.activeFlowPathId ?? null },
+  highlights: {
+    flowPaths: phase.flowState.flowPaths,
+    activeFlowPathId: phase.flowState.activeFlowPathId ?? null,
+    manualCorrections: phase.manualCorrections ?? { additions: [], exclusions: [] }
+  },
   devices: phase.flowState.deviceStates ?? {},
   notes: phase.textNotes ?? []
 })
