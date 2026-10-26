@@ -81,17 +81,17 @@ export const resolveFlowHighlightLayers = (
   manual?: ManualEntityHighlight
 ): FlowHighlightLayer[] => {
   const device = Boolean(deviceState || manual?.device || manual?.addition?.geometry === 'bounds')
-  const addition = manual?.excluded ? undefined : manual?.addition
+  const addition = manual?.excluded || device ? undefined : manual?.addition
   const automaticLayers = resolveAutomaticFlowHighlightLayers(
     profile,
-    manual?.excluded || (addition && !device) ? [] : flowPaths,
+    manual?.excluded || addition ? [] : flowPaths,
     deviceState,
     diagnosticStyle,
     activeFlowPathId
   )
   if (!addition) return automaticLayers
   const manualLayer: FlowHighlightLayer = {
-    id: `manual:${device ? 'device' : 'flow'}:${addition.handleKey}`,
+    id: `manual:flow:${addition.handleKey}`,
     renderOrder: 20000,
     style: resolveEntityPresentation(profile, {
       flowPath: {
@@ -100,8 +100,7 @@ export const resolveFlowHighlightLayers = (
         handleKeys: [addition.handleKey],
         styleSource: addition.styleSource
       }
-    }),
-    ...(device ? { geometry: 'bounds' as const } : {})
+    })
   }
-  return device ? [...automaticLayers, manualLayer] : [manualLayer]
+  return [manualLayer]
 }

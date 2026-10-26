@@ -44,6 +44,22 @@ From the monorepo root:
 pnpm dev:simple
 ```
 
+To choose the login behavior for this startup, run from the monorepo root:
+
+```powershell
+# Show the login page (also the default when omitted).
+pnpm dev:simple --login=true
+
+# Skip login and enter the workspace directly.
+pnpm dev:simple --login=false
+```
+
+The startup argument does not modify env files or persist across restarts.
+Only `true` and `false` are accepted. Other development server arguments are
+forwarded to the existing Nx command, preserving dependency builds. Direct
+workspace entry has no demo account/logout control, but keeps toolbar settings.
+This switch controls the frontend demo login, not backend authorization.
+
 Or from this package:
 
 ```bash
@@ -77,13 +93,14 @@ Phase JSON separates three sources and a derived final snapshot:
   optional `ownerHandleKey`, priority and style source). Route IDs and ownership
   survive round trips; restoration does not infer owners or run routing.
 - `manualCorrections`: `additions` store brush handles and Utility/custom style
-  sources; `exclusions` store erased flow handles. Valve additions also preserve
-  `geometry: "bounds"` so their marks do not replace state colors.
+  sources; `exclusions` store erased flow handles. The brush skips valves and
+  interactive devices; it does not add manual device markers.
 - `flowPaths`: derived final visible flow entries, composed from automatic routes
   and corrections using the same layering resolver as the viewer. Entries include
   `handleKey`, `styleSource`, resolved `style`, optional Utility
-  `highlightStyleRefId`, and optional `geometry: "bounds"`. Device-state indicators
-  remain in `deviceStates`, not in this array.
+  `highlightStyleRefId`. Device-state indicators remain in `deviceStates`, not in
+  this array. Previously saved bounds marks remain readable but are not rendered
+  or generated as new manual frames.
 
 The runtime's `flowState.flowPaths` contains automatic results only and maps to
 backend `autoFlowPaths`. Final `flowPaths` is generated at save/copy serialization
@@ -118,9 +135,11 @@ The brush and eraser now edit this independent correction state:
 - Erasing removes the manual addition and excludes any currently visible
   automatic flow contribution. Erasing an empty object or device-state-only
   highlight creates no exclusion. Exclusions apply to all flows at that handle.
-- Device states and routing inputs remain unchanged. A marked valve has an
-  external bounds frame instead of replacing its state color. Erasing a flow
-  contribution never hides the valve's state indicator.
+- Device states and routing inputs remain unchanged. Painting skips graph valves,
+  objects with device states and configured interactive devices, including their
+  mapped CAD handles. Saved manual marks on devices are suppressed without
+  deleting their records. Selection and locator frames are unaffected. Erasing
+  a flow contribution never hides the valve's state indicator.
 - Automatic recomputation preserves corrections; closing a valve can therefore
   leave manually supplemented pipe segments visible. Painting an excluded object
   makes it visible again.

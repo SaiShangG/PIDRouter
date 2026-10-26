@@ -53,22 +53,34 @@ const fixture = () => {
 }
 
 describe('manual correction runtime', () => {
-  it('paints and erases a closed valve without changing its state or automatic flows', () => {
+  it('ignores saved manual valve marks while retaining device state and eraser behavior', () => {
     const { state, device, flows, layers } = fixture()
     const before = JSON.stringify({ device, flows })
     state.paint(['A'], { kind: 'utility', utilityId: 'water' })
     expect(layers('A', flows, device)).toEqual([
-      expect.objectContaining({ id: 'device:A', style: expect.objectContaining({ color: 0x888888 }) }),
-      expect.objectContaining({
-        id: 'manual:device:A', geometry: 'bounds',
-        style: expect.objectContaining({ color: 0x123456 })
-      })
+      expect.objectContaining({ id: 'device:A', style: expect.objectContaining({ color: 0x888888 }) })
     ])
     state.erase([{ handleKey: 'A', hasAutomaticFlow: true }])
     expect(layers('A', flows, device)).toEqual([
       expect.objectContaining({ id: 'device:A', style: expect.objectContaining({ color: 0x888888 }) })
     ])
     expect(JSON.stringify({ device, flows })).toBe(before)
+  })
+
+  it('does not render manual frames for devices without a state or saved bounds marks', () => {
+    const { state, profile, flows, layers } = fixture()
+    const automatic = layers('A')
+    state.paint(['A'], { kind: 'utility', utilityId: 'water' })
+    expect(layers('A')).toEqual(automatic)
+    expect(resolveFlowHighlightLayers(profile, flows, undefined, undefined, undefined, {
+      addition: {
+        handleKey: 'A',
+        styleSource: { kind: 'utility', utilityId: 'water' },
+        geometry: 'bounds'
+      },
+      excluded: false,
+      device: false
+    })).toEqual(resolveFlowHighlightLayers(profile, flows))
   })
 
   it('supplements missing flow and overrides automatic style with one entity layer', () => {

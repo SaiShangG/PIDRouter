@@ -31,6 +31,10 @@ function assertViewerRuntimeExists(): void {
 export default defineConfig(({ mode }) => {
   assertViewerRuntimeExists()
   const env = loadEnv(mode, __dirname, '')
+  const loginEnabled = process.env.PID_LOGIN_ENABLED ?? 'true'
+  if (loginEnabled !== 'true' && loginEnabled !== 'false') {
+    throw new Error('PID_LOGIN_ENABLED must be true or false')
+  }
   const processAssistantTarget = readHttpUrl(
     env.VITE_PROCESS_ASSISTANT_API_URL,
     'VITE_PROCESS_ASSISTANT_API_URL'
@@ -46,6 +50,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    define: {
+      __PID_LOGIN_ENABLED__: JSON.stringify(loginEnabled === 'true')
+    },
     server: {
       host: frontendHost,
       port: readPort(

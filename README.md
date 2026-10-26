@@ -71,6 +71,19 @@ If dependencies and workspace build artifacts are already available, run the fol
 pnpm dev:simple
 ```
 
+Use a startup argument to choose whether to show the login page:
+
+```powershell
+pnpm dev:simple --login=true
+pnpm dev:simple --login=false
+```
+
+The default is `true`. `false` opens the workspace directly without a demo
+account or logout control. Invalid or repeated login arguments fail startup.
+The choice applies only to that development server process; no configuration
+file is changed. Restart the server to change it. This controls the frontend
+demo login, not backend authorization.
+
 The frontend address is listed in [Network Configuration](#network-configuration).
 
 ### First-Time Setup

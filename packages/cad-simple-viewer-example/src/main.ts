@@ -2161,6 +2161,7 @@ class CadViewerApp {
   ) {
     const profile = this.getActivePresentationProfile()
     const hits = objectIds.flatMap(objectId => {
+      if (operation === 'paint' && this.isBrushProtectedObject(objectId, profile)) return []
       const handleKey = this.getManualHighlightHandleKey(objectId)
       if (!handleKey) {
         log.warn('[ManualHighlight] Object has no persistent handle:', objectId)
@@ -2177,12 +2178,7 @@ class CadViewerApp {
     const changed = operation === 'paint'
       ? this.manualCorrections.paint(
         hits.map(hit => hit.handleKey),
-        this.brushStrokeStyleSource ?? this.resolveBrushStyleSource(),
-        new Set(objectIds.flatMap(objectId => {
-          const handleKey = this.getManualHighlightHandleKey(objectId)
-          return handleKey && (this.valveDeviceStates.has(objectId) ||
-            this.getPrimaryFlowHandleForObject(objectId) !== undefined) ? [handleKey] : []
-        }))
+        this.brushStrokeStyleSource ?? this.resolveBrushStyleSource()
       )
       : this.manualCorrections.erase(hits)
     if (!changed) return
@@ -2191,6 +2187,19 @@ class CadViewerApp {
 
   private getManualHighlightHandleKey(objectId: AcDbObjectId) {
     return normalizeFlowHandle(this.getHighlightHandleKeys([objectId])[0])
+  }
+
+  private isBrushProtectedObject(objectId: AcDbObjectId, profile: PresentationProfile) {
+    return this.valveDeviceStates.has(objectId) ||
+      this.getPrimaryFlowHandleForObject(objectId) !== undefined ||
+      handleKeysFromObjectId(objectId).some(handleKey => {
+        const normalized = normalizeFlowHandle(handleKey)
+        const primary = normalized
+          ? flowGraphIndex.primaryHandleByCadHandle.get(normalized)
+          : undefined
+        return (primary !== undefined && flowGraphIndex.valveKeys.has(primary)) ||
+          this.getConfiguredDeviceMatch(handleKey, profile) !== undefined
+      })
   }
 
   private getAutomaticFlowPathsForObject(objectId: AcDbObjectId) {
@@ -3934,7 +3943,10 @@ class CadViewerApp {
     return state.presentationProfile ?? createDefaultPresentationProfile()
   }
 
-  private getConfiguredDeviceMatch(handleKey: string): {
+  private getConfiguredDeviceMatch(
+    handleKey: string,
+    profile = this.getActivePresentationProfile()
+  ): {
     handleKey: string
     device: DeviceStyleDefinition
   } | undefined {
@@ -3943,7 +3955,7 @@ class CadViewerApp {
     const primaryHandle = flowGraphIndex.primaryHandleByCadHandle.get(normalized) ?? normalized
     const module = flowGraphIndex.controlModuleByPrimaryHandle.get(primaryHandle)
     if (!module) return undefined
-    const device = this.getActivePresentationProfile().devices.find(candidate =>
+    const device = profile.devices.find(candidate =>
       controlModuleMatchesDeviceName(module, candidate.name)
     )
     return device ? { handleKey: primaryHandle, device } : undefined
@@ -4428,7 +4440,7 @@ class CadViewerApp {
       {
         addition: handleKey ? this.manualCorrections.getAddition(handleKey) : undefined,
         excluded: handleKey ? this.manualCorrections.isExcluded(handleKey) : false,
-        device: this.getPrimaryFlowHandleForObject(objectId) !== undefined
+        device: this.isBrushProtectedObject(objectId, profile)
       }
     )
   }
