@@ -33,7 +33,7 @@ describe('findPhaseOverlayStyleWarnings', () => {
       id: 'flow-1',
       name: 'Flow 1',
       handleKeys: ['1A'],
-      styleSource: { kind: 'utility', utilityId: 'water' }
+      highlightStyleRefId: 'water'
     }], {
       '1A': {
         key: '1A',
@@ -50,7 +50,7 @@ describe('findPhaseOverlayStyleWarnings', () => {
       id: 'flow-1',
       name: 'Flow 1',
       handleKeys: ['1A'],
-      styleSource: { kind: 'utility' as const, utilityId: 'missing-utility' }
+      highlightStyleRefId: 'missing-utility'
     }
     const deviceState = {
       key: '1A',
@@ -66,7 +66,7 @@ describe('findPhaseOverlayStyleWarnings', () => {
       { '1A': deviceState }
     )).toEqual([
       {
-        kind: 'missing-flow-utility',
+        kind: 'missing-flow-style',
         flowPathId: 'flow-1',
         styleRefId: 'missing-utility'
       },

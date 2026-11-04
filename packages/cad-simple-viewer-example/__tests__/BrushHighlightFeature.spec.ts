@@ -8,7 +8,6 @@ import {
 } from '../src/brush/BrushHighlightFeature'
 import { HighlightRenderScheduler } from '../src/brush/HighlightRenderScheduler'
 import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
-import type { FlowPathStyleSource } from '../src/phase/types'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
   AcEdCorsorType: { Crosshair: 0 },
@@ -202,7 +201,7 @@ describe('BrushHighlightFeature', () => {
     const { canvas, view } = createView()
     const state = new ManualHighlightCorrectionState()
     let utilityId = 'water'
-    let strokeStyle: FlowPathStyleSource = { kind: 'utility' }
+    let strokeStyle: string = 'water'
     const submit = jest.fn()
     const render = jest.fn()
     const scheduleFrame = jest.fn(() => 1)
@@ -218,7 +217,7 @@ describe('BrushHighlightFeature', () => {
       getView: () => view,
       onStrokeStarted: () => {
         state.beginStroke()
-        strokeStyle = { kind: 'utility', utilityId }
+        strokeStyle = utilityId
       },
       onEntitiesChanged: apply,
       onStrokeEnded: () => {
@@ -239,15 +238,15 @@ describe('BrushHighlightFeature', () => {
     expect(submit).toHaveBeenCalledTimes(1)
     expect(render).toHaveBeenCalledTimes(1)
     expect([...render.mock.calls[0][0]]).toEqual(['A', 'B'])
-    expect(state.snapshot().additions.map(item => item.styleSource)).toEqual([
-      { kind: 'utility', utilityId: 'water' },
-      { kind: 'utility', utilityId: 'water' }
+    expect(state.snapshot().additions.map(item => item.highlightStyleRefId)).toEqual([
+      'water',
+      'water'
     ])
     stroke(canvas, 0)
-    expect(state.getAddition('A')?.styleSource).toEqual({ kind: 'utility', utilityId: 'steam' })
-    expect(state.getAddition('B')?.styleSource).toEqual({ kind: 'utility', utilityId: 'water' })
+    expect(state.getAddition('A')?.highlightStyleRefId).toEqual('steam')
+    expect(state.getAddition('B')?.highlightStyleRefId).toEqual('water')
     expect(state.undo()).toBe(true)
-    expect(state.getAddition('A')?.styleSource).toEqual({ kind: 'utility', utilityId: 'water' })
+    expect(state.getAddition('A')?.highlightStyleRefId).toEqual('water')
     expect(state.undo()).toBe(true)
     expect(state.additionCount).toBe(0)
     expect(state.canUndo).toBe(false)

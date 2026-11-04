@@ -94,19 +94,7 @@ export const clonePresentationProfile = (
 
 const cloneFlowPath = (flowPath: FlowPathStatus): FlowPathStatus => ({
   ...flowPath,
-  handleKeys: [...flowPath.handleKeys],
-  styleSource:
-    flowPath.styleSource?.kind === 'custom'
-      ? {
-        kind: 'custom',
-        style: cloneHighlightStyle(flowPath.styleSource.style)
-      }
-      : flowPath.styleSource
-        ? { ...flowPath.styleSource }
-        : undefined,
-  styleOverride: flowPath.styleOverride
-    ? { ...flowPath.styleOverride }
-    : undefined
+  handleKeys: [...flowPath.handleKeys]
 })
 
 const cloneDeviceStates = (
@@ -130,65 +118,6 @@ const cloneFlowState = (flowState: PhaseSnapshot['flowState']) => ({
     ? { deviceStates: cloneDeviceStates(flowState.deviceStates) }
     : {})
 })
-
-interface LegacyPhaseSnapshot
-  extends Omit<PhaseSnapshot, 'drawing' | 'flowState'> {
-  drawingAssetId: string
-  drawingDisplayName: string
-  flowState: { openBoundaryHandleKeys: string[] }
-}
-
-interface LegacyProcessDefinition {
-  id: string
-  name: string
-  phases: LegacyPhaseSnapshot[]
-  activePhaseId?: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface LegacyPhaseWorkspaceState {
-  version: 1
-  processes: LegacyProcessDefinition[]
-  drawingAssets: Record<string, DrawingAssetRef>
-  activeProcessId?: string
-}
-
-interface V2SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
-  phases: LegacyPhaseSnapshot[]
-}
-
-interface V2ProcessDefinition
-  extends Omit<ProcessDefinition, 'sequences'> {
-  sequences: V2SequenceDefinition[]
-}
-
-interface V2PhaseWorkspaceState {
-  version: 2
-  processes: V2ProcessDefinition[]
-  drawingAssets: Record<string, DrawingAssetRef>
-  activeProcessId?: string
-}
-
-interface V3PhaseSnapshot extends Omit<PhaseSnapshot, 'flowState'> {
-  flowState: { openBoundaryHandleKeys: string[] }
-}
-
-interface V3SequenceDefinition extends Omit<SequenceDefinition, 'phases'> {
-  phases: V3PhaseSnapshot[]
-}
-
-interface V3ProcessDefinition
-  extends Omit<ProcessDefinition, 'sequences'> {
-  sequences: V3SequenceDefinition[]
-}
-
-interface V3PhaseWorkspaceState {
-  version: 3
-  processes: V3ProcessDefinition[]
-  drawingAssets: Record<string, DrawingAssetRef>
-  activeProcessId?: string
-}
 
 const createEmptyState = (): PhaseWorkspaceState => ({
   version: PHASE_WORKSPACE_SCHEMA_VERSION,
@@ -243,53 +172,13 @@ const cloneState = (state: PhaseWorkspaceState): PhaseWorkspaceState => ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object'
 
-type V4PhaseWorkspaceState = Omit<PhaseWorkspaceState, 'version'> & { version: 4 }
-
 const isWorkspaceState = (
   value: unknown
-): value is PhaseWorkspaceState | V4PhaseWorkspaceState => {
+): value is PhaseWorkspaceState => {
   if (!isRecord(value)) return false
   return (
-    (value.version === PHASE_WORKSPACE_SCHEMA_VERSION || value.version === 4) &&
+    value.version === PHASE_WORKSPACE_SCHEMA_VERSION &&
     (value.presentationProfile === undefined || isRecord(value.presentationProfile)) &&
-    Array.isArray(value.processes) &&
-    value.processes.every(
-      process => isRecord(process) && Array.isArray(process.sequences)
-    ) &&
-    isRecord(value.drawingAssets)
-  )
-}
-
-const isLegacyWorkspaceState = (
-  value: unknown
-): value is LegacyPhaseWorkspaceState => {
-  if (!isRecord(value)) return false
-  return (
-    value.version === 1 &&
-    Array.isArray(value.processes) &&
-    value.processes.every(
-      process => isRecord(process) && Array.isArray(process.phases)
-    ) &&
-    isRecord(value.drawingAssets)
-  )
-}
-
-const isV2WorkspaceState = (value: unknown): value is V2PhaseWorkspaceState => {
-  if (!isRecord(value)) return false
-  return (
-    value.version === 2 &&
-    Array.isArray(value.processes) &&
-    value.processes.every(
-      process => isRecord(process) && Array.isArray(process.sequences)
-    ) &&
-    isRecord(value.drawingAssets)
-  )
-}
-
-const isV3WorkspaceState = (value: unknown): value is V3PhaseWorkspaceState => {
-  if (!isRecord(value)) return false
-  return (
-    value.version === 3 &&
     Array.isArray(value.processes) &&
     value.processes.every(
       process => isRecord(process) && Array.isArray(process.sequences)
@@ -598,35 +487,14 @@ export const normalizePresentationProfile = (value: unknown): PresentationProfil
 
 const normalizeFlowPaths = (
   value: unknown,
-  phaseId: string,
-  profile: PresentationProfile
+  phaseId: string
 ): FlowPathStatus[] => {
   if (!Array.isArray(value)) return []
   return value.flatMap((candidate, index) => {
-    if (!isRecord(candidate)) return []
-    const utilityId =
-      typeof candidate.utilityId === 'string' && candidate.utilityId.trim()
-        ? candidate.utilityId.trim()
-        : undefined
-    const styleOverride = isRecord(candidate.styleOverride)
-      ? normalizeStyle(candidate.styleOverride, profile.defaultFlowStyle)
-      : undefined
-    const source = isRecord(candidate.styleSource) ? candidate.styleSource : {}
-    const styleSource =
-      source.kind === 'custom'
-        ? {
-          kind: 'custom' as const,
-          style: normalizeStyle(source.style, profile.defaultFlowStyle)
-        }
-        : source.kind === 'utility'
-          ? {
-            kind: 'utility' as const,
-            utilityId:
-              typeof source.utilityId === 'string' && source.utilityId.trim()
-                ? source.utilityId.trim()
-                : undefined
-          }
-          : undefined
+    if (!isRecord(candidate) || typeof candidate.highlightStyleRefId !== 'string' ||
+      !candidate.highlightStyleRefId.trim()) {
+      throw new Error('Flow path highlightStyleRefId is required')
+    }
     return [{
       id:
         typeof candidate.id === 'string' && candidate.id
@@ -647,9 +515,7 @@ const normalizeFlowPaths = (
         Number.isFinite(candidate.priority)
         ? { priority: candidate.priority }
         : {}),
-      styleSource,
-      utilityId,
-      styleOverride
+      highlightStyleRefId: candidate.highlightStyleRefId.trim()
     }]
   })
 }
@@ -688,134 +554,6 @@ const normalizeDeviceStates = (
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
-const migrateDrawing = (
-  phase: LegacyPhaseSnapshot,
-  drawingAssets: Record<string, DrawingAssetRef>
-): PhaseDrawingAssociation =>
-  drawingAssets[phase.drawingAssetId]
-    ? {
-      kind: 'assigned',
-      assetId: phase.drawingAssetId,
-      displayName: phase.drawingDisplayName
-    }
-    : { kind: 'unassigned' }
-
-const migratePhase = (
-  phase: LegacyPhaseSnapshot,
-  drawingAssets: Record<string, DrawingAssetRef>
-): PhaseSnapshot => ({
-  id: phase.id,
-  number: phase.number,
-  name: phase.name,
-  drawing: migrateDrawing(phase, drawingAssets),
-  sourcePhaseId: phase.sourcePhaseId,
-  flowState: {
-    flowPaths: phase.flowState.openBoundaryHandleKeys.length
-      ? [
-        {
-          id: `flow-default-${phase.id}`,
-          name: DEFAULT_FLOW_PATH_NAME,
-          handleKeys: [...phase.flowState.openBoundaryHandleKeys]
-        }
-      ]
-      : []
-  },
-  createdAt: phase.createdAt,
-  updatedAt: phase.updatedAt
-})
-
-const migrateLegacyState = (
-  legacy: LegacyPhaseWorkspaceState
-): PhaseWorkspaceState => ({
-  version: PHASE_WORKSPACE_SCHEMA_VERSION,
-  presentationProfile: createDefaultPresentationProfile(),
-  activeProcessId: legacy.activeProcessId,
-  drawingAssets: Object.fromEntries(
-    Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
-  ),
-  processes: legacy.processes.map(process => {
-    const sequenceId = `sequence-default-${process.id}`
-    const activePhaseId = process.phases.some(
-      phase => phase.id === process.activePhaseId
-    )
-      ? process.activePhaseId
-      : undefined
-    return {
-      id: process.id,
-      name: process.name,
-      sequences: [
-        {
-          id: sequenceId,
-          number: 1,
-          name: DEFAULT_SEQUENCE_NAME,
-          phases: process.phases.map(phase =>
-            migratePhase(phase, legacy.drawingAssets)
-          ),
-          activePhaseId,
-          createdAt: process.createdAt,
-          updatedAt: process.updatedAt
-        }
-      ],
-      activeSequenceId: sequenceId,
-      createdAt: process.createdAt,
-      updatedAt: process.updatedAt
-    }
-  })
-})
-
-const migrateV2State = (legacy: V2PhaseWorkspaceState): PhaseWorkspaceState => ({
-  version: PHASE_WORKSPACE_SCHEMA_VERSION,
-  presentationProfile: createDefaultPresentationProfile(),
-  activeProcessId: legacy.activeProcessId,
-  drawingAssets: Object.fromEntries(
-    Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
-  ),
-  processes: legacy.processes.map(process => ({
-    ...process,
-    sequences: process.sequences.map(sequence => ({
-      ...sequence,
-      phases: sequence.phases.map(phase =>
-        migratePhase(phase, legacy.drawingAssets)
-      )
-    }))
-  }))
-})
-
-const migrateV3State = (legacy: V3PhaseWorkspaceState): PhaseWorkspaceState => ({
-  version: PHASE_WORKSPACE_SCHEMA_VERSION,
-  presentationProfile: createDefaultPresentationProfile(),
-  activeProcessId: legacy.activeProcessId,
-  drawingAssets: Object.fromEntries(
-    Object.entries(legacy.drawingAssets).map(([key, asset]) => [key, { ...asset }])
-  ),
-  processes: legacy.processes.map(process => ({
-    ...process,
-    sequences: process.sequences.map(sequence => ({
-      ...sequence,
-      phases: sequence.phases.map(phase => ({
-        id: phase.id,
-        number: phase.number,
-        name: phase.name,
-        drawing: { ...phase.drawing },
-        sourcePhaseId: phase.sourcePhaseId,
-        flowState: {
-          flowPaths: phase.flowState.openBoundaryHandleKeys.length
-            ? [
-              {
-                id: `flow-default-${phase.id}`,
-                name: DEFAULT_FLOW_PATH_NAME,
-                handleKeys: [...phase.flowState.openBoundaryHandleKeys]
-              }
-            ]
-            : []
-        },
-        createdAt: phase.createdAt,
-        updatedAt: phase.updatedAt
-      }))
-    }))
-  }))
-})
-
 const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
   const presentationProfile = normalizePresentationProfile(state.presentationProfile)
   return {
@@ -835,9 +573,10 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
           flowState: {
             flowPaths: normalizeFlowPaths(
               phase.flowState.flowPaths,
-              phase.id,
-              presentationProfile
+              phase.id
             ),
+            ...(phase.flowState.activeFlowPathId
+              ? { activeFlowPathId: phase.flowState.activeFlowPathId } : {}),
             ...(normalizeDeviceStates(phase.flowState.deviceStates)
               ? {
                 deviceStates: normalizeDeviceStates(
@@ -884,15 +623,6 @@ export class PhaseWorkspaceStore {
           ...parsed,
           version: PHASE_WORKSPACE_SCHEMA_VERSION
         })
-      }
-      if (isV3WorkspaceState(parsed)) {
-        return new PhaseWorkspaceStore(migrateV3State(parsed))
-      }
-      if (isV2WorkspaceState(parsed)) {
-        return new PhaseWorkspaceStore(migrateV2State(parsed))
-      }
-      if (isLegacyWorkspaceState(parsed)) {
-        return new PhaseWorkspaceStore(migrateLegacyState(parsed))
       }
       return new PhaseWorkspaceStore()
     } catch (error) {

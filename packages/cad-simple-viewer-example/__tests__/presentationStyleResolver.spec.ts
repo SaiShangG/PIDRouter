@@ -6,7 +6,7 @@ import {
 } from '../src/presentation/presentationStyleResolver'
 
 describe('presentationStyleResolver', () => {
-  it('applies explicit utility, custom, device, and default precedence', () => {
+  it('resolves utility and device preset references with device state precedence', () => {
     const profile = createDefaultPresentationProfile()
     profile.utilities.push({
       id: 'water',
@@ -19,21 +19,20 @@ describe('presentationStyleResolver', () => {
       id: 'flow-1',
       name: 'Route',
       handleKeys: ['1a'],
-      utilityId: 'water',
-      styleOverride: { color: 0x445566 }
+      highlightStyleRefId: 'water'
     }
 
     expect(resolveEntityPresentation(profile, { flowPath })).toMatchObject({
-      color: 0x445566,
-      lineWidthPx: 3,
-      source: 'flow'
+      color: 0x112233,
+      lineWidthPx: 2,
+      source: 'utility'
     })
     expect(
       resolveEntityPresentation(profile, {
         flowPath,
         deviceState: { key: '1a', stateKey: 'CLOSED', deviceType: 'VALVE', highlightStyleRefId: 'closed-style' }
       })
-    ).toMatchObject({ color: 0x445566, source: 'flow' })
+    ).toMatchObject({ color: 0x112233, source: 'utility' })
     profile.devices.push({
       id: 'VALVE',
       name: 'VALVE',
@@ -61,7 +60,7 @@ describe('presentationStyleResolver', () => {
       resolveEntityPresentation(profile, {
         flowPath: {
           ...flowPath,
-          styleSource: { kind: 'utility', utilityId: 'water' }
+          highlightStyleRefId: 'water'
         }
       })
     ).toMatchObject({ color: 0x112233, lineWidthPx: 2, source: 'utility' })
@@ -69,21 +68,13 @@ describe('presentationStyleResolver', () => {
       resolveEntityPresentation(profile, {
         flowPath: {
           ...flowPath,
-          styleSource: {
-            kind: 'custom',
-            style: {
-              color: 0x9c27b0,
-              lineWidthPx: 3.5,
-              opacity: 0.6,
-              visible: true
-            }
-          }
+          highlightStyleRefId: 'closed-style'
         }
       })
     ).toMatchObject({
-      color: 0x9c27b0,
-      lineWidthPx: 3.5,
-      opacity: 0.6,
+      color: 0xd32f2f,
+      lineWidthPx: 3,
+      opacity: 1,
       source: 'flow'
     })
   })
@@ -105,11 +96,10 @@ describe('presentationStyleResolver', () => {
 
   it('does not mutate profile, flow, or override inputs', () => {
     const profile = createDefaultPresentationProfile()
-    const flowPath: FlowPathStatus = {
+    const flowPath: FlowPathStatus = { highlightStyleRefId: 'water',
       id: 'flow-1',
       name: 'Route',
-      handleKeys: ['1a'],
-      styleOverride: { opacity: 0.4 }
+      handleKeys: ['1a']
     }
     const before = JSON.stringify({ profile, flowPath })
     resolveEntityPresentation(profile, { flowPath })
@@ -165,7 +155,7 @@ describe('presentationStyleResolver', () => {
         id: 'flow-1',
         name: 'Route',
         handleKeys: ['1a'],
-        styleSource: { kind: 'utility', utilityId: 'water' }
+        highlightStyleRefId: 'water'
       },
       deviceState: {
         key: '1a',

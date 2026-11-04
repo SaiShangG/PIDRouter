@@ -49,7 +49,7 @@ describe('retainUnresolvedFlowPaths', () => {
       id: 'flow-1',
       name: 'Transfer',
       handleKeys: ['1A', '2B'],
-      styleSource: { kind: 'utility' as const, utilityId: 'water' }
+      highlightStyleRefId: 'water'
     }]
 
     expect(retainUnresolvedFlowPaths(
@@ -59,13 +59,13 @@ describe('retainUnresolvedFlowPaths', () => {
       id: 'flow-1',
       name: 'Transfer',
       handleKeys: ['2B'],
-      styleSource: { kind: 'utility', utilityId: 'water' }
+      highlightStyleRefId: 'water'
     }])
     expect(flowPaths[0].handleKeys).toEqual(['1A', '2B'])
   })
 
   it('drops a retained record when every handle resolves', () => {
-    expect(retainUnresolvedFlowPaths([{
+    expect(retainUnresolvedFlowPaths([{ highlightStyleRefId: 'water',
       id: 'flow-1',
       name: 'Transfer',
       handleKeys: ['1A']

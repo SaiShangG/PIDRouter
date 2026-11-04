@@ -36,14 +36,14 @@ describe('resolveFlowHighlightLayers', () => {
       name: 'Water path',
       handleKeys: ['shared'],
       priority: 20,
-      styleSource: { kind: 'utility', utilityId: 'water' }
+      highlightStyleRefId: 'water'
     }
     const steam: FlowPathStatus = {
       id: 'steam-path',
       name: 'Steam path',
       handleKeys: ['shared'],
       priority: 10,
-      styleSource: { kind: 'utility', utilityId: 'steam' }
+      highlightStyleRefId: 'steam'
     }
     return { profile, water, steam }
   }

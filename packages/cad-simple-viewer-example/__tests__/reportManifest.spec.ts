@@ -1,5 +1,5 @@
-import type { PhaseWorkspaceState } from '../src/phase/types'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import type { PhaseWorkspaceState } from '../src/phase/types'
 import { ReportManifestStore } from '../src/report/reportManifest'
 
 const createWorkspace = (
@@ -10,13 +10,13 @@ const createWorkspace = (
     drawing: { id: 'drawing', kind: 'blank' as const, sourceName: 'Blank.dwg' }
   }
   return {
-    version: 5,
+    version: 6,
+    presentationProfile: createDefaultPresentationProfile(),
     drawingAssets,
     processes: [
       {
         id: 'process',
         name: 'CIP',
-        presentationProfile: createDefaultPresentationProfile(),
         createdAt: 'now',
         updatedAt: 'now',
         sequences: Array.from({ length: sequenceCount }, (_, sequenceIndex) => ({

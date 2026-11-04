@@ -90,17 +90,23 @@ Phase JSON separates three sources and a derived final snapshot:
 
 - `deviceStates`: equipment states, never edited by the brush/eraser.
 - `autoFlowPaths`: complete automatic route records (`id`, `name`, `handleKeys`,
-  optional `ownerHandleKey`, priority and style source). Route IDs and ownership
+  required `highlightStyleRefId`, optional `ownerHandleKey` and `priority`). Route IDs and ownership
   survive round trips; restoration does not infer owners or run routing.
-- `manualCorrections`: `additions` store brush handles and Utility/custom style
-  sources; `exclusions` store erased flow handles. The brush skips valves and
+- `manualCorrections`: each `additions` record contains one `handleKey` and a
+  required `highlightStyleRefId`; a batch stroke creates multiple records.
+  `exclusions` store erased flow handles. The brush skips valves and
   interactive devices; it does not add manual device markers.
 - `flowPaths`: derived final visible flow entries, composed from automatic routes
-  and corrections using the same layering resolver as the viewer. Entries include
-  `handleKey`, `styleSource`, resolved `style`, optional Utility
-  `highlightStyleRefId`. Device-state indicators remain in `deviceStates`, not in
-  this array. Previously saved bounds marks remain readable but are not rendered
-  or generated as new manual frames.
+  and corrections using the same layering resolver as the viewer. Each entry has
+  only `handleKey` and `highlightStyleRefId`. Device-state indicators remain in
+  `deviceStates`, not in this array.
+
+Style references point to either a Utility ID or a device-state preset ID in the
+project style configuration. Configuration edits apply to existing highlights;
+no inline style snapshot, `styleSource`, `styleOverride`, `utilityId`, or
+`geometry` is persisted. Backend handles are decimal strings; runtime CAD
+handles are hexadecimal. Local workspace schema is version 6; older local
+versions are not migrated.
 
 The runtime's `flowState.flowPaths` contains automatic results only and maps to
 backend `autoFlowPaths`. Final `flowPaths` is generated at save/copy serialization
@@ -113,7 +119,7 @@ Internal handles are hexadecimal; backend handles, including automatic route
 owners and members, are decimal strings and retain large integer precision.
 Explicit empty correction arrays clear corrections. Duplicate additions use the last style,
 and exclusions win if imported data contains both operations for one handle.
-Missing Utility references and unresolved handles are retained for later resolution.
+Missing style references and unresolved handles are retained for later resolution.
 
 The store clones corrections during phase copying/inheritance, preserves them on
 flow-only updates and same-drawing reassociation, and clears them when a drawing
@@ -130,8 +136,8 @@ restoration so old drawing strokes cannot overwrite the reassociated data.
 The brush and eraser now edit this independent correction state:
 
 - Painting adds or recolors a manual highlight and removes an exclusion for the
-  same handle. Utility references are retained per object; device presets are
-  copied as appearance-only custom styles, never as device states.
+  same handle. Utility and device preset IDs are retained per object; painting
+  with a device preset changes appearance only, never device states.
 - Erasing removes the manual addition and excludes any currently visible
   automatic flow contribution. Erasing an empty object or device-state-only
   highlight creates no exclusion. Exclusions apply to all flows at that handle.
@@ -144,7 +150,7 @@ The brush and eraser now edit this independent correction state:
   leave manually supplemented pipe segments visible. Painting an excluded object
   makes it visible again.
 - Phase restoration reads manual handles directly without creating route roots.
-  Unresolved handles and missing Utility references are retained and reported.
+  Unresolved handles and missing style references are retained and reported.
 - The brush component only samples hits. The application owns one correction
   state and one highlight-rendering path; completed/interrupted strokes submit
   state once, including Escape, pointer cancellation and tool/phase changes.

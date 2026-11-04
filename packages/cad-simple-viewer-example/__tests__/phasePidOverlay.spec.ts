@@ -12,9 +12,7 @@ const createValidOverlay = () => ({
   autoFlowPaths: [],
   flowPaths: [{
     handleKey: ' 43794 ',
-    highlightStyleRefId: ' utility-1 ',
-    styleSource: { kind: 'utility', utilityId: 'utility-1' },
-    style: { color: 65280, lineWidthPx: 3, opacity: 1, visible: true }
+    highlightStyleRefId: ' utility-1 '
   }],
   deviceStates: [{
     handleKey: ' 52532 ',
@@ -23,12 +21,12 @@ const createValidOverlay = () => ({
     deviceType: ' valve-1 '
   }],
   textNotes: [{
-    id: ' note-1 ',
-    contents: 'Open valve',
-    location: { x: 1, y: 2, z: 0 },
-    width: 20,
-    rotation: Math.PI / 2,
-    attachmentPoint: TextAttachmentPoint.MiddleCenter,
+    Id: ' note-1 ',
+    Content: 'Open valve',
+    Position: { X: 1, Y: 2, Z: 0 },
+    Width: 20,
+    LineSpacingFactor: 1,
+    AttachmentPoint: TextAttachmentPoint.MiddleCenter,
     linkedObjectHandleKey: ' 61270 ',
     visible: true,
     createdAt: '2026-08-27T00:00:00.000Z',
@@ -37,6 +35,19 @@ const createValidOverlay = () => ({
 })
 
 describe('parsePhasePidOverlay', () => {
+  it('does not convert legacy style sources into style references', () => {
+    const result = parsePhasePidOverlay({
+      ...createValidOverlay(),
+      autoFlowPaths: [{ id: 'route', name: 'Route', handleKeys: ['26'], styleSource: { kind: 'utility', utilityId: 'water' } }],
+      flowPaths: [{ handleKey: '26', style: { color: 0xff0000 }, geometry: 'bounds' }]
+    })
+    expect(result.status).toBe('valid')
+    if (result.status !== 'valid') throw new Error('Expected valid root')
+    expect(result.overlay.autoFlowPaths).toEqual([])
+    expect(result.overlay.flowPaths).toEqual([])
+    expect(result.warnings.map(warning => warning.code)).toEqual(['invalid-auto-flow-path', 'invalid-flow-path'])
+  })
+
   it('parses current data, normalizes values, and preserves stateKey case', () => {
     const result = parsePhasePidOverlay(JSON.stringify(createValidOverlay()))
 
@@ -50,9 +61,7 @@ describe('parsePhasePidOverlay', () => {
     expect(result.overlay.Name).toBe('S1-1')
     expect(result.overlay.flowPaths[0]).toEqual({
       handleKey: '43794',
-      highlightStyleRefId: 'utility-1',
-      styleSource: { kind: 'utility', utilityId: 'utility-1' },
-      style: { color: 65280, lineWidthPx: 3, opacity: 1, visible: true }
+      highlightStyleRefId: 'utility-1'
     })
     expect(result.overlay.deviceStates[0]).toEqual({
       handleKey: '52532',

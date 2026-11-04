@@ -11,10 +11,9 @@ describe('PhaseSaveState', () => {
   it('ignores absent optional fields added by workspace snapshot cloning', () => {
     const tracker = new PhaseSaveState()
     const original = phase()
-    original.flowState.flowPaths = [{ id: 'flow', name: 'Flow', handleKeys: ['A'] }]
+    original.flowState.flowPaths = [{ highlightStyleRefId: 'water', id: 'flow', name: 'Flow', handleKeys: ['A'] }]
     tracker.accept(original)
-    original.flowState.flowPaths[0].styleSource = undefined
-    original.flowState.flowPaths[0].styleOverride = undefined
+    original.flowState.flowPaths[0].highlightStyleRefId = 'water'
     expect(tracker.get(original).saved).toBe(true)
     tracker.accept(original)
     expect(tracker.get(original).saved).toBe(true)
@@ -77,7 +76,7 @@ describe('PhaseSaveState', () => {
     expect(tracker.get({ ...original, updatedAt: 'later' }).saved).toBe(true)
     original.name = 'Changed'
     original.drawing = { kind: 'assigned', assetId: 'drawing', displayName: 'PID' }
-    original.flowState.flowPaths.push({ id: 'flow', name: 'Flow', handleKeys: ['A'] })
+    original.flowState.flowPaths.push({ highlightStyleRefId: 'water', id: 'flow', name: 'Flow', handleKeys: ['A'] })
     expect(tracker.get(original).changes).toEqual(['details', 'drawing', 'highlights'])
   })
 

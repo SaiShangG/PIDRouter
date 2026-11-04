@@ -28,11 +28,11 @@ const fixture = () => {
   const flows: FlowPathStatus[] = [
     {
       id: 'flow-one', name: 'First flow', handleKeys: ['A', 'B'],
-      styleSource: { kind: 'utility', utilityId: 'water' }
+      highlightStyleRefId: 'water'
     },
     {
       id: 'flow-two', name: 'Second flow', handleKeys: ['B'],
-      styleSource: { kind: 'utility', utilityId: 'water' }
+      highlightStyleRefId: 'water'
     }
   ]
   const state = new ManualHighlightCorrectionState()
@@ -56,7 +56,7 @@ describe('manual correction runtime', () => {
   it('ignores saved manual valve marks while retaining device state and eraser behavior', () => {
     const { state, device, flows, layers } = fixture()
     const before = JSON.stringify({ device, flows })
-    state.paint(['A'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['A'], 'water')
     expect(layers('A', flows, device)).toEqual([
       expect.objectContaining({ id: 'device:A', style: expect.objectContaining({ color: 0x888888 }) })
     ])
@@ -67,29 +67,27 @@ describe('manual correction runtime', () => {
     expect(JSON.stringify({ device, flows })).toBe(before)
   })
 
-  it('does not render manual frames for devices without a state or saved bounds marks', () => {
+  it('does not render manual flow marks for protected devices', () => {
     const { state, profile, flows, layers } = fixture()
     const automatic = layers('A')
-    state.paint(['A'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['A'], 'water')
     expect(layers('A')).toEqual(automatic)
     expect(resolveFlowHighlightLayers(profile, flows, undefined, undefined, undefined, {
       addition: {
         handleKey: 'A',
-        styleSource: { kind: 'utility', utilityId: 'water' },
-        geometry: 'bounds'
+        highlightStyleRefId: 'water'
       },
       excluded: false,
-      device: false
+      device: true
     })).toEqual(resolveFlowHighlightLayers(profile, flows))
   })
 
-  it('supplements missing flow and overrides automatic style with one entity layer', () => {
-    const { state, layers } = fixture()
-    const source = {
-      kind: 'custom' as const,
-      style: { color: 0xff0000, lineWidthPx: 5, opacity: 1, visible: true }
-    }
-    state.paint(['B', 'C'], source)
+  it('uses a device preset ID for manual flow and follows configuration changes', () => {
+    const { state, profile, layers } = fixture()
+    const preset = profile.devices[0].states[0]
+    preset.color = 0xff0000
+    preset.lineWidthPx = 5
+    state.paint(['B', 'C'], preset.id)
     for (const handleKey of ['B', 'C']) {
       expect(layers(handleKey)).toEqual([
         expect.objectContaining({
@@ -99,13 +97,15 @@ describe('manual correction runtime', () => {
         })
       ])
     }
-    source.style.color = 0
-    expect(layers('B')[0].style.color).toBe(0xff0000)
+    expect(state.getAddition('B')?.highlightStyleRefId).toBe('closed')
+    preset.color = 0x00ff00
+    preset.lineWidthPx = 2
+    expect(layers('B')[0].style).toMatchObject({ color: 0x00ff00, lineWidthPx: 2 })
   })
 
   it('removes overlap in one erase and excludes all automatic flow contributions', () => {
     const { state, flows, layers } = fixture()
-    state.paint(['B'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['B'], 'water')
     state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
     expect(state.getAddition('B')).toBeUndefined()
     expect(state.snapshot().exclusions).toEqual(['B'])
@@ -122,7 +122,7 @@ describe('manual correction runtime', () => {
     ])).toBe(false)
     expect(state.snapshot()).toEqual({ additions: [], exclusions: [] })
     expect(layers('A', [], device)[0].id).toBe('device:A')
-    state.paint(['C'], { kind: 'utility' })
+    state.paint(['C'], 'water')
     expect(state.erase([{ handleKey: 'C', hasAutomaticFlow: false }])).toBe(true)
     expect(state.erase([{ handleKey: 'C', hasAutomaticFlow: false }])).toBe(false)
     expect(state.snapshot()).toEqual({ additions: [], exclusions: [] })
@@ -131,17 +131,17 @@ describe('manual correction runtime', () => {
   it('repaints an excluded handle and permits recoloring without changing other marks', () => {
     const { state } = fixture()
     state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
-    expect(state.paint(['B', 'C'], { kind: 'utility', utilityId: 'water' })).toBe(true)
+    expect(state.paint(['B', 'C'], 'water')).toBe(true)
     expect(state.isExcluded('B')).toBe(false)
-    expect(state.paint(['B'], { kind: 'utility', utilityId: 'water' })).toBe(false)
-    state.paint(['B'], { kind: 'utility' })
-    expect(state.getAddition('C')?.styleSource).toEqual({ kind: 'utility', utilityId: 'water' })
-    expect(state.getAddition('B')?.styleSource).toEqual({ kind: 'utility' })
+    expect(state.paint(['B'], 'water')).toBe(false)
+    state.paint(['B'], 'closed')
+    expect(state.getAddition('C')?.highlightStyleRefId).toEqual('water')
+    expect(state.getAddition('B')?.highlightStyleRefId).toEqual('closed')
   })
 
   it('rejects malformed erase hits before partially applying a correction', () => {
     const { state } = fixture()
-    state.paint(['B'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['B'], 'water')
     const before = state.snapshot()
     expect(() => state.erase([
       { handleKey: 'B', hasAutomaticFlow: true },
@@ -152,7 +152,7 @@ describe('manual correction runtime', () => {
 
   it('retains supplements when automatic flow is removed and preserves device fallback', () => {
     const { state, layers, device } = fixture()
-    state.paint(['B'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['B'], 'water')
     expect(layers('B', [])[0].id).toBe('manual:flow:B')
     state.erase([{ handleKey: 'A', hasAutomaticFlow: true }])
     expect(layers('A', [], { ...device, highlightStyleRefId: 'missing' })[0].id)
@@ -161,7 +161,7 @@ describe('manual correction runtime', () => {
 
   it('restores exact corrections and isolates phases without changing automatic flow data', () => {
     const { state, flows, device, layers } = fixture()
-    state.paint(['C', 'DEAD'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['C', 'DEAD'], 'water')
     state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
     const saved = state.snapshot()
     const before = JSON.stringify({ flows, device })
@@ -178,19 +178,17 @@ describe('manual correction runtime', () => {
 
   it('reports missing manual Utility references and renders a default without losing the reference', () => {
     const { state, profile, layers } = fixture()
-    state.paint(['C'], { kind: 'utility', utilityId: 'missing' })
+    state.paint(['C'], 'missing')
     expect(findPhaseOverlayStyleWarnings(profile, [], {}, state.snapshot())).toEqual([{
-      kind: 'missing-manual-utility', handleKey: 'C', styleRefId: 'missing'
+      kind: 'missing-manual-style', handleKey: 'C', styleRefId: 'missing'
     }])
     expect(layers('C')[0].style.color).toBe(profile.defaultFlowStyle.color)
-    expect(state.getAddition('C')?.styleSource).toEqual({
-      kind: 'utility', utilityId: 'missing'
-    })
+    expect(state.getAddition('C')?.highlightStyleRefId).toEqual('missing')
   })
 
   it('round-trips edited corrections via the phase store and backend payload without new flow members', async () => {
     const { state, flows, device, profile } = fixture()
-    state.paint(['C'], { kind: 'utility', utilityId: 'water' })
+    state.paint(['C'], 'water')
     state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
     const phase: PhaseSnapshot = {
       id: '20', name: 'Rinse', number: 1, drawing: { kind: 'unassigned' },
@@ -211,7 +209,7 @@ describe('manual correction runtime', () => {
     get.mockResolvedValue({ ...update.mock.calls[0][1], id: 20 })
     const loaded = await repository.loadPhase('20', {}, 0)
     const store = new PhaseWorkspaceStore({
-      version: 5, presentationProfile: profile, drawingAssets: {},
+      version: 6, presentationProfile: profile, drawingAssets: {},
       processes: [{
         id: '1', name: 'Process', createdAt: 'now', updatedAt: 'now',
         sequences: [{

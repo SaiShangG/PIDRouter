@@ -600,15 +600,20 @@ export class PhaseWorkspaceRepository {
         ? this.readFileId(phase.drawing.assetId)
         : undefined
     const profile = this.options.getPresentationProfile?.() ?? this.readPresentationProfile()
-    const autoFlowPaths = phase.flowState.flowPaths.map(path => ({
-      ...path,
-      handleKeys: [...new Set(path.handleKeys.map(handle => this.requirePersistedHandleKey(handle)))],
-      ...(path.ownerHandleKey !== undefined
-        ? { ownerHandleKey: this.requirePersistedHandleKey(path.ownerHandleKey) } : {}),
-      styleSource: path.styleSource ?? (path.styleOverride
-        ? { kind: 'custom' as const, style: { ...profile.defaultFlowStyle, ...path.styleOverride } }
-        : { kind: 'utility' as const, utilityId: path.utilityId })
-    }))
+    const autoFlowPaths = phase.flowState.flowPaths.map(path => {
+      if (typeof path.highlightStyleRefId !== 'string' || !path.highlightStyleRefId.trim()) {
+        throw new Error('Flow path highlightStyleRefId is required')
+      }
+      return {
+        id: path.id,
+        name: path.name,
+        handleKeys: [...new Set(path.handleKeys.map(handle => this.requirePersistedHandleKey(handle)))],
+        highlightStyleRefId: path.highlightStyleRefId.trim(),
+        ...(path.priority !== undefined ? { priority: path.priority } : {}),
+        ...(path.ownerHandleKey !== undefined
+          ? { ownerHandleKey: this.requirePersistedHandleKey(path.ownerHandleKey) } : {})
+      }
+    })
     const flowPaths = composeFinalFlowPaths(phase, profile).map(path => ({
       ...path, handleKey: this.requirePersistedHandleKey(path.handleKey)
     }))

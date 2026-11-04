@@ -17,7 +17,6 @@ export interface FlowHighlightLayer {
   id: string
   renderOrder: number
   style: ResolvedEntityPresentation
-  geometry?: 'bounds'
 }
 
 const resolveAutomaticFlowHighlightLayers = (
@@ -80,7 +79,7 @@ export const resolveFlowHighlightLayers = (
   activeFlowPathId?: string,
   manual?: ManualEntityHighlight
 ): FlowHighlightLayer[] => {
-  const device = Boolean(deviceState || manual?.device || manual?.addition?.geometry === 'bounds')
+  const device = Boolean(deviceState || manual?.device)
   const addition = manual?.excluded || device ? undefined : manual?.addition
   const automaticLayers = resolveAutomaticFlowHighlightLayers(
     profile,
@@ -98,7 +97,7 @@ export const resolveFlowHighlightLayers = (
         id: `manual:${addition.handleKey}`,
         name: 'Manual correction',
         handleKeys: [addition.handleKey],
-        styleSource: addition.styleSource
+        highlightStyleRefId: addition.highlightStyleRefId
       }
     })
   }

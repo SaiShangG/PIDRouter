@@ -1,7 +1,4 @@
-import {
-  PHASE_WORKSPACE_STORAGE_KEY,
-  PhaseWorkspaceStore
-} from '../src/phase/phaseWorkspaceStore'
+import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 import type {
   DrawingAssetRef,
   FlowPathStatus,
@@ -11,11 +8,10 @@ import type {
 const flowState = (handleKeys: string[] = []) => ({
   flowPaths: handleKeys.length
     ? [
-      {
+      { highlightStyleRefId: 'water',
         id: 'flow-1',
         name: 'Main route',
-        handleKeys: [...handleKeys],
-        styleOverride: { color: 0x123456, lineWidthPx: 4 }
+        handleKeys: [...handleKeys]
       }
     ]
     : []
@@ -39,20 +35,6 @@ const createStore = () => {
 const createProcessContext = (store: PhaseWorkspaceStore) => {
   const process = store.createProcess('CIP')
   return { process, sequence: process.sequences[0] }
-}
-
-const legacyPhase = {
-  id: 'phase-1',
-  number: 1,
-  name: 'Initial rinse',
-  drawingAssetId: drawing.id,
-  drawingDisplayName: 'CIP-01.dwg',
-  flowState: { openBoundaryHandleKeys: ['1a'] },
-  deviceStates: {
-    '1a': { key: '1a', label: 'XV-101', mode: 'open' }
-  },
-  createdAt: '2026-08-10T00:00:00.000Z',
-  updatedAt: '2026-08-10T00:00:00.000Z'
 }
 
 describe('PhaseWorkspaceStore', () => {
@@ -130,62 +112,6 @@ describe('PhaseWorkspaceStore', () => {
     expect(snapshot.drawingAssets[drawing.id]).toBeUndefined()
   })
 
-  it('migrates v1 processes into deterministic default sequences', () => {
-    const storage = {
-      getItem: jest.fn((key: string) =>
-        key === PHASE_WORKSPACE_STORAGE_KEY
-          ? JSON.stringify({
-            version: 1,
-            processes: [
-              {
-                id: 'process-1',
-                name: 'CIP',
-                phases: [legacyPhase],
-                activePhaseId: legacyPhase.id,
-                createdAt: '2026-08-10T00:00:00.000Z',
-                updatedAt: '2026-08-10T00:00:00.000Z'
-              }
-            ],
-            drawingAssets: { [drawing.id]: drawing },
-            activeProcessId: 'process-1'
-          })
-          : null
-      )
-    }
-
-    const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
-    const process = snapshot.processes[0]
-    const sequence = process.sequences[0]
-
-    expect(snapshot.version).toBe(5)
-    expect(snapshot.presentationProfile.defaultFlowStyle.color).toBe(0x00c853)
-    expect(process).not.toHaveProperty('presentationProfile')
-    expect(process.activeSequenceId).toBe('sequence-default-process-1')
-    expect(sequence.id).toBe('sequence-default-process-1')
-    expect(sequence.activePhaseId).toBe(legacyPhase.id)
-    expect(sequence.phases[0]).toMatchObject({
-      id: legacyPhase.id,
-      number: legacyPhase.number,
-      name: legacyPhase.name,
-      drawing: {
-        kind: 'assigned',
-        assetId: drawing.id,
-        displayName: 'CIP-01.dwg'
-      },
-      flowState: {
-        flowPaths: [
-          {
-            id: `flow-default-${legacyPhase.id}`,
-            name: '默认流路',
-            handleKeys: ['1a']
-          }
-        ]
-      }
-    })
-    expect(sequence.phases[0]).not.toHaveProperty('deviceStates')
-    expect(snapshot.drawingAssets[drawing.id]).toEqual(drawing)
-  })
-
   it('creates, renames, reorders, copies, and deletes sequences', () => {
     const store = createStore()
     const { process, sequence: first } = createProcessContext(store)
@@ -240,14 +166,14 @@ describe('PhaseWorkspaceStore', () => {
     })
 
     second.flowState.flowPaths[0].handleKeys.push('changed')
-    second.flowState.flowPaths[0].styleOverride!.color = 0xffffff
+    second.flowState.flowPaths[0].highlightStyleRefId = 'other-style'
     const storedFirst = store.snapshot().processes[0].sequences[0].phases[0]
     expect(storedFirst.flowState.flowPaths[0].handleKeys).toEqual(['1a', '2b'])
-    expect(storedFirst.flowState.flowPaths[0].styleOverride?.color).toBe(0x123456)
+    expect(storedFirst.flowState.flowPaths[0].highlightStyleRefId).toBe('water')
     expect(historical.sourcePhaseId).toBe(first.id)
   })
 
-  it('clones explicit custom flow styles without shared references', () => {
+  it('clones flow style references without sharing flow records', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)
     const phase = store.createPhase({
@@ -261,26 +187,18 @@ describe('PhaseWorkspaceStore', () => {
       id: 'flow-custom',
       name: 'Custom route',
       handleKeys: ['1a'],
-      styleSource: {
-        kind: 'custom',
-        style: {
-          color: 0x123456,
-          lineWidthPx: 4,
-          opacity: 0.5,
-          visible: true
-        }
-      }
+      highlightStyleRefId: 'device-preset'
     }
     store.updatePhaseState(process.id, sequence.id, phase.id, {
       flowState: { flowPaths: [flowPath] }
     })
 
-      ; (flowPath.styleSource as Extract<NonNullable<FlowPathStatus['styleSource']>, { kind: 'custom' }>).style.color = 0xffffff
+    flowPath.highlightStyleRefId = 'other-style'
 
     expect(
       store.snapshot().processes[0].sequences[0].phases[0].flowState.flowPaths[0]
-        .styleSource
-    ).toMatchObject({ kind: 'custom', style: { color: 0x123456 } })
+        .highlightStyleRefId
+    ).toBe('device-preset')
   })
 
   it('copies a phase across sequences without sharing mutable state', () => {
@@ -314,12 +232,12 @@ describe('PhaseWorkspaceStore', () => {
       sourcePhaseId: source.id
     })
     copy.flowState.flowPaths[0].handleKeys.push('changed')
-    copy.flowState.flowPaths[0].styleOverride!.lineWidthPx = 12
+    copy.flowState.flowPaths[0].highlightStyleRefId = 'other-style'
     const snapshot = store.snapshot()
     const storedSource = snapshot.processes[0].sequences[0].phases[0]
     const storedTarget = snapshot.processes[0].sequences[1]
     expect(storedSource.flowState.flowPaths[0].handleKeys).toEqual(['1a'])
-    expect(storedSource.flowState.flowPaths[0].styleOverride?.lineWidthPx).toBe(4)
+    expect(storedSource.flowState.flowPaths[0].highlightStyleRefId).toBe('water')
     expect(storedTarget.phases.map(phase => phase.id)).toEqual([copy.id])
     expect(storedTarget.activePhaseId).toBe(copy.id)
     expect(snapshot.processes[0].activeSequenceId).toBe(targetSequence.id)
@@ -450,97 +368,6 @@ describe('PhaseWorkspaceStore', () => {
     expect(store.snapshot().drawingAssets).toEqual({})
   })
 
-  it('migrates v2 phases with missing assets as unassigned', () => {
-    const storage = {
-      getItem: jest.fn(() =>
-        JSON.stringify({
-          version: 2,
-          processes: [
-            {
-              id: 'process-1',
-              name: 'CIP',
-              sequences: [
-                {
-                  id: 'sequence-1',
-                  number: 1,
-                  name: 'Route',
-                  phases: [legacyPhase, { ...legacyPhase, id: 'phase-2', drawingAssetId: 'missing' }],
-                  createdAt: legacyPhase.createdAt,
-                  updatedAt: legacyPhase.updatedAt
-                }
-              ],
-              activeSequenceId: 'sequence-1',
-              createdAt: legacyPhase.createdAt,
-              updatedAt: legacyPhase.updatedAt
-            }
-          ],
-          drawingAssets: { [drawing.id]: drawing },
-          activeProcessId: 'process-1'
-        })
-      )
-    }
-
-    const phases = PhaseWorkspaceStore.load(storage).snapshot().processes[0]
-      .sequences[0].phases
-    expect(phases[0].drawing.kind).toBe('assigned')
-    expect(phases[1].drawing).toEqual({ kind: 'unassigned' })
-  })
-
-  it('migrates v3 handles into a default flow path and profile', () => {
-    const storage = {
-      getItem: jest.fn(() =>
-        JSON.stringify({
-          version: 3,
-          processes: [
-            {
-              id: 'process-1',
-              name: 'CIP',
-              sequences: [
-                {
-                  id: 'sequence-1',
-                  number: 1,
-                  name: 'Route',
-                  phases: [
-                    {
-                      id: 'phase-1',
-                      number: 1,
-                      name: 'Rinse',
-                      drawing: { kind: 'unassigned' },
-                      flowState: { openBoundaryHandleKeys: ['1a', '2b'] },
-                      createdAt: legacyPhase.createdAt,
-                      updatedAt: legacyPhase.updatedAt
-                    }
-                  ],
-                  createdAt: legacyPhase.createdAt,
-                  updatedAt: legacyPhase.updatedAt
-                }
-              ],
-              createdAt: legacyPhase.createdAt,
-              updatedAt: legacyPhase.updatedAt
-            }
-          ],
-          drawingAssets: {}
-        })
-      )
-    }
-
-    const snapshot = PhaseWorkspaceStore.load(storage).snapshot()
-    expect(snapshot.version).toBe(5)
-    expect(snapshot.presentationProfile.defaultFlowStyle).toEqual({
-      color: 0x00c853,
-      lineWidthPx: 3,
-      opacity: 1,
-      visible: true
-    })
-    expect(
-      snapshot.processes[0].sequences[0].phases[0].flowState.flowPaths[0]
-    ).toEqual({
-      id: 'flow-default-phase-1',
-      name: '默认流路',
-      handleKeys: ['1a', '2b']
-    })
-  })
-
   it('preserves persisted UUIDs when normalizing presentation styles', () => {
     const deviceStyleId = 'a4f4cb2a-edf8-4880-b45c-0ca42a45063d'
     const utilityId = '0a4e2606-bb00-479d-bb6d-22c2a8607189'
@@ -610,11 +437,7 @@ describe('PhaseWorkspaceStore', () => {
           id: 'flow-1',
           name: 'Water route',
           handleKeys: ['1A'],
-          utilityId: 'removed-utility',
-          styleSource: {
-            kind: 'utility',
-            utilityId: 'removed-utility'
-          }
+          highlightStyleRefId: 'removed-utility'
         }]
       }
     })
@@ -626,11 +449,8 @@ describe('PhaseWorkspaceStore', () => {
 
     const flowPath = store.snapshot().processes[0]
       .sequences[0].phases[0].flowState.flowPaths[0]
-    expect(flowPath.utilityId).toBe('removed-utility')
-    expect(flowPath.styleSource).toEqual({
-      kind: 'utility',
-      utilityId: 'removed-utility'
-    })
+    expect(flowPath.highlightStyleRefId).toBe('removed-utility')
+    expect(flowPath.highlightStyleRefId).toEqual('removed-utility')
   })
 
   it('keeps project presentation styles when phase runtime state changes', () => {
@@ -756,9 +576,16 @@ describe('PhaseWorkspaceStore', () => {
     expect(associated.drawing).toEqual(source.drawing)
     expect(associated.sourcePhaseId).toBe(source.id)
     expect(associated.flowState.flowPaths[0].handleKeys).toEqual(['1a'])
-    expect(associated.flowState.flowPaths[0].styleOverride).toEqual({
-      color: 0x123456,
-      lineWidthPx: 4
+    expect(associated.flowState.flowPaths[0].highlightStyleRefId).toBe('water')
+  })
+
+  it.each([1, 2, 3, 4, 5])('does not migrate old workspace version %i', version => {
+    const legacy = { ...createStore().snapshot(), version }
+    legacy.processes.push({
+      id: 'old-process', name: 'Old', sequences: [], createdAt: 'now', updatedAt: 'now'
     })
+    const restored = PhaseWorkspaceStore.load({ getItem: () => JSON.stringify(legacy) })
+    expect(restored.snapshot().version).toBe(6)
+    expect(restored.snapshot().processes).toEqual([])
   })
 })

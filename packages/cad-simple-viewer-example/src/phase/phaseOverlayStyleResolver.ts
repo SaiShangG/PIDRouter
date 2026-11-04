@@ -7,12 +7,12 @@ import type {
 
 export type PhaseOverlayStyleWarning =
   | {
-    kind: 'missing-manual-utility'
+    kind: 'missing-manual-style'
     handleKey: string
     styleRefId: string
   }
   | {
-    kind: 'missing-flow-utility'
+    kind: 'missing-flow-style'
     flowPathId: string
     styleRefId: string
   }
@@ -40,18 +40,19 @@ export const findPhaseOverlayStyleWarnings = (
   deviceStates: Readonly<Record<string, DeviceState>> = {},
   manualCorrections?: ManualHighlightCorrections
 ): PhaseOverlayStyleWarning[] => {
-  const utilityIds = new Set(profile.utilities.map(utility => utility.id))
   const deviceStyles = profile.devices.flatMap(device =>
     device.states.map(state => ({ device, state }))
   )
+  const styleIds = new Set([
+    ...profile.utilities.map(utility => utility.id),
+    ...deviceStyles.map(candidate => candidate.state.id)
+  ])
   const warnings: PhaseOverlayStyleWarning[] = []
   manualCorrections?.additions.forEach(addition => {
-    const styleRefId = addition.styleSource.kind === 'utility'
-      ? addition.styleSource.utilityId
-      : undefined
-    if (styleRefId && !utilityIds.has(styleRefId)) {
+    const styleRefId = addition.highlightStyleRefId
+    if (!styleIds.has(styleRefId)) {
       warnings.push({
-        kind: 'missing-manual-utility',
+        kind: 'missing-manual-style',
         handleKey: addition.handleKey,
         styleRefId
       })
@@ -59,12 +60,10 @@ export const findPhaseOverlayStyleWarnings = (
   })
 
   flowPaths.forEach(flowPath => {
-    const styleRefId = flowPath.styleSource?.kind === 'utility'
-      ? flowPath.styleSource.utilityId
-      : flowPath.utilityId
-    if (styleRefId && !utilityIds.has(styleRefId)) {
+    const styleRefId = flowPath.highlightStyleRefId
+    if (!styleIds.has(styleRefId)) {
       warnings.push({
-        kind: 'missing-flow-utility',
+        kind: 'missing-flow-style',
         flowPathId: flowPath.id,
         styleRefId
       })

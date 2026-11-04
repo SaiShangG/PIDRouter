@@ -69,28 +69,21 @@ export const resolveEntityPresentation = (
 ): ResolvedEntityPresentation => {
   let source: PresentationSource = 'default'
   const flowPath = context.flowPath
-  const customStyle =
-    flowPath?.styleSource?.kind === 'custom'
-      ? flowPath.styleSource.style
-      : flowPath?.styleSource == null && flowPath?.styleOverride
-        ? { ...profile.defaultFlowStyle, ...flowPath.styleOverride }
-        : undefined
-  let style: HighlightStyle = customStyle ?? profile.defaultFlowStyle
+  let style: HighlightStyle = profile.defaultFlowStyle
   if (flowPath) source = 'flow'
-  const utilityId =
-    flowPath?.styleSource?.kind === 'utility'
-      ? flowPath.styleSource.utilityId
-      : flowPath?.styleSource == null && !customStyle
-        ? flowPath?.utilityId
-        : undefined
-  const utility = utilityId
+  const styleRefId = flowPath?.highlightStyleRefId
+  const utility = styleRefId
     ? profile.utilities.find(
-      item => item.id === utilityId
+      item => item.id === styleRefId
     )
     : undefined
   if (utility) {
     style = utility.style
     source = 'utility'
+  } else if (styleRefId) {
+    const state = profile.devices.flatMap(device => device.states)
+      .find(candidate => candidate.id === styleRefId)
+    if (state) style = deviceStateStyle(state)
   }
   const deviceStyle = resolveDeviceStyle(profile, context.deviceState)
   if (deviceStyle) {

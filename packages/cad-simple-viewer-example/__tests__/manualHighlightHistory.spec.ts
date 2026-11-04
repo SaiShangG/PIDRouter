@@ -1,13 +1,12 @@
 import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
-import type { FlowPathStyleSource } from '../src/phase/types'
 
-const water: FlowPathStyleSource = { kind: 'utility', utilityId: 'water' }
-const steam: FlowPathStyleSource = { kind: 'utility', utilityId: 'steam' }
+const water: string = 'water'
+const steam: string = 'steam'
 
 const paintStroke = (
   state: ManualHighlightCorrectionState,
   handles: string[],
-  source: FlowPathStyleSource = water
+  source: string = water
 ) => {
   state.beginStroke()
   state.paint(handles, source)
@@ -50,9 +49,9 @@ describe('manual correction history', () => {
     state.undo()
     expect(state.snapshot()).toEqual(recolored)
     state.undo()
-    expect(state.getAddition('A')?.styleSource).toEqual(water)
+    expect(state.getAddition('A')?.highlightStyleRefId).toEqual(water)
     state.redo()
-    expect(state.getAddition('A')?.styleSource).toEqual(steam)
+    expect(state.getAddition('A')?.highlightStyleRefId).toEqual(steam)
     state.redo()
     expect(state.snapshot()).toEqual(erased)
   })
@@ -88,8 +87,8 @@ describe('manual correction history', () => {
     const state = new ManualHighlightCorrectionState()
     state.restore({
       additions: [
-        { handleKey: 'A', styleSource: water },
-        { handleKey: 'B', styleSource: steam }
+        { handleKey: 'A', highlightStyleRefId: water },
+        { handleKey: 'B', highlightStyleRefId: steam }
       ],
       exclusions: []
     })
@@ -108,13 +107,13 @@ describe('manual correction history', () => {
     expect(state.canUndo).toBe(true)
     expect(state.canRedo).toBe(true)
     state.restore({
-      additions: [{ handleKey: 'C', styleSource: steam }],
+      additions: [{ handleKey: 'C', highlightStyleRefId: steam }],
       exclusions: ['D']
     })
     expect(state.canUndo).toBe(false)
     expect(state.canRedo).toBe(false)
     expect(state.undo()).toBe(false)
-    expect(state.getAddition('C')?.styleSource).toEqual(steam)
+    expect(state.getAddition('C')?.highlightStyleRefId).toEqual(steam)
     expect(state.isExcluded('D')).toBe(true)
   })
 
@@ -133,24 +132,15 @@ describe('manual correction history', () => {
     expect(state.redo()).toBe(false)
   })
 
-  it('keeps custom style snapshots independent from inputs and exported snapshots', () => {
+  it('keeps style references independent from exported correction records', () => {
     const state = new ManualHighlightCorrectionState()
-    const source: FlowPathStyleSource = {
-      kind: 'custom',
-      style: { color: 0x123456, lineWidthPx: 4, opacity: 0.5, visible: true }
-    }
+    const source: string = 'device-preset'
     paintStroke(state, ['A'], source)
-    source.style.color = 0
     const exported = state.snapshot()
-    const custom = exported.additions[0].styleSource
-    if (custom.kind !== 'custom') throw new Error('Expected custom source')
-    custom.style.color = 0xffffff
+    exported.additions[0].highlightStyleRefId = 'other-style'
     state.undo()
     state.redo()
-    expect(state.getAddition('A')?.styleSource).toEqual({
-      kind: 'custom',
-      style: { color: 0x123456, lineWidthPx: 4, opacity: 0.5, visible: true }
-    })
+    expect(state.getAddition('A')?.highlightStyleRefId).toEqual('device-preset')
   })
 
   it('rejects nested strokes and completes interrupted strokes once', () => {
@@ -168,9 +158,9 @@ describe('manual correction history', () => {
     const state = new ManualHighlightCorrectionState()
     state.restore({
       additions: [
-        { handleKey: '00ab', styleSource: water },
-        { handleKey: 'AB', styleSource: steam },
-        { handleKey: 'DEAD', styleSource: water }
+        { handleKey: '00ab', highlightStyleRefId: water },
+        { handleKey: 'AB', highlightStyleRefId: steam },
+        { handleKey: 'DEAD', highlightStyleRefId: water }
       ],
       exclusions: ['00CD', 'CD']
     })

@@ -1,9 +1,8 @@
 import {
   ManualHighlightCorrectionsValidationError,
-  normalizeFlowPathStyleSource,
   normalizeManualHighlightCorrections
 } from './manualHighlightCorrections'
-import type { FlowPathStatus, FlowPathStyleSource, HighlightStyle, ManualHighlightCorrections } from './types'
+import type { FlowPathStatus, ManualHighlightCorrections } from './types'
 
 export enum TextAttachmentPoint {
   TopLeft = 1,
@@ -24,10 +23,7 @@ export interface PhasePidOverlayDrawing {
 
 export interface PhasePidOverlayFlowPath {
   handleKey: string
-  highlightStyleRefId?: string
-  styleSource: FlowPathStyleSource
-  style: HighlightStyle
-  geometry?: 'bounds'
+  highlightStyleRefId: string
 }
 
 export interface PhasePidOverlayDeviceState {
@@ -147,29 +143,18 @@ const readDrawing = (value: unknown): PhasePidOverlayDrawing | undefined => {
 }
 
 const readFlowPath = (value: unknown): PhasePidOverlayFlowPath | undefined => {
-  if (!isRecord(value)) return undefined
+  if (!isRecord(value) || !isNonEmptyString(value.highlightStyleRefId)) return undefined
   const handleKey = normalizeHandleKey(value.handleKey)
-  if (!handleKey || (value.geometry !== undefined && value.geometry !== 'bounds')) return undefined
-  try {
-    const styleSource = normalizeFlowPathStyleSource(value.styleSource)
-    const resolved = normalizeFlowPathStyleSource({ kind: 'custom', style: value.style })
-    if (resolved.kind !== 'custom') return undefined
-    return {
-      handleKey,
-      styleSource,
-      style: resolved.style,
-      ...(isNonEmptyString(value.highlightStyleRefId)
-        ? { highlightStyleRefId: value.highlightStyleRefId.trim() } : {}),
-      ...(value.geometry === 'bounds' ? { geometry: 'bounds' } : {})
-    }
-  } catch (error) {
-    if (!(error instanceof ManualHighlightCorrectionsValidationError)) throw error
-    return undefined
+  if (!handleKey) return undefined
+  return {
+    handleKey,
+    highlightStyleRefId: value.highlightStyleRefId.trim()
   }
 }
 
 const readAutoFlowPath = (value: unknown): FlowPathStatus | undefined => {
   if (!isRecord(value) || !isNonEmptyString(value.id) ||
+    !isNonEmptyString(value.highlightStyleRefId) ||
     typeof value.name !== 'string' || !Array.isArray(value.handleKeys) ||
     (value.priority !== undefined && (typeof value.priority !== 'number' || !Number.isFinite(value.priority)))) {
     return undefined
@@ -179,28 +164,13 @@ const readAutoFlowPath = (value: unknown): FlowPathStatus | undefined => {
   const ownerHandleKey = value.ownerHandleKey === undefined
     ? undefined : normalizeHandleKey(value.ownerHandleKey)
   if (value.ownerHandleKey !== undefined && ownerHandleKey === undefined) return undefined
-  try {
-    const styleSource = normalizeFlowPathStyleSource(value.styleSource)
-    if (value.styleOverride !== undefined) {
-      if (!isRecord(value.styleOverride)) return undefined
-      normalizeFlowPathStyleSource({
-        kind: 'custom',
-        style: { color: 0, lineWidthPx: 1, opacity: 1, visible: true, ...value.styleOverride }
-      })
-    }
-    return {
-      id: value.id,
-      name: value.name,
-      handleKeys: handleKeys.filter((key): key is string => key !== undefined),
-      ...(ownerHandleKey !== undefined ? { ownerHandleKey } : {}),
-      ...(typeof value.priority === 'number' ? { priority: value.priority } : {}),
-      styleSource,
-      ...(styleSource.kind === 'utility' && styleSource.utilityId ? { utilityId: styleSource.utilityId } : {}),
-      ...(isRecord(value.styleOverride) ? { styleOverride: value.styleOverride } : {})
-    }
-  } catch (error) {
-    if (!(error instanceof ManualHighlightCorrectionsValidationError)) throw error
-    return undefined
+  return {
+    id: value.id,
+    name: value.name,
+    handleKeys: handleKeys.filter((key): key is string => key !== undefined),
+    ...(ownerHandleKey !== undefined ? { ownerHandleKey } : {}),
+    ...(typeof value.priority === 'number' ? { priority: value.priority } : {}),
+    highlightStyleRefId: value.highlightStyleRefId.trim()
   }
 }
 
@@ -352,7 +322,7 @@ export const parsePhasePidOverlay = (
       })
       return
     }
-    const key = `${flowPath.handleKey}:${flowPath.geometry ?? 'entity'}`
+    const key = flowPath.handleKey
     if (flowPathKeys.has(key)) {
       warnings.push({
         code: 'duplicate-flow-path',

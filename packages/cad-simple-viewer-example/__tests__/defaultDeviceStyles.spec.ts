@@ -1,8 +1,8 @@
-import { createDefaultPresentationProfile, normalizePresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import { findPhaseOverlayStyleWarnings } from '../src/phase/phaseOverlayStyleResolver'
 import { toPersistedPresentationProfile } from '../src/phase/phaseWorkspaceRepository'
+import { createDefaultPresentationProfile, normalizePresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import { generateDefaultDeviceStyles, initializeDefaultDeviceStyles, initializeProjectDeviceStyles } from '../src/presentation/defaultDeviceStyles'
 import templates from '../src/presentation/defaultDeviceStyles.json'
-import { findPhaseOverlayStyleWarnings } from '../src/phase/phaseOverlayStyleResolver'
 import { parseHighlightStyleDocument } from '../src/presentation/highlightStyleDocument'
 
 const document = {
@@ -85,7 +85,7 @@ describe('default device styles', () => {
     const restored = normalizePresentationProfile(toPersistedPresentationProfile(initialized))
     expect(restored.utilities).toEqual(initialized.utilities)
     expect(findPhaseOverlayStyleWarnings(restored, [{
-      id: 'flow-1', name: 'Flow', handleKeys: [], utilityId: initialized.utilities[0].id
+      id: 'flow-1', name: 'Flow', handleKeys: [], highlightStyleRefId: initialized.utilities[0].id
     }])).toEqual([])
     restored.utilities[0].style.color = 0x123456
     restored.utilities.pop()

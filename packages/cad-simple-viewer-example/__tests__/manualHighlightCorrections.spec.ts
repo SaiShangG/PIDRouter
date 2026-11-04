@@ -13,13 +13,10 @@ import type {
 
 const corrections = (): ManualHighlightCorrections => ({
   additions: [
-    { handleKey: 'AB12', styleSource: { kind: 'utility', utilityId: 'missing-utility' } },
+    { handleKey: 'AB12', highlightStyleRefId: 'missing-utility' },
     {
       handleKey: 'CD34',
-      styleSource: {
-        kind: 'custom',
-        style: { color: 0x123456, lineWidthPx: 4, opacity: 0.5, visible: true }
-      }
+      highlightStyleRefId: 'device-preset'
     }
   ],
   exclusions: ['EF56', '20000000000001']
@@ -72,18 +69,65 @@ const overlay = (manualCorrections: unknown) => ({
 })
 
 describe('manual highlight correction data', () => {
+  it('serializes the automatic route plus manual additions and exclusion as ID-only records', () => {
+    const { store } = createContext()
+    const phase = firstPhase(store)
+    phase.flowState.flowPaths = [Object.assign({
+      id: 'route-1', name: 'Automatic route', ownerHandleKey: '1A',
+      handleKeys: ['1A', '2B'], highlightStyleRefId: 'water'
+    }, { geometry: 'bounds', styleSource: { kind: 'utility', utilityId: 'water' } })]
+    phase.manualCorrections = {
+      additions: ['2C', '21', '37'].map(handleKey => ({ handleKey, highlightStyleRefId: 'air' })),
+      exclusions: ['2B']
+    }
+    const payload = createRepository().repository.createPhaseData(phase)
+    expect(payload.autoFlowPaths).toEqual([{
+      id: 'route-1', name: 'Automatic route', ownerHandleKey: '26',
+      handleKeys: ['26', '43'], highlightStyleRefId: 'water'
+    }])
+    expect(payload.manualCorrections).toEqual({
+      additions: ['44', '33', '55'].map(handleKey => ({ handleKey, highlightStyleRefId: 'air' })),
+      exclusions: ['43']
+    })
+    expect(payload.flowPaths).toEqual([
+      { handleKey: '26', highlightStyleRefId: 'water' },
+      ...['44', '33', '55'].map(handleKey => ({ handleKey, highlightStyleRefId: 'air' }))
+    ])
+  })
+
+  it('preserves the active automatic route across local persistence and final composition', () => {
+    const { store, processId, sequenceId, phaseId } = createContext()
+    store.updatePhaseState(processId, sequenceId, phaseId, {
+      flowState: {
+        flowPaths: [
+          { id: 'route-1', name: 'Water', handleKeys: ['1A'], priority: 10, highlightStyleRefId: 'water' },
+          { id: 'route-2', name: 'Air', handleKeys: ['1A'], priority: 0, highlightStyleRefId: 'air' }
+        ],
+        activeFlowPathId: 'route-2'
+      }
+    })
+    const storage = { setItem: jest.fn() }
+    store.persist(storage)
+    const restored = PhaseWorkspaceStore.load({ getItem: () => storage.setItem.mock.calls[0][1] })
+    const phase = firstPhase(restored)
+    expect(phase.flowState.activeFlowPathId).toBe('route-2')
+    const payload = createRepository().repository.createPhaseData(phase)
+    expect(payload.activeFlowPathId).toBe('route-2')
+    expect(payload.flowPaths).toEqual([{ handleKey: '26', highlightStyleRefId: 'air' }])
+  })
+
   it('normalizes handles, deduplicates and keeps additions/exclusions disjoint', () => {
     const result = normalizeManualHighlightCorrections({
       additions: [
-        { handleKey: ' 00ab ', styleSource: { kind: 'utility', utilityId: 'first' } },
-        { handleKey: 'AB', styleSource: { kind: 'utility', utilityId: ' second ' } },
-        { handleKey: 'cd', styleSource: { kind: 'utility' } }
+        { handleKey: ' 00ab ', highlightStyleRefId: 'first' },
+        { handleKey: 'AB', highlightStyleRefId: ' second ' },
+        { handleKey: 'cd', highlightStyleRefId: 'water' }
       ],
       exclusions: ['00cd', 'CD']
     })
     expect(result).toEqual({
       additions: [{
-        handleKey: 'AB', styleSource: { kind: 'utility', utilityId: 'second' }
+        handleKey: 'AB', highlightStyleRefId: 'second'
       }],
       exclusions: ['CD']
     })
@@ -95,15 +139,13 @@ describe('manual highlight correction data', () => {
     {},
     { additions: [], exclusions: ['not-a-handle'] },
     { additions: [null], exclusions: [] },
-    { additions: [{ handleKey: 'AB', styleSource: { kind: 'device-state' } }], exclusions: [] },
-    { additions: [{ handleKey: 'AB', styleSource: { kind: 'utility', utilityId: '' } }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', highlightStyleRefId: { kind: 'device-state' } }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', highlightStyleRefId: '' }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', styleSource: { kind: 'utility', utilityId: 'water' } }], exclusions: [] },
     {
       additions: [{
         handleKey: 'AB',
-        styleSource: {
-          kind: 'custom',
-          style: { color: 1, lineWidthPx: 3, opacity: 2, visible: true }
-        }
+        highlightStyleRefId: 123
       }],
       exclusions: []
     }
@@ -116,7 +158,7 @@ describe('manual highlight correction data', () => {
     const result = parsePhasePidOverlay(overlay({
       additions: [{
         handleKey: ' 000438 ',
-        styleSource: { kind: 'utility', utilityId: 'missing-utility' }
+        highlightStyleRefId: 'missing-utility'
       }],
       exclusions: ['9007199254740993']
     }))
@@ -126,7 +168,7 @@ describe('manual highlight correction data', () => {
     expect(result.overlay.manualCorrections).toEqual({
       additions: [{
         handleKey: '438',
-        styleSource: { kind: 'utility', utilityId: 'missing-utility' }
+        highlightStyleRefId: 'missing-utility'
       }],
       exclusions: ['9007199254740993']
     })
@@ -154,7 +196,7 @@ describe('manual highlight correction data', () => {
     snapshot.manualCorrections?.additions.splice(0, 1)
     store.updatePhaseState(processId, sequenceId, phaseId, {
       flowState: {
-        flowPaths: [{ id: 'flow', name: 'Auto flow', handleKeys: ['AB12'] }],
+        flowPaths: [{ highlightStyleRefId: 'water', id: 'flow', name: 'Auto flow', handleKeys: ['AB12'] }],
         deviceStates: {
           AB12: { key: 'AB12', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'open' }
         }
@@ -165,18 +207,9 @@ describe('manual highlight correction data', () => {
     const restored = PhaseWorkspaceStore.load({
       getItem: () => storage.setItem.mock.calls[0][1]
     })
-    expect(restored.snapshot().version).toBe(5)
+    expect(restored.snapshot().version).toBe(6)
     expect(firstPhase(restored).manualCorrections).toEqual(corrections())
     expect(firstPhase(restored).flowState.deviceStates?.AB12.stateKey).toBe('OPEN')
-  })
-
-  it('migrates v4 without interpreting old flow records as manual corrections', () => {
-    const { store } = createContext()
-    const legacy = { ...store.snapshot(), version: 4 }
-    const migrated = PhaseWorkspaceStore.load({ getItem: () => JSON.stringify(legacy) })
-    expect(migrated.snapshot().version).toBe(5)
-    expect(firstPhase(migrated).id).toBe(firstPhase(store).id)
-    expect(firstPhase(migrated).manualCorrections).toBeUndefined()
   })
 
   it('does not silently replace a workspace containing malformed corrections', () => {
@@ -204,7 +237,7 @@ describe('manual highlight correction data', () => {
     const { store, processId, sequenceId, phaseId } = createContext()
     const before = firstPhase(store)
     expect(() => store.updatePhaseState(processId, sequenceId, phaseId, {
-      flowState: { flowPaths: [{ id: 'new', name: 'New', handleKeys: ['AB'] }] },
+      flowState: { flowPaths: [{ highlightStyleRefId: 'water', id: 'new', name: 'New', handleKeys: ['AB'] }] },
       manualCorrections: { additions: [], exclusions: ['bad-handle'] }
     })).toThrow(ManualHighlightCorrectionsValidationError)
     expect(firstPhase(store)).toEqual(before)
@@ -227,9 +260,7 @@ describe('manual highlight correction data', () => {
     for (const phase of [previous, history, copy, replacement]) {
       expect(phase.manualCorrections).toEqual(corrections())
     }
-    const custom = copy.manualCorrections?.additions[1].styleSource
-    if (custom?.kind !== 'custom') throw new Error('Expected custom style')
-    custom.style.color = 0
+    copy.manualCorrections!.additions[1].highlightStyleRefId = 'other-style'
     store.updateManualCorrections(processId, sequenceId, previous.id, {
       additions: [], exclusions: []
     })
@@ -277,7 +308,7 @@ describe('manual highlight correction data', () => {
     expect(tracker.get(phase).changes).toEqual(['highlights'])
   })
 
-  it('round-trips utility/custom styles and unresolved handles through backend JSON', async () => {
+  it('round-trips style references and unresolved handles through backend JSON', async () => {
     const { repository, phases } = createRepository()
     const { store } = createContext()
     const phase: PhaseSnapshot = {
@@ -290,9 +321,11 @@ describe('manual highlight correction data', () => {
     expect(payload.manualCorrections?.exclusions[1]).toBe('9007199254740993')
     expect(payload.autoFlowPaths).toEqual([])
     expect(payload.flowPaths?.map(item => item.handleKey)).toEqual(
-      payload.manualCorrections?.additions.filter(item => item.styleSource.kind !== 'custom' ||
-        (item.styleSource.style.visible && item.styleSource.style.opacity > 0)).map(item => item.handleKey)
+      payload.manualCorrections?.additions.map(item => item.handleKey)
     )
+    for (const field of ['styleSource', 'styleOverride', 'geometry', '"style"']) {
+      expect(JSON.stringify(payload)).not.toContain(field)
+    }
     expect(payload.deviceStates).toBeNull()
     await repository.updatePhase('10', phase, 1)
     const written = phases.update.mock.calls[0][1]

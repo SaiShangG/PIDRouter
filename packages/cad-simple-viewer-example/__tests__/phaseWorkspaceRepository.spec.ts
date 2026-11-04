@@ -257,7 +257,7 @@ describe('PhaseWorkspaceRepository', () => {
                   autoFlowPaths: [{
                     id: 'flow-1', name: 'Main', ownerHandleKey: '26',
                     handleKeys: ['26'],
-                    styleSource: { kind: 'utility', utilityId: 'utility-water' }
+                    highlightStyleRefId: 'utility-water'
                   }],
                   flowPaths: [],
                   deviceStates: [{
@@ -440,7 +440,7 @@ describe('PhaseWorkspaceRepository', () => {
           id: 'flow-1',
           name: 'Main',
           handleKeys: ['1a', '2b', '2B'],
-          utilityId: 'utility-water'
+          highlightStyleRefId: 'utility-water'
         }],
         deviceStates: {
           '1A': {
@@ -468,14 +468,11 @@ describe('PhaseWorkspaceRepository', () => {
       drawing: { fileId: 5, displayName: 'PID' },
       autoFlowPaths: [{
         id: 'flow-1', name: 'Main', handleKeys: ['26', '43'],
-        utilityId: 'utility-water',
-        styleSource: { kind: 'utility', utilityId: 'utility-water' }
+        highlightStyleRefId: 'utility-water'
       }],
       flowPaths: [{
         handleKey: '43',
-        highlightStyleRefId: 'utility-water',
-        styleSource: { kind: 'utility', utilityId: 'utility-water' },
-        style: expect.objectContaining({ visible: true })
+        highlightStyleRefId: 'utility-water'
       }],
       deviceStates: [{
         handleKey: '26',

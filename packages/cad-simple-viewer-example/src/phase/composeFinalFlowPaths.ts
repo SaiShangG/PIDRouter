@@ -37,28 +37,21 @@ export const composeFinalFlowPaths = (
       deviceState,
       undefined,
       phase.flowState.activeFlowPathId,
-      { addition, excluded: exclusions.has(handleKey), device: addition?.geometry === 'bounds' }
+      { addition, excluded: exclusions.has(handleKey), device: Boolean(deviceState) }
     )
     return layers.filter(layer =>
       (layer.style.source === 'flow' || layer.style.source === 'utility') &&
       layer.style.visible && layer.style.opacity > 0
     ).map(layer => {
-      const { color, lineWidthPx, opacity, visible } = layer.style
-      const style = { color, lineWidthPx, opacity, visible }
       const manual = layer.id.startsWith('manual:')
       const path = contributions.get(handleKey)?.find(candidate => candidate.id === layer.id)
-      const styleSource = manual && addition
-        ? addition.styleSource
-        : path?.styleSource ?? (path?.styleOverride
-          ? { kind: 'custom' as const, style }
-          : { kind: 'utility' as const, utilityId: path?.utilityId })
-      const utilityId = styleSource.kind === 'utility' ? styleSource.utilityId : undefined
+      const highlightStyleRefId = manual && addition
+        ? addition.highlightStyleRefId
+        : path?.highlightStyleRefId
+      if (!highlightStyleRefId) throw new Error(`Missing highlight style reference for CAD handle: ${handleKey}`)
       return {
         handleKey,
-        styleSource,
-        style,
-        ...(utilityId ? { highlightStyleRefId: utilityId } : {}),
-        ...(layer.geometry ? { geometry: layer.geometry } : {})
+        highlightStyleRefId
       }
     })
   })

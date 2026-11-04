@@ -59,11 +59,8 @@ import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { AccountControls } from './auth/AccountControls'
-import { injectLoginStyles } from './auth/loginStyles'
-import { PhaseSaveState, phaseSaveStatusText } from './phase/phaseSaveState'
-import { loadToolbarPreferences, saveToolbarPreferences, type ToolbarPreferences } from './toolbarPreferences'
-import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
 import type { AuthService, AuthUser } from './auth/authService'
+import { injectLoginStyles } from './auth/loginStyles'
 import {
   BrushHighlightFeature,
   type BrushOperation
@@ -110,7 +107,6 @@ import {
 import { DrawingAssetStore } from './phase/drawingAssetStore'
 import { ManualHighlightCorrectionState } from './phase/manualHighlightCorrections'
 import { resolveWorkspacePhase, shouldHotSwitchPhase } from './phase/phaseActivationUtils'
-import { WorkspaceLoading, type WorkspaceLoadingTask } from './phase/workspaceLoading'
 import {
   type PhaseConfigImportLabels,
   PhaseConfigImportModal
@@ -126,6 +122,7 @@ import {
 } from './phase/phaseFlowPathRuntime'
 import { createPhaseIcon } from './phase/phaseIcons'
 import { findPhaseOverlayStyleWarnings } from './phase/phaseOverlayStyleResolver'
+import { PhaseSaveState, phaseSaveStatusText } from './phase/phaseSaveState'
 import {
   type CopyPhaseRequest,
   type CopySequenceRequest,
@@ -151,18 +148,18 @@ import type {
   DeviceStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
-  FlowPathStyleSource,
   FlowStateSnapshot,
   PhaseSnapshot,
   PhaseWorkspaceState,
   PresentationProfile
 } from './phase/types'
+import { WorkspaceLoading, type WorkspaceLoadingTask } from './phase/workspaceLoading'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
+import { initializeDefaultDeviceStyles, initializeProjectDeviceStyles } from './presentation/defaultDeviceStyles'
 import {
   HighlightStyleDialog,
   type HighlightStyleDraft
 } from './presentation/HighlightStyleDialog'
-import { initializeDefaultDeviceStyles, initializeProjectDeviceStyles } from './presentation/defaultDeviceStyles'
 import { PhasePresentationController } from './presentation/PhasePresentationController'
 import {
   type ResolvedEntityPresentation,
@@ -195,8 +192,10 @@ import {
   ReportWorkspaceModal
 } from './report/ReportWorkspaceModal'
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
+import { loadToolbarPreferences, saveToolbarPreferences, type ToolbarPreferences } from './toolbarPreferences'
 import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
 import { reportMessage, type ToastTone } from './ui/Toast'
+import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
 import { injectUiReferenceThemeStyles } from './uiReferenceThemeStyles'
 import { localizeDom, translateUiText } from './uiTranslations'
 
@@ -456,7 +455,7 @@ class CadViewerApp {
   private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
   private readonly manualCorrections = new ManualHighlightCorrectionState()
-  private brushStrokeStyleSource?: FlowPathStyleSource
+  private brushStrokeStyleRefId?: string
   private manualCorrectionControls?: ManualCorrectionControls
   private manualCorrectionScope = 0
   private readonly manualHighlightRender = new HighlightRenderScheduler<AcDbObjectId>(ids => {
@@ -2012,13 +2011,13 @@ class CadViewerApp {
       onActiveChanged: () => this.getSimpleUiPlugin()?.refreshToolbar(),
       onStrokeStarted: operation => {
         this.manualCorrections.beginStroke()
-        this.brushStrokeStyleSource = operation === 'paint'
-          ? this.resolveBrushStyleSource()
+        this.brushStrokeStyleRefId = operation === 'paint'
+          ? this.resolveBrushStyleRefId()
           : undefined
         this.syncManualCorrectionControls()
       },
       onStrokeEnded: () => {
-        this.brushStrokeStyleSource = undefined
+        this.brushStrokeStyleRefId = undefined
         this.manualHighlightRender.flush()
         if (this.manualCorrections.endStroke()) this.captureLoadedPhaseState()
         this.syncManualCorrectionControls()
@@ -2049,7 +2048,7 @@ class CadViewerApp {
       onApply: selection => {
         this.brushStyleSelection = selection
         localStorage.setItem(BRUSH_STYLE_STORAGE_KEY, JSON.stringify(selection))
-        this.brushHighlightFeature?.activate('paint')
+        if (this.resolveBrushStyleRefId()) this.brushHighlightFeature?.activate('paint')
       },
       onClose: () => undefined
     })
@@ -2128,7 +2127,7 @@ class CadViewerApp {
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, crosshair`
   }
 
-  private resolveBrushStyleSource(): FlowPathStyleSource {
+  private resolveBrushStyleRefId(): string | undefined {
     const profile = this.getActivePresentationProfile()
     const selection =
       this.brushStyleSelection ?? this.loadBrushStyleSelection(profile)
@@ -2136,12 +2135,12 @@ class CadViewerApp {
       const style = resolveDevicePresetStyle(
         profile, selection.deviceId ?? '', selection.stateId ?? ''
       )
-      if (style) return { kind: 'custom', style }
+      if (style) return selection.stateId
       this.showMessage(
         translateUiText(this.appLocale, '画笔样式已失效，已使用默认流路样式'),
         'warning'
       )
-      return { kind: 'utility' }
+      return profile.utilities.find(item => item.enabled)?.id
     }
     const utility = profile.utilities.find(
       item => item.id === selection.utilityId && item.enabled
@@ -2152,7 +2151,7 @@ class CadViewerApp {
         'warning'
       )
     }
-    return { kind: 'utility', utilityId: utility?.id }
+    return utility?.id ?? profile.utilities.find(item => item.enabled)?.id
   }
 
   private handleBrushEntitiesChanged(
@@ -2160,6 +2159,10 @@ class CadViewerApp {
     objectIds: readonly AcDbObjectId[]
   ) {
     const profile = this.getActivePresentationProfile()
+    const styleRefId = operation === 'paint'
+      ? this.brushStrokeStyleRefId ?? this.resolveBrushStyleRefId()
+      : undefined
+    if (operation === 'paint' && !styleRefId) return
     const hits = objectIds.flatMap(objectId => {
       if (operation === 'paint' && this.isBrushProtectedObject(objectId, profile)) return []
       const handleKey = this.getManualHighlightHandleKey(objectId)
@@ -2178,7 +2181,7 @@ class CadViewerApp {
     const changed = operation === 'paint'
       ? this.manualCorrections.paint(
         hits.map(hit => hit.handleKey),
-        this.brushStrokeStyleSource ?? this.resolveBrushStyleSource()
+        styleRefId!
       )
       : this.manualCorrections.erase(hits)
     if (!changed) return
@@ -4003,7 +4006,7 @@ class CadViewerApp {
         name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
         ownerHandleKey: handleKey,
         handleKeys: this.getHighlightHandleKeys(highlightedIds),
-        styleSource: { kind: 'utility', utilityId: utility.id }
+        highlightStyleRefId: utility.id
       })
     } else if (
       state.flowBehavior === 'conducting' &&
@@ -4113,11 +4116,9 @@ class CadViewerApp {
       desiredLayers.forEach(layer => {
         let root = roots.get(layer.id)
         if (!root) {
-          const createdRoot = layer.geometry === 'bounds'
-            ? this.createHighlightBoundsFrame(id, layer.style)
-            : layout.createEntityPreviewRoot([id], {
-              missingEntity: 'skip'
-            }) as PreviewRoot | null
+          const createdRoot = layout.createEntityPreviewRoot([id], {
+            missingEntity: 'skip'
+          }) as PreviewRoot | null
           if (!createdRoot) return
 
           root = createdRoot
@@ -4308,16 +4309,7 @@ class CadViewerApp {
     if (!this.loadedPhase) return []
     return [...this.openHighlightPaths.values()].map(flowPath => ({
       ...flowPath,
-      handleKeys: [...flowPath.handleKeys],
-      styleSource:
-        flowPath.styleSource?.kind === 'custom'
-          ? {
-            kind: 'custom',
-            style: { ...flowPath.styleSource.style }
-          }
-          : flowPath.styleSource
-            ? { ...flowPath.styleSource }
-            : undefined
+      handleKeys: [...flowPath.handleKeys]
     }))
   }
 

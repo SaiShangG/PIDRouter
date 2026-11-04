@@ -8,7 +8,7 @@ export type {
   PhasePidOverlayTextNote
 } from './phasePidOverlay'
 
-export const PHASE_WORKSPACE_SCHEMA_VERSION = 5
+export const PHASE_WORKSPACE_SCHEMA_VERSION = 6
 
 export interface HighlightStyle {
   color: number
@@ -62,14 +62,9 @@ export interface UtilityStyleDefinition {
   order: number
 }
 
-export type FlowPathStyleSource =
-  | { kind: 'utility'; utilityId?: string }
-  | { kind: 'custom'; style: HighlightStyle }
-
 export interface ManualHighlightAddition {
   handleKey: string
-  styleSource: FlowPathStyleSource
-  geometry?: 'bounds'
+  highlightStyleRefId: string
 }
 
 export interface ManualHighlightCorrections {
@@ -100,9 +95,7 @@ export interface FlowPathStatus {
   ownerHandleKey?: string
   handleKeys: string[]
   priority?: number
-  styleSource?: FlowPathStyleSource
-  utilityId?: string
-  styleOverride?: Partial<HighlightStyle>
+  highlightStyleRefId: string
 }
 
 export type DrawingAssetKind = 'local' | 'url' | 'blank'

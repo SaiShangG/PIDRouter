@@ -19,7 +19,7 @@ type ExportReport = (
 ) => Promise<PhaseReportExportResult>
 
 const workspace: PhaseWorkspaceState = {
-  version: 5,
+  version: 6,
   presentationProfile: createDefaultPresentationProfile(),
   drawingAssets: {
     drawing: { id: 'drawing', kind: 'blank', sourceName: 'Blank.dwg' }

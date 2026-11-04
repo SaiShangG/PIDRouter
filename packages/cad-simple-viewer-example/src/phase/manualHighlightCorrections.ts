@@ -1,7 +1,6 @@
 import { isEqual } from 'lodash-es'
 
 import type {
-  FlowPathStyleSource,
   ManualHighlightAddition,
   ManualHighlightCorrections
 } from './types'
@@ -24,46 +23,6 @@ export const normalizeCadHandle = (value: unknown): string | undefined => {
   return BigInt(`0x${value.trim()}`).toString(16).toUpperCase()
 }
 
-export const normalizeFlowPathStyleSource = (value: unknown, path = 'styleSource'): FlowPathStyleSource => {
-  if (!isRecord(value)) return invalid(path)
-  if (value.kind === 'utility') {
-    if (value.utilityId === undefined) return { kind: 'utility' }
-    if (typeof value.utilityId !== 'string' || !value.utilityId.trim()) {
-      return invalid(`${path}.utilityId`)
-    }
-    return { kind: 'utility', utilityId: value.utilityId.trim() }
-  }
-  const style = value.style
-  if (
-    value.kind !== 'custom' ||
-    !isRecord(style) ||
-    typeof style.color !== 'number' ||
-    !Number.isInteger(style.color) ||
-    style.color < 0 ||
-    style.color > 0xffffff ||
-    typeof style.lineWidthPx !== 'number' ||
-    !Number.isFinite(style.lineWidthPx) ||
-    style.lineWidthPx < 1 ||
-    style.lineWidthPx > 12 ||
-    typeof style.opacity !== 'number' ||
-    !Number.isFinite(style.opacity) ||
-    style.opacity < 0 ||
-    style.opacity > 1 ||
-    typeof style.visible !== 'boolean'
-  ) {
-    return invalid(path)
-  }
-  return {
-    kind: 'custom',
-    style: {
-      color: style.color,
-      lineWidthPx: style.lineWidthPx,
-      opacity: style.opacity,
-      visible: style.visible
-    }
-  }
-}
-
 export const normalizeManualHighlightCorrections = (
   value: unknown,
   normalizeHandle: (value: unknown) => string | undefined = normalizeCadHandle
@@ -77,11 +36,12 @@ export const normalizeManualHighlightCorrections = (
     if (!isRecord(candidate)) return invalid(path)
     const handleKey = normalizeHandle(candidate.handleKey)
     if (handleKey === undefined) return invalid(`${path}.handleKey`)
-    if (candidate.geometry !== undefined && candidate.geometry !== 'bounds') return invalid(`${path}.geometry`)
+    if (typeof candidate.highlightStyleRefId !== 'string' || !candidate.highlightStyleRefId.trim()) {
+      return invalid(`${path}.highlightStyleRefId`)
+    }
     additions.set(handleKey, {
       handleKey,
-      styleSource: normalizeFlowPathStyleSource(candidate.styleSource, `${path}.styleSource`),
-      ...(candidate.geometry === 'bounds' ? { geometry: 'bounds' as const } : {})
+      highlightStyleRefId: candidate.highlightStyleRefId.trim()
     })
   })
   const exclusions = new Set<string>()
@@ -210,13 +170,11 @@ export class ManualHighlightCorrectionState {
 
   paint(
     handleKeys: readonly string[],
-    styleSource: FlowPathStyleSource,
-    boundsHandles?: ReadonlySet<string>
+    highlightStyleRefId: string
   ): boolean {
     const normalized = normalizeManualHighlightCorrections({
       additions: handleKeys.map(handleKey => ({
-        handleKey, styleSource,
-        ...(boundsHandles?.has(handleKey) ? { geometry: 'bounds' as const } : {})
+        handleKey, highlightStyleRefId
       })),
       exclusions: []
     })
