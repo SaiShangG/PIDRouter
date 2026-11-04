@@ -26,31 +26,43 @@ export interface PresentationObject {
 
 export class PhasePresentationController {
   private readonly roots = new Set<PresentationObject>()
-  private viewportWidth = 1
-  private viewportHeight = 1
+  private applied = new WeakMap<PresentationObject, ResolvedEntityPresentation & { renderOrder: number }>()
+  private viewportWidth?: number
+  private viewportHeight?: number
 
   apply(
     root: PresentationObject,
     style: ResolvedEntityPresentation,
     renderOrder = 10000
   ) {
+    const previous = this.applied.get(root)
+    const materialChanged = !previous || previous.color !== style.color ||
+      previous.lineWidthPx !== style.lineWidthPx || previous.opacity !== style.opacity
+    const visibilityChanged = !previous || previous.visible !== style.visible
+    const orderChanged = !previous || previous.renderOrder !== renderOrder
+    if (!materialChanged && !visibilityChanged && !orderChanged) return false
+
     this.roots.add(root)
     root.renderOrder = renderOrder
     root.visible = style.visible
     root.traverse(object => {
-      object.renderOrder = renderOrder
-      object.visible = style.visible
+      if (orderChanged) object.renderOrder = renderOrder
+      if (visibilityChanged) object.visible = style.visible
+      if (!materialChanged) return
       const materials = Array.isArray(object.material)
         ? object.material
         : object.material
           ? [object.material]
           : []
-      materials.forEach(material => this.applyMaterial(material, style))
+      materials.forEach(material => this.applyMaterial(material, style, previous))
     })
+    this.applied.set(root, { ...style, renderOrder })
+    return true
   }
 
   forget(root: PresentationObject) {
     this.roots.delete(root)
+    this.applied.delete(root)
   }
 
   resize(width: number, height: number) {
@@ -63,42 +75,54 @@ export class PhasePresentationController {
           : object.material
             ? [object.material]
             : []
-        materials.forEach(material => {
-          material.resolution?.set(this.viewportWidth, this.viewportHeight)
-          const resolution = material.uniforms?.resolution?.value
-          if (resolution && typeof resolution !== 'number' && 'set' in resolution) {
-            resolution.set(this.viewportWidth, this.viewportHeight)
-          }
-        })
+        materials.forEach(material => this.applyResolution(material))
       })
     })
   }
 
   clear() {
     this.roots.clear()
+    this.applied = new WeakMap()
+  }
+
+  private applyResolution(material: PresentationMaterial) {
+    if (this.viewportWidth === undefined || this.viewportHeight === undefined) return
+    material.resolution?.set(this.viewportWidth, this.viewportHeight)
+    const resolution = material.uniforms?.resolution?.value
+    if (resolution && typeof resolution !== 'number' && 'set' in resolution) {
+      resolution.set(this.viewportWidth, this.viewportHeight)
+    }
   }
 
   private applyMaterial(
     material: PresentationMaterial,
-    style: ResolvedEntityPresentation
+    style: ResolvedEntityPresentation,
+    previous?: ResolvedEntityPresentation
   ) {
-    material.color?.set(style.color)
-    material.emissive?.set(style.color)
-    for (const name of ['u_color', 'u_startColor', 'u_endColor']) {
-      const value = material.uniforms?.[name]?.value
-      if (value && typeof value !== 'number' && 'set' in value) {
-        (value as WritableColor).set(style.color)
+    if (!previous || previous.color !== style.color) {
+      material.color?.set(style.color)
+      material.emissive?.set(style.color)
+      for (const name of ['u_color', 'u_startColor', 'u_endColor']) {
+        const value = material.uniforms?.[name]?.value
+        if (value && typeof value !== 'number' && 'set' in value) {
+          ; (value as WritableColor).set(style.color)
+        }
       }
     }
-    if ('linewidth' in material) material.linewidth = style.lineWidthPx
-    material.opacity = style.opacity
-    if (material.uniforms?.opacity) {
-      material.uniforms.opacity.value = style.opacity
+    if ((!previous || previous.lineWidthPx !== style.lineWidthPx) && 'linewidth' in material) {
+      material.linewidth = style.lineWidthPx
     }
-    material.transparent = style.opacity < 1
-    material.depthTest = false
-    material.depthWrite = false
-    material.needsUpdate = true
+    if (!previous || previous.opacity !== style.opacity) {
+      material.opacity = style.opacity
+      if (material.uniforms?.opacity) material.uniforms.opacity.value = style.opacity
+    }
+    const transparent = style.opacity < 1
+    const needsUpdate = material.transparent !== transparent || material.depthTest || material.depthWrite
+    if (material.transparent !== transparent) material.transparent = transparent
+    if (material.depthTest) material.depthTest = false
+    if (material.depthWrite) material.depthWrite = false
+    if (needsUpdate) material.needsUpdate = true
+    if (!previous) this.applyResolution(material)
   }
 
 }

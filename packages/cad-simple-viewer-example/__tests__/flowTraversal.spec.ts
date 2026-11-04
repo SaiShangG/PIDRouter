@@ -1,8 +1,11 @@
 import { buildFlowGraphIndex } from '../src/flow/flowGraph'
+import type { DeviceFlowPolicy } from '../src/flow/deviceFlowRuntime'
 import {
+  collectFlowHighlightKeys,
   countFlowTreeNodes,
   countFlowTreeStops,
   mergeFlowHighlightKeys,
+  traverseFlowFromDevice,
   traverseFlowFromValve
 } from '../src/flow/flowTraversal'
 
@@ -33,6 +36,37 @@ const graph = buildFlowGraphIndex({
 })
 
 describe('flowTraversal', () => {
+  it('keeps lightweight and debug traversal membership and ordering identical', () => {
+    for (const flowBehavior of ['conducting', 'blocking', 'neutral'] as const) {
+      for (const autoHighlightFlow of [true, false]) {
+        const policies = new Map<string, DeviceFlowPolicy>([
+          ['1', { flowBehavior, autoHighlightFlow }],
+          ['4', { flowBehavior: 'neutral', autoHighlightFlow: false }],
+          ['7', { flowBehavior: 'blocking', autoHighlightFlow: false, issue: 'missing-state' }],
+          ['F', { flowBehavior, autoHighlightFlow }]
+        ])
+        for (const key of ['1', '4', '7', 'F']) {
+          expect([...collectFlowHighlightKeys(graph, key, policies)])
+            .toEqual([...traverseFlowFromDevice(graph, key, policies).highlightedKeys])
+        }
+      }
+    }
+  })
+
+  it('does not read debug node metadata during lightweight traversal', () => {
+    const policies = new Map<string, DeviceFlowPolicy>([
+      ['1', { flowBehavior: 'conducting', autoHighlightFlow: true }],
+      ['4', { flowBehavior: 'blocking', autoHighlightFlow: false, issue: 'unselected' }]
+    ])
+    const nodeReads = jest.spyOn(graph.nodes, 'get')
+    expect(collectFlowHighlightKeys(graph, '1', policies))
+      .toEqual(new Set(['1', '2', '6', '3', '5']))
+    expect(nodeReads).not.toHaveBeenCalled()
+    traverseFlowFromDevice(graph, '1', policies)
+    expect(nodeReads).toHaveBeenCalled()
+    nodeReads.mockRestore()
+  })
+
   it('walks lines and equipment, stops at closed valves, and omits revisits', () => {
     const states = new Map([
       ['1', 'open' as const],

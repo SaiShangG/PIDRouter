@@ -34,7 +34,48 @@ const valveState = (
   return states.has(key) ? 'open' : 'closed'
 }
 
-/** Traverses a configured source using the same policies as automatic highlighting. */
+const walkFlowFromDevice = (
+  graph: FlowGraphIndex,
+  startKey: string,
+  policies: ReadonlyMap<string, DeviceFlowPolicy>,
+  sourceEnabled: boolean,
+  details?: {
+    visit(key: string, parentKey: string): void
+    edge(left: string, right: string): void
+  }
+) => {
+  const visitedKeys = new Set([startKey])
+  const highlightedKeys = new Set<string>()
+  const policy = policies.get(startKey)
+  const queue: string[] = []
+  if (sourceEnabled && policy?.flowBehavior === 'conducting' && policy.autoHighlightFlow) {
+    highlightedKeys.add(startKey)
+    queue.push(startKey)
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head]
+    for (const neighbor of graph.adjacency.get(current) ?? []) {
+      details?.edge(current, neighbor)
+      if (visitedKeys.has(neighbor)) continue
+      visitedKeys.add(neighbor)
+      details?.visit(neighbor, current)
+      if (policies.get(neighbor)?.flowBehavior === 'blocking') continue
+      highlightedKeys.add(neighbor)
+      queue.push(neighbor)
+    }
+  }
+  return { visitedKeys, highlightedKeys }
+}
+
+export const collectFlowHighlightKeys = (
+  graph: FlowGraphIndex,
+  startKey: string,
+  policies: ReadonlyMap<string, DeviceFlowPolicy>
+) => walkFlowFromDevice(
+  graph, startKey, policies, policies.get(startKey)?.autoHighlightFlow ?? false
+).highlightedKeys
+
+/** Adds debug details to the same walk used by automatic highlighting. */
 export const traverseFlowFromDevice = (
   graph: FlowGraphIndex,
   startKey: string,
@@ -53,8 +94,6 @@ export const traverseFlowFromDevice = (
 
   const startPolicy = policies.get(startKey)
   const startState = startPolicy?.flowBehavior === 'blocking' ? 'closed' : 'open'
-  const canStart = sourceEnabled &&
-    startPolicy?.flowBehavior === 'conducting' && startPolicy.autoHighlightFlow
   const startNeighbors = graph.adjacency.get(startKey) ?? []
   const diagnosedMissing = new Set<string>()
   if (start.missingEntity) {
@@ -73,26 +112,13 @@ export const traverseFlowFromDevice = (
     depth: 0,
     children: []
   }
-  const visited = new Set<string>([startKey])
   const visitedEdges = new Set<string>()
-  const highlighted = new Set<string>()
   const stoppedValves = new Set<string>()
-
-  if (canStart) {
-    highlighted.add(startKey)
-  } else if (startState === 'closed') {
-    stoppedValves.add(startKey)
-  }
-
-  const queue: Array<{ key: string; tree: FlowDebugTreeNode }> = []
-  if (canStart) queue.push({ key: startKey, tree: root })
-
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    const neighbors = graph.adjacency.get(current.key) ?? []
-
-    for (const neighborKey of neighbors) {
-      visitedEdges.add(edgeKey(current.key, neighborKey))
+  if (startState === 'closed') stoppedValves.add(startKey)
+  const treeByKey = new Map([[startKey, root]])
+  const result = walkFlowFromDevice(graph, startKey, policies, sourceEnabled, {
+    edge: (left, right) => visitedEdges.add(edgeKey(left, right)),
+    visit: (neighborKey, parentKey) => {
       const neighbor = graph.nodes.get(neighborKey) ?? {
         key: neighborKey,
         handle: Number.parseInt(neighborKey, 16),
@@ -109,11 +135,7 @@ export const traverseFlowFromDevice = (
         ? policy.flowBehavior === 'blocking' ? 'closed' : 'open'
         : undefined
 
-      // Keep cycle/convergence detection internally, but do not add duplicate
-      // references to the debug tree. Each handle is listed only on first visit.
-      if (visited.has(neighborKey)) continue
-
-      visited.add(neighborKey)
+      const parent = treeByKey.get(parentKey)!
       const child: FlowDebugTreeNode = {
         key: neighborKey,
         node: neighbor,
@@ -121,26 +143,20 @@ export const traverseFlowFromDevice = (
           policy?.flowBehavior === 'neutral' ? 'neutral' :
             state ? state : nodeStatus(neighbor, state, false)
         ),
-        depth: current.tree.depth + 1,
+        depth: parent.depth + 1,
         children: []
       }
-      current.tree.children.push(child)
-
-      if (state === 'closed') {
-        stoppedValves.add(neighborKey)
-        continue
-      }
-
-      highlighted.add(neighborKey)
-      queue.push({ key: neighborKey, tree: child })
+      parent.children.push(child)
+      treeByKey.set(neighborKey, child)
+      if (state === 'closed') stoppedValves.add(neighborKey)
     }
-  }
+  })
 
   return {
     root,
-    visitedKeys: visited,
+    visitedKeys: result.visitedKeys,
     visitedEdges,
-    highlightedKeys: highlighted,
+    highlightedKeys: result.highlightedKeys,
     stoppedValveKeys: stoppedValves,
     diagnostics
   }

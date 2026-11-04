@@ -2,6 +2,8 @@
 
 import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
 import { calculateAutomaticFlowPaths, resolveDeviceFlowPolicies } from '../src/flow/deviceFlowRuntime'
+import type { DeviceFlowRuntime } from '../src/flow/deviceFlowRuntime'
+import * as flowTraversal from '../src/flow/flowTraversal'
 import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import type { FlowConnectionDocumentInput, ValveDebugOverlay, ValveDebugView } from '../src/flow/types'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
@@ -91,6 +93,92 @@ describe('invalid device state menu', () => {
 })
 
 describe('ValveDebugFeature', () => {
+  it.each([false, true])('builds debug trees only on demand with debug enabled=%s', enabled => {
+    const graphDocument: FlowConnectionDocumentInput = {
+      Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }, { CadHandle: 3, Name: 'Valve' }] }],
+      Map: { Graph: { Vertices: [1, 2, 3, 4], Edges: [
+        { Source: 1, Target: 2 }, { Source: 2, Target: 3 }, { Source: 3, Target: 4 }
+      ] } }
+    }
+    const graph = buildFlowGraphIndex(graphDocument)
+    const profile = createDefaultPresentationProfile()
+    const preset: DeviceStateStyleDefinition = {
+      id: 'run', key: 'RUN', displayName: 'Running', enabled: true,
+      color: 0x00ff00, lineWidthPx: 3, opacity: 1, order: 0,
+      flowBehavior: 'conducting', autoHighlightFlow: true
+    }
+    profile.devices = [{ id: 'valve', name: 'Valve', order: 0, states: [preset] }]
+    profile.utilities = [{ id: 'water', name: 'Water', enabled: true, order: 0,
+      style: { color: 0x00ff00, lineWidthPx: 3, opacity: 1, visible: true } }]
+    const records: DeviceState[] = ['1', '3'].map(key => ({
+      key, deviceType: 'Valve', stateKey: 'RUN', highlightStyleRefId: 'run'
+    }))
+    let runtime: DeviceFlowRuntime = {
+      policies: resolveDeviceFlowPolicies(graph, profile, records),
+      sourceKeys: new Set(['1', '3'])
+    }
+    const canvas = document.createElement('canvas')
+    const host = document.createElement('div')
+    document.body.append(host)
+    const getRuntime = jest.fn(() => runtime)
+    const feature = new ValveDebugFeature({
+      enabled, panelHost: host, graphDocument, renderPathOverlay: false,
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point, screenToWorld: point => point,
+        pick: () => [{ id: '1' }], zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key, resolveHandleKeys: id => [String(id)],
+      resolveConfiguredDeviceKey: key => graph.controlModuleByPrimaryHandle.has(key) ? key : undefined,
+      getConfiguredStates: () => [preset], getConfiguredStateKey: () => 'RUN',
+      getUtilities: () => profile.utilities, getFlowRuntime: getRuntime,
+      requestConfiguredStateChange: key => {
+        const result = calculateAutomaticFlowPaths(graph, profile, records, [], {
+          idPrefix: 'test', name: 'Test'
+        })
+        runtime = { policies: result.policies,
+          sourceKeys: new Set(result.paths.flatMap(path => path.ownerHandleKey ? [path.ownerHandleKey] : [])) }
+        feature.refreshFlowState({ activeKey: key })
+        return true
+      },
+      createOverlay: jest.fn(), getLabels: defaultValveDebugLabels, getLocale: () => 'en'
+    })
+    feature.attach()
+    const traversal = jest.spyOn(flowTraversal, 'traverseFlowFromDevice')
+    const lightweight = jest.spyOn(flowTraversal, 'collectFlowHighlightKeys')
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.click()
+    expect(lightweight).toHaveBeenCalledTimes(2)
+    expect(traversal).toHaveBeenCalledTimes(enabled ? 1 : 0)
+    feature.refreshFlowState()
+    expect(traversal).toHaveBeenCalledTimes(enabled ? 1 : 0)
+    feature.setEnabled(false)
+    feature.setEnabled(true)
+    expect(traversal).toHaveBeenCalledTimes(enabled ? 2 : 1)
+    traversal.mockClear()
+    feature.refreshFlowState({ activeKey: '3' })
+    expect(traversal).toHaveBeenCalledTimes(1)
+    feature.refreshFlowState({ activeKey: '1' })
+    expect(traversal).toHaveBeenCalledTimes(1)
+    traversal.mockClear()
+    runtime = { ...runtime, sourceKeys: new Set() }
+    feature.refreshFlowState({ activeKey: '1' })
+    expect(traversal).toHaveBeenCalledTimes(1)
+    expect(traversal.mock.results[0].value.highlightedKeys.size).toBe(0)
+    feature.refreshFlowState({ recompute: false })
+    traversal.mockClear()
+    feature.setEnabled(false)
+    feature.setEnabled(true)
+    expect(traversal).not.toHaveBeenCalled()
+    feature.refreshFlowState({ activeKey: '3' })
+    expect(traversal).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('.valve-debug-tree-label')?.textContent).toBe('3')
+    feature.dispose()
+    traversal.mockRestore()
+    lightweight.mockRestore()
+  })
+
   it('uses runtime policies and actual sources for debug, preserving Utility selection and snapshot restoration', () => {
     const graphDocument: FlowConnectionDocumentInput = {
       Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }, { CadHandle: 3, Name: 'PP' }] }],

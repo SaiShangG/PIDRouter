@@ -84,6 +84,7 @@ import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import {
   calculateAutomaticFlowPaths,
+  type DeviceFlowRuntime,
   haveFlowRulesChanged,
   resolveDeviceFlowPolicies
 } from './flow/deviceFlowRuntime'
@@ -460,6 +461,11 @@ class CadViewerApp {
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
   private activeFlowPathId?: string
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
+  private flowRuntimeCache?: {
+    graph: typeof flowGraphIndex
+    store: PhaseWorkspaceStore
+    value: DeviceFlowRuntime
+  }
   private readonly deviceStateWarningNotifications = new DeviceStateWarningNotifications()
   private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
@@ -2020,16 +2026,7 @@ class CadViewerApp {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
         return ownerId ? this.openHighlightPaths.get(ownerId)?.highlightStyleRefId : undefined
       },
-      getFlowRuntime: () => ({
-        policies: resolveDeviceFlowPolicies(
-          flowGraphIndex,
-          this.getActivePresentationProfile(),
-          [...this.valveDeviceStates.values()]
-        ),
-        sourceKeys: new Set([...this.openHighlightPaths.values()].flatMap(path =>
-          path.ownerHandleKey ? [path.ownerHandleKey] : []
-        ))
-      }),
+      getFlowRuntime: () => this.getDeviceFlowRuntime(),
       getUtilities: () => this.getActivePresentationProfile().utilities,
       requestConfiguredStateChange: (handleKey, state, utilityId) =>
         this.applyConfiguredValveState(handleKey, state, utilityId),
@@ -3897,6 +3894,25 @@ class CadViewerApp {
     return state.presentationProfile ?? createDefaultPresentationProfile()
   }
 
+  private cacheDeviceFlowRuntime(policies: DeviceFlowRuntime['policies']) {
+    const value: DeviceFlowRuntime = {
+      policies,
+      sourceKeys: new Set([...this.openHighlightPaths.values()].flatMap(path =>
+        path.ownerHandleKey ? [path.ownerHandleKey] : []
+      ))
+    }
+    this.flowRuntimeCache = { graph: flowGraphIndex, store: this.phaseStore, value }
+    return value
+  }
+
+  private getDeviceFlowRuntime() {
+    const cached = this.flowRuntimeCache
+    if (cached?.graph === flowGraphIndex && cached.store === this.phaseStore) return cached.value
+    return this.cacheDeviceFlowRuntime(resolveDeviceFlowPolicies(
+      flowGraphIndex, this.getActivePresentationProfile(), [...this.valveDeviceStates.values()]
+    ))
+  }
+
   private getConfiguredDeviceMatch(
     handleKey: string,
     profile = this.getActivePresentationProfile()
@@ -3939,8 +3955,10 @@ class CadViewerApp {
       deviceType: device.name,
       highlightStyleRefId: state.id
     })
+    this.flowRuntimeCache = undefined
     this.recomputeOpenHighlightGroups(
-      utilityId ? new Map([[handleKey, utilityId]]) : undefined
+      utilityId ? new Map([[handleKey, utilityId]]) : undefined,
+      handleKey
     )
     this.captureLoadedPhaseState()
     return true
@@ -3964,7 +3982,10 @@ class CadViewerApp {
     return removedHighlight
   }
 
-  private recomputeOpenHighlightGroups(utilitySelections?: ReadonlyMap<string, string>) {
+  private recomputeOpenHighlightGroups(
+    utilitySelections?: ReadonlyMap<string, string>,
+    activeKey?: string
+  ) {
     const profile = this.getActivePresentationProfile()
     const result = calculateAutomaticFlowPaths(
       flowGraphIndex,
@@ -3999,6 +4020,7 @@ class CadViewerApp {
           .map(key => Number.parseInt(key, 16))
       ))
     })
+    this.cacheDeviceFlowRuntime(result.policies)
     result.diagnostics.forEach(diagnostic => log.warn('[DeviceFlow]', diagnostic))
     this.notifyInvalidDeviceStates(profile)
     if (result.diagnostics.some(item => item.kind === 'missing-utility')) {
@@ -4010,7 +4032,7 @@ class CadViewerApp {
       )
     }
     this.syncOpenHighlightRoots()
-    this.valveDebugFeature?.refreshFlowState()
+    this.valveDebugFeature?.refreshFlowState({ activeKey })
   }
 
   private notifyInvalidDeviceStates(
@@ -4060,8 +4082,9 @@ class CadViewerApp {
       changedHighlight = true
     })
 
+    const profile = this.getActivePresentationProfile()
     desiredIds.forEach(id => {
-      const desiredLayers = this.resolveHighlightLayersForObjectId(id)
+      const desiredLayers = this.resolveHighlightLayersForObjectId(id, profile)
       const roots = this.openHighlightRoots.get(id) ?? new Map<string, PreviewRoot>()
       const desiredLayerIds = new Set(desiredLayers.map(layer => layer.id))
 
@@ -4092,8 +4115,7 @@ class CadViewerApp {
           roots.set(layer.id, root)
           changedHighlight = true
         }
-        this.applyOpenHighlightStyle(root, layer)
-        changedHighlight = true
+        if (this.applyOpenHighlightStyle(root, layer)) changedHighlight = true
       })
 
       if (roots.size > 0) {
@@ -4163,6 +4185,7 @@ class CadViewerApp {
       )
       if (!result?.addedStates.length) return
       this.phaseStore.updatePresentationProfile(result.profile)
+      this.flowRuntimeCache = undefined
       if (this.activeProjectId !== undefined) {
         this.projectPresentationProfiles.set(this.activeProjectId, clonePresentationProfile(result.profile))
       }
@@ -4173,12 +4196,6 @@ class CadViewerApp {
       log.error('Failed to initialize default device styles:', error)
       this.showMessage('默认设备样式生成失败', 'error')
     }
-  }
-
-  private getLoadedHighlightStyleDraft() {
-    return this.loadedPhase
-      ? { presentationProfile: this.getActivePresentationProfile() }
-      : undefined
   }
 
   private openHighlightStyleDialog() {
@@ -4241,7 +4258,9 @@ class CadViewerApp {
       }
       if (projectId !== this.activeProjectId || repository !== this.phaseRepository) return
       const previousProfile = this.getActivePresentationProfile()
+      const rulesChanged = haveFlowRulesChanged(previousProfile, normalizedProfile)
       this.phaseStore.updatePresentationProfile(normalizedProfile)
+      if (rulesChanged) this.flowRuntimeCache = undefined
       if (projectId !== undefined) {
         this.projectPresentationProfiles.set(
           projectId,
@@ -4250,7 +4269,7 @@ class CadViewerApp {
       }
       this.phaseStore.persist()
       if (loadedPhase && loadedPhase === this.loadedPhase &&
-        haveFlowRulesChanged(previousProfile, normalizedProfile)) {
+        rulesChanged) {
         this.recomputeOpenHighlightGroups()
         this.captureLoadedPhaseState()
       } else {
@@ -4383,10 +4402,8 @@ class CadViewerApp {
 
   private resolveHighlightLayersForObjectId(
     objectId: AcDbObjectId,
-    draft = this.getLoadedHighlightStyleDraft()
+    profile: PresentationProfile
   ): FlowHighlightLayer[] {
-    const profile =
-      draft?.presentationProfile ?? this.getActivePresentationProfile()
     const savedDeviceState = this.valveDeviceStates.get(objectId)
     const deviceState = savedDeviceState
       ? this.getDeviceStatePresentationContext(savedDeviceState, profile)
@@ -4411,6 +4428,7 @@ class CadViewerApp {
     let removedHighlight = false
 
     if (!ids) {
+      this.flowRuntimeCache = undefined
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
       this.openHighlightPaths.clear()
@@ -4603,6 +4621,7 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
+    this.flowRuntimeCache = undefined
     this.clearPhaseTextNotes()
     const styleWarnings = findPhaseOverlayStyleWarnings(
       state.presentationProfile,
@@ -4725,7 +4744,7 @@ class CadViewerApp {
   }
 
   private applyOpenHighlightStyle(root: PreviewRoot, layer: FlowHighlightLayer) {
-    this.phasePresentationController.apply(
+    return this.phasePresentationController.apply(
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
       layer.style,
       layer.renderOrder
@@ -4992,6 +5011,7 @@ class CadViewerApp {
   }
 
   private resetPhaseRuntimeState(preserveHighlightRoots = false) {
+    this.flowRuntimeCache = undefined
     this.valveDebugFeature?.reset()
     this.clearManualBrushState()
     if (preserveHighlightRoots) {

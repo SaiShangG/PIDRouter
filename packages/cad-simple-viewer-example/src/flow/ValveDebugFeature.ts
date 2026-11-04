@@ -20,6 +20,7 @@ import {
 } from './flowTraversal'
 import type {
   FlowConnectionDocumentInput,
+  FlowDebugTreeNode,
   FlowGraphIndex,
   ValveDebugOverlay,
   ValveDebugPanelLabels,
@@ -57,6 +58,7 @@ export interface ValveDebugFeatureOptions {
   getConfiguredStates?(handleKey: string): readonly DeviceStateStyleDefinition[]
   getConfiguredStateKey?(handleKey: string): string | undefined
   getConfiguredUtilityId?(handleKey: string): string | undefined
+  /** Reuse the snapshot until its policies or actual source keys change. */
   getFlowRuntime?(): DeviceFlowRuntime
   getUtilities?(): readonly UtilityStyleDefinition[]
   requestConfiguredStateChange?(
@@ -409,6 +411,8 @@ export class ValveDebugFeature {
   private readonly applyMenuAction: HTMLButtonElement
   private attachedCanvas?: HTMLCanvasElement
   private activeKey?: string
+  private lastRuntime?: DeviceFlowRuntime
+  private renderedRoot?: FlowDebugTreeNode
   private pathOverlay?: ValveDebugOverlay
   private locatorOverlay?: ValveDebugOverlay
   private locatorTimer?: number
@@ -507,7 +511,10 @@ export class ValveDebugFeature {
     this.panel.setDebugModes(enabled, this.brushDebugEnabled)
     this.closeMenu()
     this.attach()
+    this.results.clear()
+    this.lastRuntime = undefined
     this.resize()
+    this.recomputeResults()
   }
 
   setBrushDebugEnabled(enabled: boolean) {
@@ -556,6 +563,7 @@ export class ValveDebugFeature {
     this.states.clear()
     this.configuredStates.clear()
     this.results.clear()
+    this.lastRuntime = undefined
     this.activeKey = undefined
     this.disposePathOverlay()
     this.disposeLocatorOverlay()
@@ -563,6 +571,7 @@ export class ValveDebugFeature {
   }
 
   restoreOpenStates(handleKeys: readonly string[], options: { recompute?: boolean } = {}) {
+    this.lastRuntime = undefined
     this.states.clear()
     handleKeys.forEach(key => {
       const valveKey = this.resolveValveKey(key)
@@ -580,7 +589,7 @@ export class ValveDebugFeature {
 
   }
 
-  refreshFlowState(options: { recompute?: boolean } = {}) {
+  refreshFlowState(options: { recompute?: boolean; activeKey?: string } = {}) {
     if (this.disposed) return
     this.closeMenu()
     if (options.recompute === false) {
@@ -588,9 +597,11 @@ export class ValveDebugFeature {
       this.configuredStates.clear()
       this.activeKey = undefined
       this.results.clear()
+      this.lastRuntime = undefined
       this.disposePathOverlay()
       this.renderPanel()
     } else {
+      if (options.activeKey !== undefined) this.activeKey = options.activeKey
       this.recomputeResults()
     }
   }
@@ -895,23 +906,48 @@ export class ValveDebugFeature {
   }
 
   private recomputeResults() {
-    this.results.clear()
+    if (!this.enabled) {
+      this.results.clear()
+      this.lastRuntime = undefined
+      this.disposePathOverlay()
+      this.renderPanel()
+      return
+    }
     const runtime = this.getFlowRuntime()
     if (runtime) {
-      const keys = new Set(runtime.sourceKeys)
+      let changed = this.lastRuntime !== runtime
+      if (changed) this.results.clear()
+      const keys = new Set(
+        this.options.renderPathOverlay === false ? [] : runtime.sourceKeys
+      )
       if (this.activeKey) keys.add(this.activeKey)
+      if (this.options.renderPathOverlay !== false) {
+        this.results.forEach((_, key) => {
+          if (!keys.has(key)) {
+            this.results.delete(key)
+            changed = true
+          }
+        })
+      }
       keys.forEach(key => {
+        if (this.results.has(key)) return
         this.results.set(key, traverseFlowFromDevice(
           this.graph,
           key,
           runtime.policies,
           runtime.sourceKeys.has(key) && Boolean(runtime.policies.get(key)?.autoHighlightFlow)
         ))
+        changed = true
       })
-      this.renderHighlights()
-      this.renderPanel()
+      this.lastRuntime = runtime
+      if (changed) this.renderHighlights()
+      if (changed || this.renderedRoot !== this.results.get(this.activeKey ?? '')?.root) {
+        this.renderPanel()
+      }
       return
     }
+    this.results.clear()
+    this.lastRuntime = undefined
     this.states.forEach((state, key) => {
       if (state === 'open' || key === this.activeKey) {
         this.results.set(key, traverseFlowFromValve(this.graph, key, this.states))
@@ -958,6 +994,7 @@ export class ValveDebugFeature {
 
   private renderPanel() {
     const root = this.activeKey ? this.results.get(this.activeKey)?.root : undefined
+    this.renderedRoot = root
     const state = root ? (
       ['closed', 'unselected', 'missing-state'].includes(root.status) ? 'closed' : 'open'
     ) : undefined

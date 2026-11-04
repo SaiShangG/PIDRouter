@@ -311,6 +311,24 @@ customer drawing remain deployment acceptance requirements; automated tests cove
 model composition, correction controls/history, rendering scheduling and mocked
 backend round trips, not a full authenticated drawing workflow.
 
+### Highlight performance
+
+- Each full or partial highlight synchronization reads one presentation profile
+  for the batch, rather than cloning the entire workspace per entity.
+- Automatic routing and debug trees share one traversal kernel. Automatic routing
+  collects handles without allocating debug nodes or visited-edge details.
+- Disabling valve debug releases its trees without disabling configured-device
+  menus, warnings, automatic routing, or brush debug. With path overlays disabled,
+  trees are built only for inspected devices. Repeated refreshes reuse the
+  same runtime result; state/rule, graph, workspace and Phase changes invalidate it.
+  Phase restoration never triggers routing or prebuilds debug trees.
+- Identical presentation values and render order do not traverse preview roots
+  or update materials again. Order/visibility-only changes leave materials alone.
+  Viewport resolution updates remain independent, including for newly added roots;
+  disposed roots are removed from both viewport tracking and style caches.
+- These caches are runtime-only. Route identity, Utility selection, priority,
+  manual corrections, invalid-state blocking and saved snapshots are unchanged.
+
 ### Default Device Styles / 默认设备样式
 
 - Built-in defaults are maintained in [defaultDeviceStyles.json](src/presentation/defaultDeviceStyles.json), using the same `presentationProfile.deviceStyles` / `utilities` format as exported files. The file can be imported directly, or replaced with a valid export; changes require rebuilding. Initialization, import, and drawing supplementation share [parseHighlightStyleDocument](src/presentation/highlightStyleDocument.ts). It validates required fields, hex colors, line widths (1-12 px), opacity (0-1), flow rules, and duplicate IDs/states before normalization. Historical backend data still uses the existing compatibility reader.

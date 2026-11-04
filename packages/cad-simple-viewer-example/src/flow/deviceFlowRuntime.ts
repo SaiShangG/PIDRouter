@@ -6,7 +6,7 @@ import type {
   PresentationProfile
 } from '../phase/types'
 import { normalizeFlowHandle, resolveConfiguredDeviceMatch } from './flowGraph'
-import { traverseFlowFromDevice } from './flowTraversal'
+import { collectFlowHighlightKeys } from './flowTraversal'
 import type { FlowGraphIndex } from './types'
 
 export interface DeviceFlowPolicy {
@@ -97,12 +97,12 @@ export const calculateAutomaticFlowPaths = (
       diagnostics.push({ kind: 'missing-utility', handleKey: key })
       return
     }
-    const result = traverseFlowFromDevice(graph, key, policies)
+    const highlightedKeys = collectFlowHighlightKeys(graph, key, policies)
     paths.push({
       ...(previous ?? { id: `${options.idPrefix}-${key}`, name: options.name }),
       ownerHandleKey: key,
       highlightStyleRefId: utility.id,
-      handleKeys: [...result.highlightedKeys]
+      handleKeys: [...highlightedKeys]
     })
   })
   return { paths, policies, diagnostics }
