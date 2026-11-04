@@ -65,7 +65,8 @@ describe('retainUnresolvedFlowPaths', () => {
   })
 
   it('drops a retained record when every handle resolves', () => {
-    expect(retainUnresolvedFlowPaths([{ highlightStyleRefId: 'water',
+    expect(retainUnresolvedFlowPaths([{
+      highlightStyleRefId: 'water',
       id: 'flow-1',
       name: 'Transfer',
       handleKeys: ['1A']

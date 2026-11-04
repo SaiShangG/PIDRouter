@@ -96,7 +96,8 @@ describe('presentationStyleResolver', () => {
 
   it('does not mutate profile, flow, or override inputs', () => {
     const profile = createDefaultPresentationProfile()
-    const flowPath: FlowPathStatus = { highlightStyleRefId: 'water',
+    const flowPath: FlowPathStatus = {
+      highlightStyleRefId: 'water',
       id: 'flow-1',
       name: 'Route',
       handleKeys: ['1a']

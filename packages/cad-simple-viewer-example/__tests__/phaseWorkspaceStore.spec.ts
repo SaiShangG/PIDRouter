@@ -8,7 +8,8 @@ import type {
 const flowState = (handleKeys: string[] = []) => ({
   flowPaths: handleKeys.length
     ? [
-      { highlightStyleRefId: 'water',
+      {
+        highlightStyleRefId: 'water',
         id: 'flow-1',
         name: 'Main route',
         handleKeys: [...handleKeys]
