@@ -1,5 +1,7 @@
 import type { AcDbObjectId } from '@mlightcad/data-model'
 
+import { type BrushDebugEntity, BrushDebugPanel } from '../brush/BrushDebugPanel'
+import type { BrushOperation } from '../brush/BrushHighlightFeature'
 import type {
   DeviceStateStyleDefinition,
   UtilityStyleDefinition
@@ -25,11 +27,14 @@ export type ValveDebugLocale = 'zh' | 'en'
 
 export interface ValveDebugFeatureOptions {
   enabled?: boolean
+  brushDebugEnabled?: boolean
   panelHost: HTMLElement
   graphDocument: FlowConnectionDocumentInput
   getView(): ValveDebugView | undefined
   resolveObjectId(handleKey: string): AcDbObjectId | undefined
   resolveHandleKeys(objectId: AcDbObjectId): readonly string[]
+  isBrushProtectedObject?(objectId: AcDbObjectId): boolean
+  describeBrushEntity?(objectId: AcDbObjectId): Omit<BrushDebugEntity, 'objectId'>
   createOverlay(
     objectIds: readonly AcDbObjectId[],
     kind: 'path' | 'locator'
@@ -304,6 +309,8 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
   locale === 'en'
     ? {
       title: 'Valve debug',
+      debugTitle: 'Debug',
+      brushDebug: 'Brush debug',
       empty: 'Right-click a valve to inspect its connected path.',
       currentStart: 'Start',
       state: 'State',
@@ -319,14 +326,16 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       equipment: 'Equipment',
       truncated: 'Truncated',
       missing: 'Missing',
-      collapse: 'Collapse valve debug panel',
-      expand: 'Expand valve debug panel',
+      collapse: 'Collapse debug panel',
+      expand: 'Expand debug panel',
       collapseBranch: 'Collapse branch',
       expandBranch: 'Expand branch',
-      resize: 'Resize valve debug panel'
+      resize: 'Resize debug panel'
     }
     : {
       title: '阀门调试',
+      debugTitle: 'Debug',
+      brushDebug: '画笔调试',
       empty: '右键选择阀门，查看其连接路径。',
       currentStart: '起点',
       state: '状态',
@@ -342,11 +351,11 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       equipment: '设备',
       truncated: '关闭/截断',
       missing: '缺失',
-      collapse: '折叠阀门调试面板',
-      expand: '展开阀门调试面板',
+      collapse: '折叠调试面板',
+      expand: '展开调试面板',
       collapseBranch: '折叠分支',
       expandBranch: '展开分支',
-      resize: '调整阀门调试面板宽度'
+      resize: '调整调试面板宽度'
     }
 
 export const defaultValveDebugLabels = getLabels
@@ -354,6 +363,7 @@ export const defaultValveDebugLabels = getLabels
 export class ValveDebugFeature {
   graph: FlowGraphIndex
   readonly panel: ValveDebugPanel
+  readonly brushPanel: BrushDebugPanel
   private readonly states = new Map<string, ValveRuntimeState>()
   private readonly results = new Map<string, ReturnType<typeof traverseFlowFromValve>>()
   private readonly contextMenu: HTMLDivElement
@@ -379,14 +389,22 @@ export class ValveDebugFeature {
   private locatorBlinkTimer?: number
   private disposed = false
   private enabled = true
+  private brushDebugEnabled = false
 
   constructor(private readonly options: ValveDebugFeatureOptions) {
     this.graph = buildFlowGraphIndex(options.graphDocument)
     this.panel = new ValveDebugPanel(options.panelHost, options.getLabels(options.getLocale()), {
       onCollapseChanged: () => this.resize(),
       onWidthChanged: () => this.resize(),
-      onNodeClick: key => this.locateNode(key)
+      onNodeClick: key => this.locateNode(key),
+      onDebugModeChanged: () => this.disposeLocatorOverlay()
     })
+    this.brushPanel = new BrushDebugPanel(options.getLocale(), {
+      onEntityClick: objectId => !this.disposed && this.brushDebugEnabled &&
+        this.locateObject(objectId),
+      onClear: () => this.disposeLocatorOverlay()
+    })
+    this.panel.setBrushContent(this.brushPanel.element)
 
     injectMenuStyles()
     this.contextMenu = document.createElement('div')
@@ -448,16 +466,39 @@ export class ValveDebugFeature {
       window.matchMedia('(max-width: 640px)').matches
     this.panel.setCollapsed(compact)
     this.renderPanel()
+    this.setBrushDebugEnabled(options.brushDebugEnabled ?? false)
     this.setEnabled(options.enabled ?? true)
   }
 
   setEnabled(enabled: boolean) {
     if (this.disposed || this.enabled === enabled) return
     this.enabled = enabled
-    this.panel.element.hidden = !enabled
+    this.panel.setDebugModes(enabled, this.brushDebugEnabled)
     this.closeMenu()
     this.attach()
     this.resize()
+  }
+
+  setBrushDebugEnabled(enabled: boolean) {
+    if (this.disposed || this.brushDebugEnabled === enabled) return
+    this.brushDebugEnabled = enabled
+    this.panel.setDebugModes(this.enabled, enabled)
+    this.resize()
+  }
+
+  recordBrushEntities(operation: BrushOperation, objectIds: readonly AcDbObjectId[]) {
+    if (this.disposed || !this.brushDebugEnabled) return
+    const entities = [...new Set(objectIds)]
+      .filter(id => !this.options.isBrushProtectedObject?.(id))
+      .map(objectId => ({
+        ...this.options.describeBrushEntity?.(objectId),
+        objectId
+      }))
+    this.brushPanel.record(operation, entities)
+  }
+
+  resetBrushDebug() {
+    this.brushPanel.clear()
   }
 
   attach() {
@@ -479,6 +520,7 @@ export class ValveDebugFeature {
   }
 
   reset() {
+    this.resetBrushDebug()
     this.closeMenu()
     this.states.clear()
     this.results.clear()
@@ -506,6 +548,7 @@ export class ValveDebugFeature {
   }
 
   setLocale(locale: ValveDebugLocale) {
+    this.brushPanel.setLocale(locale)
     this.panel.setLabels(this.options.getLabels(locale))
     const key = this.openMenuAction.dataset.handleKey
     if (key && !this.contextMenu.hidden) {
@@ -826,16 +869,16 @@ export class ValveDebugFeature {
   private locateNode(key: string) {
     if (this.disposed || !this.enabled) return
     const objectId = this.options.resolveObjectId(key)
-    if (!objectId) {
+    if (objectId === undefined || !this.locateObject(objectId)) {
       this.panel.markNodeUnavailable(key)
-      return
     }
+  }
+
+  private locateObject(objectId: AcDbObjectId): boolean {
     this.disposeLocatorOverlay()
+    if (!this.options.getView()) return false
     this.locatorOverlay = this.options.createOverlay([objectId], 'locator') ?? undefined
-    if (!this.locatorOverlay) {
-      this.panel.markNodeUnavailable(key)
-      return
-    }
+    if (!this.locatorOverlay) return false
     let visible = true
     this.locatorBlinkTimer = window.setInterval(() => {
       visible = !visible
@@ -844,6 +887,7 @@ export class ValveDebugFeature {
     this.locatorTimer = window.setTimeout(() => {
       this.disposeLocatorOverlay()
     }, 1200)
+    return true
   }
 
   private disposePathOverlay() {
@@ -882,8 +926,7 @@ export class ValveDebugFeature {
     if (this.options.resolveConfiguredDeviceKey) {
       return this.options.resolveConfiguredDeviceKey(normalized)
     }
-    const primaryKey = this.graph.primaryHandleByCadHandle.get(normalized) ?? normalized
-    return this.graph.valveKeys.has(primaryKey) ? primaryKey : undefined
+    return this.graph.valveKeys.has(normalized) ? normalized : undefined
   }
 }
 

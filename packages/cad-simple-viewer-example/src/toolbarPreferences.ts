@@ -7,12 +7,14 @@ export interface ToolbarPreferences {
   placement: AcExToolbarPlacement
   edgeOffset: number
   valveDebugEnabled: boolean
+  brushDebugEnabled: boolean
 }
 
 export const defaultToolbarPreferences = (): ToolbarPreferences => ({
   hiddenIds: ['layer', 'agent', 'measure', 'export', 'rev-vis', 'theme', 'locale'],
   visible: true, collapsed: false, placement: 'right', edgeOffset: 8,
-  valveDebugEnabled: false
+  valveDebugEnabled: false,
+  brushDebugEnabled: false
 })
 
 export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'getItem'>): ToolbarPreferences {
@@ -28,6 +30,8 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
       collapsed: typeof value.collapsed === 'boolean' ? value.collapsed : defaults.collapsed,
       valveDebugEnabled: typeof value.valveDebugEnabled === 'boolean'
         ? value.valveDebugEnabled : defaults.valveDebugEnabled,
+      brushDebugEnabled: typeof value.brushDebugEnabled === 'boolean'
+        ? value.brushDebugEnabled : defaults.brushDebugEnabled,
       placement: ['top', 'bottom', 'left', 'right'].includes(value.placement) ? value.placement : defaults.placement,
       edgeOffset: typeof value.edgeOffset === 'number' && Number.isFinite(value.edgeOffset)
         ? Math.min(80, Math.max(0, value.edgeOffset)) : defaults.edgeOffset

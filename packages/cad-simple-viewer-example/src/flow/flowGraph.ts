@@ -1,3 +1,4 @@
+import type { DeviceStyleDefinition } from '../phase/types'
 import type {
   DocumentAreaInput,
   DocumentControlModule,
@@ -38,6 +39,21 @@ export const controlModuleMatchesDeviceName = (
   return [module.Name, moduleInfo(module, 'YQJ_CODE')].some(
     value => value?.trim().toLocaleLowerCase() === expected
   )
+}
+
+export const resolveConfiguredDeviceMatch = (
+  graph: FlowGraphIndex,
+  handleKey: string,
+  devices: readonly DeviceStyleDefinition[]
+): { handleKey: string; device: DeviceStyleDefinition } | undefined => {
+  const normalized = normalizeFlowHandle(handleKey)
+  if (!normalized) return undefined
+  const module = graph.controlModuleByPrimaryHandle.get(normalized)
+  if (!module) return undefined
+  const device = devices.find(candidate =>
+    controlModuleMatchesDeviceName(module, candidate.name)
+  )
+  return device ? { handleKey: normalized, device } : undefined
 }
 
 const classifyControlModule = (

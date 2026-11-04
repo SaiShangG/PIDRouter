@@ -152,6 +152,9 @@ export class ToolbarPreferencesModal {
     development.append(this.checkbox('阀门调试', this.draft.valveDebugEnabled, value => {
       this.draft.valveDebugEnabled = value
     }, 'valveDebugEnabled'))
+    development.append(this.checkbox('画笔调试', this.draft.brushDebugEnabled, value => {
+      this.draft.brushDebugEnabled = value
+    }, 'brushDebugEnabled'))
     body.append(viewer, development)
     const error = document.createElement('p')
     error.className = 'toolbar-preferences-error'

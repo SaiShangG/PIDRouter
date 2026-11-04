@@ -7,6 +7,7 @@ import {
   type BrushOperation
 } from '../src/brush/BrushHighlightFeature'
 import { HighlightRenderScheduler } from '../src/brush/HighlightRenderScheduler'
+import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
@@ -121,6 +122,62 @@ describe('BrushHighlightFeature', () => {
       ['paint', ['A']], ['paint', ['A']]
     ])
     feature.dispose()
+  })
+
+  it('reports every picked entity, not just the first hit under the brush', () => {
+    const { canvas, view } = createView()
+    const pick = jest.fn(() => ['A', 'B', 'A', 'C'].map(id => ({
+      id, minX: 0, minY: 0, maxX: 1, maxY: 1
+    })))
+    view.pick = pick
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({ getView: () => view, onEntitiesChanged })
+    feature.activate('paint')
+    stroke(canvas, 0)
+    expect(pick).toHaveBeenCalledWith({ x: 0, y: 0 }, 8, false)
+    expect(onEntitiesChanged).toHaveBeenCalledTimes(1)
+    expect(onEntitiesChanged).toHaveBeenCalledWith('paint', ['A', 'B', 'C'])
+    feature.dispose()
+  })
+
+  it('feeds interpolated brush hits into debug and reports unavailable locators', () => {
+    const { canvas, view } = createView()
+    const host = document.createElement('div')
+    const createOverlay = jest.fn(() => ({ dispose: jest.fn(), setVisible: jest.fn() }))
+    const debug = new ValveDebugFeature({
+      enabled: false,
+      brushDebugEnabled: true,
+      panelHost: host,
+      graphDocument: {},
+      getView: () => undefined,
+      resolveObjectId: key => key,
+      resolveHandleKeys: id => [String(id)],
+      isBrushProtectedObject: id => id === 'B',
+      createOverlay,
+      getLabels: defaultValveDebugLabels,
+      getLocale: () => 'en'
+    })
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      onEntitiesChanged: (operation, ids) => debug.recordBrushEntities(operation, ids)
+    })
+    feature.activate('paint')
+    canvas.dispatchEvent(pointer('pointerdown', 0))
+    canvas.dispatchEvent(pointer('pointermove', 20))
+    canvas.dispatchEvent(pointer('pointerup', 20, 0))
+    expect([...host.querySelectorAll<HTMLElement>('[data-entity-id]')].map(row => row.dataset.entityId))
+      .toEqual(['A', 'C'])
+    stroke(canvas, 0)
+    expect(host.querySelectorAll('[data-entity-id]')).toHaveLength(2)
+    feature.activate('erase')
+    stroke(canvas, 20)
+    const row = host.querySelector<HTMLButtonElement>('[data-entity-id="C"]')!
+    expect(row.textContent).toContain('Eraser hit')
+    row.click()
+    expect(row.textContent).toContain('Cannot locate')
+    expect(createOverlay).not.toHaveBeenCalled()
+    feature.dispose()
+    debug.dispose()
   })
 
   it('reports unpainted eraser hits to the correction model without changing selection', () => {

@@ -148,6 +148,80 @@ const injectStyles = () => {
       min-width: 0;
       overflow: hidden;
     }
+    .valve-debug-panel-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px;
+      border-bottom: 1px solid var(--valve-debug-border);
+    }
+    .valve-debug-panel-tabs button,
+    .brush-debug-toolbar button {
+      padding: 5px 8px;
+      border: 1px solid var(--valve-debug-border);
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .valve-debug-panel-tabs button[aria-pressed="true"],
+    .brush-debug-entity[aria-pressed="true"] {
+      border-color: var(--valve-debug-accent);
+      background: var(--app-success-surface, #edf8f4);
+    }
+    .valve-debug-panel-content,
+    .brush-debug-panel {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .valve-debug-panel-tabs[hidden],
+    .valve-debug-panel-tabs button[hidden],
+    .valve-debug-panel-content[hidden],
+    .brush-debug-panel[hidden],
+    .brush-debug-panel > [hidden] { display: none; }
+    .brush-debug-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    .brush-debug-toolbar button:disabled { opacity: .5; cursor: default; }
+    .brush-debug-hint {
+      margin: 0;
+      padding: 0 12px 8px;
+      color: var(--valve-debug-muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .brush-debug-entity {
+      display: grid;
+      gap: 4px;
+      width: 100%;
+      margin-bottom: 4px;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    .brush-debug-entity .valve-debug-tree-meta { white-space: pre-line; }
+    .brush-debug-status { color: var(--valve-debug-muted); font-size: 11px; }
+    .brush-debug-entity:hover { background: var(--app-success-surface, #edf8f4); }
+    .valve-debug-panel-tabs button:focus-visible,
+    .brush-debug-toolbar button:focus-visible,
+    .brush-debug-entity:focus-visible {
+      outline: 2px solid var(--valve-debug-accent);
+      outline-offset: -2px;
+    }
     .valve-debug-panel-summary {
       display: grid;
       grid-template-columns: max-content minmax(0, 1fr);
@@ -309,6 +383,14 @@ export class ValveDebugPanel {
   private readonly resizeHandle: HTMLDivElement
   private readonly titleElement: HTMLElement
   private readonly bodyElement: HTMLElement
+  private readonly valveContent = document.createElement('div')
+  private readonly tabsElement = document.createElement('div')
+  private readonly valveTab = document.createElement('button')
+  private readonly brushTab = document.createElement('button')
+  private brushContent?: HTMLElement
+  private valveEnabled = true
+  private brushEnabled = false
+  private activeMode: 'valve' | 'brush' = 'valve'
   private readonly summaryElement: HTMLElement
   private readonly treeElement: HTMLOListElement
   private readonly emptyElement: HTMLElement
@@ -363,7 +445,19 @@ export class ValveDebugPanel {
     this.emptyElement.className = 'valve-debug-panel-empty'
     this.treeElement = document.createElement('ol')
     this.treeElement.className = 'valve-debug-panel-tree'
-    this.bodyElement.append(this.summaryElement, this.emptyElement, this.treeElement)
+    this.valveContent.className = 'valve-debug-panel-content'
+    this.valveContent.append(this.summaryElement, this.emptyElement, this.treeElement)
+    this.tabsElement.className = 'valve-debug-panel-tabs'
+    this.tabsElement.hidden = true
+    for (const [mode, button] of [
+      ['valve', this.valveTab], ['brush', this.brushTab]
+    ] as const) {
+      button.type = 'button'
+      button.dataset.debugMode = mode
+      button.addEventListener('click', () => this.setActiveMode(mode))
+      this.tabsElement.append(button)
+    }
+    this.bodyElement.append(this.tabsElement, this.valveContent)
     this.element.append(this.resizeHandle, header, this.bodyElement)
     host.append(this.element)
     this.setLabels(labels)
@@ -373,8 +467,11 @@ export class ValveDebugPanel {
 
   setLabels(labels: ValveDebugPanelLabels) {
     this.labels = labels
-    this.titleElement.textContent = labels.title
-    this.element.setAttribute('aria-label', labels.title)
+    const title = this.brushContent ? labels.debugTitle : labels.title
+    this.titleElement.textContent = title
+    this.element.setAttribute('aria-label', title)
+    this.valveTab.textContent = labels.title
+    this.brushTab.textContent = labels.brushDebug
     this.collapseButton.setAttribute(
       'aria-label',
       this.collapsed ? labels.expand : labels.collapse
@@ -382,6 +479,40 @@ export class ValveDebugPanel {
     this.collapseButton.setAttribute('aria-expanded', String(!this.collapsed))
     this.resizeHandle.setAttribute('aria-label', labels.resize ?? labels.title)
     this.renderSummary(undefined)
+  }
+
+  setBrushContent(content: HTMLElement) {
+    this.brushContent?.remove()
+    this.brushContent = content
+    this.bodyElement.append(content)
+    this.setLabels(this.labels)
+    this.updateModes()
+  }
+
+  setDebugModes(valveEnabled: boolean, brushEnabled: boolean) {
+    this.valveEnabled = valveEnabled
+    this.brushEnabled = brushEnabled
+    this.element.hidden = !valveEnabled && !brushEnabled
+    if (this.activeMode === 'valve' && !valveEnabled) this.activeMode = 'brush'
+    else if (this.activeMode === 'brush' && !brushEnabled) this.activeMode = 'valve'
+    this.updateModes()
+  }
+
+  private setActiveMode(mode: 'valve' | 'brush') {
+    if (mode === this.activeMode) return
+    this.activeMode = mode
+    this.updateModes()
+    this.callbacks.onDebugModeChanged?.()
+  }
+
+  private updateModes() {
+    this.tabsElement.hidden = !this.brushContent
+    this.valveTab.hidden = !this.valveEnabled
+    this.brushTab.hidden = !this.brushEnabled
+    this.valveTab.setAttribute('aria-pressed', String(this.activeMode === 'valve'))
+    this.brushTab.setAttribute('aria-pressed', String(this.activeMode === 'brush'))
+    this.valveContent.hidden = this.activeMode !== 'valve'
+    if (this.brushContent) this.brushContent.hidden = this.activeMode !== 'brush'
   }
 
   setCollapsed(collapsed: boolean) {

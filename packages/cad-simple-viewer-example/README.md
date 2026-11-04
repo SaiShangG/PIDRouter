@@ -84,6 +84,32 @@ Development and deployment network settings, including the runtime API override,
 
 ## Usage
 
+### Brush debugging
+
+Enable **Feature settings > Development > Brush debug** to show the shared
+**Debug** sidebar. When valve debugging is also enabled, use the **Valve debug**
+and **Brush debug** buttons to switch views.
+
+Brush debug accumulates unique entity IDs hit by brush/eraser strokes, excluding
+valves, pumps, and other protected interactive devices using the same protection
+rules as painting. Each row shows its DXF entity type, layer, CAD handle, and latest operation;
+missing persistent handles remain visible for diagnosis. Click a row to blink
+that exact entity for 1.2 seconds without zooming, editing its highlight, changing
+device states, or adding Phase data. Unavailable previews are marked explicitly.
+**Clear list** clears debug history only. Opening a drawing or resetting Phase
+runtime clears the list and any locator overlay. Objects missed by picking
+cannot appear in this list.
+
+Interactive-device recognition and brush protection use the device Title in
+**Highlight style settings > Devices** (`devices[].name`). Only the entity's own
+`ControlModules[].CadHandle` can match; its module `Name` or `YQJ_CODE` must equal
+a configured Title (case-insensitive, ignoring surrounding whitespace).
+Graph-inferred ownership does not make connected pipe segments devices.
+Unmatched entities do not gain device interaction or brush protection merely
+because they are connected to a valve or have a saved device-state record.
+Right-click state selection, brush protection, manual-highlight rendering, and
+brush debug share this rule. The flow graph itself remains unchanged.
+
 ### Manual highlight correction data
 
 Phase JSON separates three sources and a derived final snapshot:

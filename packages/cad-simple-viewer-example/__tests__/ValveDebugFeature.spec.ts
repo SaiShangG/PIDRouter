@@ -1,7 +1,9 @@
 /** @jest-environment jsdom */
 
+import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
 import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
-import type { ValveDebugOverlay, ValveDebugView } from '../src/flow/types'
+import type { FlowConnectionDocumentInput, ValveDebugOverlay, ValveDebugView } from '../src/flow/types'
+import type { DeviceStateStyleDefinition, DeviceStyleDefinition } from '../src/phase/types'
 
 describe('ValveDebugFeature', () => {
   beforeEach(() => {
@@ -45,7 +47,7 @@ describe('ValveDebugFeature', () => {
       },
       getView: () => view,
       resolveObjectId: key => key,
-      resolveHandleKeys: objectId => objectId === 'V1' ? ['2'] : [],
+      resolveHandleKeys: objectId => objectId === 'V1' ? ['1'] : [],
       createOverlay: (ids, kind): ValveDebugOverlay => {
         const overlay = { ids: ids.map(String), kind, disposed: false }
         overlays.push(overlay)
@@ -106,6 +108,124 @@ describe('ValveDebugFeature', () => {
     expect(closeButton.disabled).toBe(false)
     closeButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(overlays.find(item => item.kind === 'path')?.disposed).toBe(true)
+    feature.dispose()
+  })
+
+  it.each([
+    ['Valve', true], ['Valve', false],
+    ['Pump', true], ['Pump', false],
+    ['PP', true], ['PP', false]
+  ] as const)(
+    'uses the configured %s Title for interaction and brush protection with debug enabled=%s',
+    (name, enabled) => {
+      const host = document.createElement('div')
+      document.body.append(host)
+      const canvas = document.createElement('canvas')
+      let pickedId = '2'
+      const graphDocument: FlowConnectionDocumentInput = {
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Name: name }],
+          ContainCadEntityHandles: [1, 2]
+        }],
+        Map: { Graph: { Vertices: [1, 2], Edges: [{ Source: 1, Target: 2 }] } }
+      }
+      const graph = buildFlowGraphIndex(graphDocument)
+      const state: DeviceStateStyleDefinition = {
+        id: 'configured-on', key: 'ON', displayName: 'On', color: 0x00ff00,
+        lineWidthPx: 3, opacity: 1, enabled: true, autoHighlightFlow: false,
+        flowBehavior: 'neutral', order: 0
+      }
+      const devices: DeviceStyleDefinition[] = [{
+        id: 'configured-device', name, states: [state], order: 0
+      }]
+      const match = (key: string) => resolveConfiguredDeviceMatch(graph, key, devices)
+      const requestConfiguredStateChange = jest.fn(() => true)
+      const feature = new ValveDebugFeature({
+        enabled,
+        brushDebugEnabled: true,
+        panelHost: host,
+        graphDocument,
+        getView: () => ({
+          canvas, width: 100, height: 100, isDirty: false,
+          viewportToCanvas: point => point,
+          screenToWorld: point => point,
+          pick: () => [{ id: pickedId }],
+          zoomTo: () => undefined
+        }),
+        resolveObjectId: key => key,
+        resolveHandleKeys: id => [String(id)],
+        isBrushProtectedObject: id => match(String(id)) !== undefined,
+        resolveConfiguredDeviceKey: key => match(key)?.handleKey,
+        getConfiguredStates: key => match(key)?.device.states ?? [],
+        requestConfiguredStateChange,
+        createOverlay: () => null,
+        getLabels: defaultValveDebugLabels,
+        getLocale: () => 'en'
+      })
+      feature.attach()
+      const menu = document.querySelector<HTMLDivElement>('.valve-debug-context-menu')!
+
+      expect(graph.primaryHandleByCadHandle.get('2')).toBe('1')
+      const pipeClick = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      canvas.dispatchEvent(pipeClick)
+      expect(pipeClick.defaultPrevented).toBe(false)
+      expect(menu.hidden).toBe(true)
+      feature.recordBrushEntities('paint', ['1', '2'])
+      expect([...host.querySelectorAll<HTMLElement>('[data-entity-id]')].map(row => row.dataset.entityId))
+        .toEqual(['2'])
+
+      pickedId = '1'
+      canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+      expect(menu.hidden).toBe(false)
+      menu.querySelector<HTMLInputElement>('[data-valve-state-radio="true"]')!.click()
+      menu.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.click()
+      expect(requestConfiguredStateChange).toHaveBeenCalledWith('1', state, undefined)
+
+      devices[0].name = 'Unmatched Title'
+      const unmatchedClick = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+      canvas.dispatchEvent(unmatchedClick)
+      expect(unmatchedClick.defaultPrevented).toBe(false)
+      expect(menu.hidden).toBe(true)
+      feature.recordBrushEntities('paint', ['1'])
+      expect(host.querySelector('[data-entity-id="1"]')).not.toBeNull()
+      feature.dispose()
+    }
+  )
+
+  it('does not resolve a connected pipe to a valve in legacy debug mode', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const feature = new ValveDebugFeature({
+      enabled: true,
+      panelHost: host,
+      graphDocument: {
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 1, Name: 'Valve' }],
+          ContainCadEntityHandles: [1, 2]
+        }],
+        Map: { Graph: { Vertices: [1, 2], Edges: [{ Source: 1, Target: 2 }] } }
+      },
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point,
+        screenToWorld: point => point,
+        pick: () => [{ id: '2' }],
+        zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key,
+      resolveHandleKeys: id => [String(id)],
+      createOverlay: () => null,
+      getLabels: defaultValveDebugLabels,
+      getLocale: () => 'en'
+    })
+    feature.attach()
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    canvas.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')!.hidden).toBe(true)
     feature.dispose()
   })
 

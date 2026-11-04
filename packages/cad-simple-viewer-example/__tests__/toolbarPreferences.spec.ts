@@ -11,6 +11,7 @@ describe('toolbar preferences', () => {
   it('uses defaults for a new user', () => {
     expect(loadToolbarPreferences('new-user', storage)).toEqual(defaultToolbarPreferences())
     expect(defaultToolbarPreferences().valveDebugEnabled).toBe(false)
+    expect(defaultToolbarPreferences().brushDebugEnabled).toBe(false)
   })
 
   it('enables only the requested toolbar groups by default', () => {
@@ -33,7 +34,7 @@ describe('toolbar preferences', () => {
   })
 
   it('persists independently for each user', () => {
-    const preferences = { ...defaultToolbarPreferences(), hiddenIds: ['export-pdf'], visible: false, valveDebugEnabled: true }
+    const preferences = { ...defaultToolbarPreferences(), hiddenIds: ['export-pdf'], visible: false, valveDebugEnabled: true, brushDebugEnabled: true }
     saveToolbarPreferences('alice', preferences, storage)
     expect(loadToolbarPreferences('alice', storage)).toEqual(preferences)
     expect(loadToolbarPreferences('bob', storage)).toEqual(defaultToolbarPreferences())
@@ -46,9 +47,17 @@ describe('toolbar preferences', () => {
 
   it('validates stored values without migrating a legacy format', () => {
     const preferences = loadToolbarPreferences('alice', {
-      getItem: () => JSON.stringify({ hiddenIds: ['pan', 'pan', 1], visible: 'no', collapsed: true, placement: 'invalid', edgeOffset: -9, valveDebugEnabled: 'true' })
+      getItem: () => JSON.stringify({ hiddenIds: ['pan', 'pan', 1], visible: 'no', collapsed: true, placement: 'invalid', edgeOffset: -9, valveDebugEnabled: 'true', brushDebugEnabled: 'true' })
     })
     expect(preferences).toEqual({ ...defaultToolbarPreferences(), hiddenIds: ['pan'], collapsed: true, edgeOffset: 0 })
+  })
+
+  it('keeps existing users opted out of brush debugging until enabled', () => {
+    const preferences = loadToolbarPreferences('alice', {
+      getItem: () => JSON.stringify({ valveDebugEnabled: true })
+    })
+    expect(preferences.valveDebugEnabled).toBe(true)
+    expect(preferences.brushDebugEnabled).toBe(false)
   })
 
   it('reports save failures instead of pretending the setting was saved', () => {

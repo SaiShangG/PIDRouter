@@ -84,8 +84,8 @@ import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import {
   buildFlowGraphIndex,
-  controlModuleMatchesDeviceName,
-  normalizeFlowHandle
+  normalizeFlowHandle,
+  resolveConfiguredDeviceMatch
 } from './flow/flowGraph'
 import type {
   FlowConnectionDocumentInput,
@@ -145,7 +145,6 @@ import { readDocumentTanks, TankLocator, type TankOption } from './phase/tankSel
 import type {
   DeviceState,
   DeviceStateStyleDefinition,
-  DeviceStyleDefinition,
   DrawingAssetRef,
   FlowPathStatus,
   FlowStateSnapshot,
@@ -438,6 +437,7 @@ class CadViewerApp {
     changed: active => {
       if (active) {
         this.brushHighlightFeature?.deactivate()
+        this.valveDebugFeature?.resetBrushDebug()
         this.syncManualCorrectionControls()
         this.updateEmptyStateVisibility()
       } else this.finishLoadingState()
@@ -1466,6 +1466,7 @@ class CadViewerApp {
 
   private applyUserToolbarPreferences(): void {
     this.valveDebugFeature?.setEnabled(this.toolbarPreferences.valveDebugEnabled)
+    this.valveDebugFeature?.setBrushDebugEnabled(this.toolbarPreferences.brushDebugEnabled)
     const plugin = this.getSimpleUiPlugin()
     if (!plugin) return
     this.applyingToolbarPreferences = true
@@ -1971,6 +1972,7 @@ class CadViewerApp {
 
     this.valveDebugFeature = createValveDebugFeature({
       enabled: this.toolbarPreferences.valveDebugEnabled,
+      brushDebugEnabled: this.toolbarPreferences.brushDebugEnabled,
       panelHost,
       graphDocument: flowConnectionDocument,
       getView: () => {
@@ -1979,6 +1981,17 @@ class CadViewerApp {
       },
       resolveObjectId: handleKey => this.resolveObjectIdByHandleKey(handleKey),
       resolveHandleKeys: objectId => handleKeysFromObjectId(objectId),
+      isBrushProtectedObject: objectId =>
+        this.isBrushProtectedObject(objectId, this.getActivePresentationProfile()),
+      describeBrushEntity: objectId => {
+        const entity = AcApDocManager.instance.curDocument
+          .database.tables.blockTable.getEntityById(objectId)
+        return {
+          handleKey: this.getManualHighlightHandleKey(objectId),
+          entityType: entity?.dxfTypeName,
+          layer: entity?.layer
+        }
+      },
       createOverlay: (objectIds, kind) =>
         this.createValveDebugOverlay(objectIds, kind),
       zoomToObject: objectId => this.zoomToValveDebugObject(objectId),
@@ -2158,6 +2171,7 @@ class CadViewerApp {
     operation: BrushOperation,
     objectIds: readonly AcDbObjectId[]
   ) {
+    this.valveDebugFeature?.recordBrushEntities(operation, objectIds)
     const profile = this.getActivePresentationProfile()
     const styleRefId = operation === 'paint'
       ? this.brushStrokeStyleRefId ?? this.resolveBrushStyleRefId()
@@ -2193,16 +2207,9 @@ class CadViewerApp {
   }
 
   private isBrushProtectedObject(objectId: AcDbObjectId, profile: PresentationProfile) {
-    return this.valveDeviceStates.has(objectId) ||
-      this.getPrimaryFlowHandleForObject(objectId) !== undefined ||
-      handleKeysFromObjectId(objectId).some(handleKey => {
-        const normalized = normalizeFlowHandle(handleKey)
-        const primary = normalized
-          ? flowGraphIndex.primaryHandleByCadHandle.get(normalized)
-          : undefined
-        return (primary !== undefined && flowGraphIndex.valveKeys.has(primary)) ||
-          this.getConfiguredDeviceMatch(handleKey, profile) !== undefined
-      })
+    return handleKeysFromObjectId(objectId).some(handleKey =>
+      this.getConfiguredDeviceMatch(handleKey, profile) !== undefined
+    )
   }
 
   private getAutomaticFlowPathsForObject(objectId: AcDbObjectId) {
@@ -2213,21 +2220,6 @@ class CadViewerApp {
       if (path) paths.push(path)
     })
     return paths
-  }
-
-  private getPrimaryFlowHandleForObject(objectId: AcDbObjectId) {
-    for (const handleKey of handleKeysFromObjectId(objectId)) {
-      const normalized = normalizeFlowHandle(handleKey)
-      if (!normalized) continue
-      if (flowGraphIndex.valveKeys.has(normalized)) return normalized
-
-      const primary = flowGraphIndex.primaryHandleByCadHandle.get(normalized)
-      if (primary && flowGraphIndex.valveKeys.has(primary)) {
-        const valveObjectId = this.resolveObjectIdByHandleKey(primary)
-        if (valveObjectId === objectId) return primary
-      }
-    }
-    return undefined
   }
 
   private clearManualBrushState() {
@@ -2318,7 +2310,9 @@ class CadViewerApp {
     upgradePreviewWideLines(root, style, view.width, view.height)
     this.phasePresentationController.apply(
       root as unknown as Parameters<PhasePresentationController['apply']>[0],
-      style
+      style,
+      // Manual brush highlights render at 20000; locators must stay above them.
+      kind === 'locator' ? 30000 : undefined
     )
       ; (layout.internalObject as LayoutObjectHost).add(root)
     view.isDirty = true
@@ -3949,19 +3943,8 @@ class CadViewerApp {
   private getConfiguredDeviceMatch(
     handleKey: string,
     profile = this.getActivePresentationProfile()
-  ): {
-    handleKey: string
-    device: DeviceStyleDefinition
-  } | undefined {
-    const normalized = normalizeFlowHandle(handleKey)
-    if (!normalized) return undefined
-    const primaryHandle = flowGraphIndex.primaryHandleByCadHandle.get(normalized) ?? normalized
-    const module = flowGraphIndex.controlModuleByPrimaryHandle.get(primaryHandle)
-    if (!module) return undefined
-    const device = profile.devices.find(candidate =>
-      controlModuleMatchesDeviceName(module, candidate.name)
-    )
-    return device ? { handleKey: primaryHandle, device } : undefined
+  ) {
+    return resolveConfiguredDeviceMatch(flowGraphIndex, handleKey, profile.devices)
   }
 
   private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
@@ -5049,6 +5032,7 @@ class CadViewerApp {
   }
 
   private setLoadingState(loading: boolean) {
+    if (loading) this.valveDebugFeature?.resetBrushDebug()
     this.isLoadingFile = loading
     this.syncManualCorrectionControls()
     this.updateEmptyStateVisibility()

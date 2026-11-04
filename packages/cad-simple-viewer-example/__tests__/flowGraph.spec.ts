@@ -1,9 +1,11 @@
 import {
   buildFlowGraphIndex,
   controlModuleMatchesDeviceName,
-  normalizeFlowHandle
+  normalizeFlowHandle,
+  resolveConfiguredDeviceMatch
 } from '../src/flow/flowGraph'
 import type { FlowConnectionDocumentInput } from '../src/flow/types'
+import type { DeviceStyleDefinition } from '../src/phase/types'
 
 const documentWithGraph = (document: FlowConnectionDocumentInput): FlowConnectionDocumentInput =>
   document
@@ -39,6 +41,59 @@ describe('flowGraph', () => {
       Infos: [{ Name: 'YQJ_CODE', Value: 'PP' }]
     }, ' pp ')).toBe(true)
     expect(controlModuleMatchesDeviceName({ Name: 'PP' }, 'Pump')).toBe(false)
+  })
+
+  it.each(['Valve', 'Pump', 'PP'])(
+    'recognizes only the direct %s device whose Title is configured, not its connected pipes',
+    name => {
+      const graph = buildFlowGraphIndex({
+        Areas: [{
+          Id: 'A-1',
+          ControlModules: [{ CadHandle: 26, Name: name }],
+          ContainCadEntityHandles: [26, 3]
+        }],
+        Map: {
+          Graph: {
+            Vertices: [26, 3],
+            Edges: [{ Source: 26, Target: 3 }]
+          }
+        }
+      })
+      const device: DeviceStyleDefinition = {
+        id: 'configured-device', name: ` ${name.toLowerCase()} `, order: 0, states: []
+      }
+
+      expect(graph.primaryHandleByCadHandle.get('3')).toBe('1A')
+      expect(resolveConfiguredDeviceMatch(graph, '0x001a', [device])).toEqual({
+        handleKey: '1A', device
+      })
+      expect(resolveConfiguredDeviceMatch(graph, '3', [device])).toBeUndefined()
+      expect(resolveConfiguredDeviceMatch(graph, '1A', [])).toBeUndefined()
+      expect(resolveConfiguredDeviceMatch(graph, 'invalid', [device])).toBeUndefined()
+
+      device.name = `${name}1`
+      expect(resolveConfiguredDeviceMatch(graph, '1A', [device])).toBeUndefined()
+    }
+  )
+
+  it('uses the direct module YQJ_CODE to match a configured Title without changing graph classification', () => {
+    const graph = buildFlowGraphIndex({
+      Areas: [{
+        ControlModules: [{
+          CadHandle: 26,
+          Name: 'Custom equipment',
+          Infos: [{ Name: 'YQJ_CODE', Value: 'PP' }]
+        }]
+      }]
+    })
+    const device: DeviceStyleDefinition = {
+      id: 'pp', name: 'PP', order: 0, states: []
+    }
+
+    expect(graph.nodes.get('1A')?.kind).toBe('equipment')
+    expect(resolveConfiguredDeviceMatch(graph, '1A', [device])?.device).toBe(device)
+    device.name = 'Pump'
+    expect(resolveConfiguredDeviceMatch(graph, '1A', [device])).toBeUndefined()
   })
 
   it('indexes ControlModules and infers only unique contained-handle owners', () => {

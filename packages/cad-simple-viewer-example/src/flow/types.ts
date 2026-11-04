@@ -143,6 +143,8 @@ export interface ValveDebugView {
 
 export interface ValveDebugPanelLabels {
   title: string
+  debugTitle: string
+  brushDebug: string
   empty: string
   currentStart: string
   state: string
@@ -169,4 +171,5 @@ export interface ValveDebugPanelCallbacks {
   onCollapseChanged(collapsed: boolean): void
   onWidthChanged?(width: number): void
   onNodeClick(key: string): void
+  onDebugModeChanged?(): void
 }
