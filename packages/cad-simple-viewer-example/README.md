@@ -108,6 +108,76 @@ no inline style snapshot, `styleSource`, `styleOverride`, `utilityId`, or
 handles are hexadecimal. Local workspace schema is version 6; older local
 versions are not migrated.
 
+#### Style reference validation / 样式引用检查
+
+`highlightStyleRefId` identifies a Utility style or a device-state style preset,
+not a device object. Missing-reference checks search both ID sets, matching the
+renderer: checking Utilities alone would incorrectly report valid device presets
+as missing. The brush retains the selected preset ID, so later configuration
+edits update existing highlights without copying an inline style snapshot.
+Borrowing a device preset affects appearance only; it does not change equipment
+states or trigger routing. Actual `deviceStates` are checked separately for the
+referenced state style, state key, and device type.
+
+`highlightStyleRefId` 引用 Utility 样式或设备状态样式预设，不是设备对象 ID。
+缺失检查同时查找这两类 ID，与渲染解析保持一致；只查 Utility 会误报有效的设备预设。
+画笔保留所选预设的原始 ID，因此修改样式配置后，已有高亮同步更新，无需保存内联样式快照。
+借用设备预设仅改变外观，不修改设备状态或触发路由；真正的 `deviceStates` 仍单独检查
+状态样式引用、状态键和设备类型是否匹配。
+
+#### Removed geometry marker / 已移除的 geometry 标记
+
+The former optional `geometry: 'bounds'` selected a rectangular marker around an
+entity instead of highlighting its CAD geometry. It stored no coordinates and
+did not participate in connectivity calculations. It appeared in manual addition
+records, final flow records, parsing/deduplication, and the rendering branch.
+Before removal, bounds-marked manual additions were already suppressed as device
+markers, and normal brush strokes did not generate them. This residual support
+is now removed: persisted flow highlights use the entity itself, with no geometry
+field or old-data migration. Temporary valve locator frames and Three.js geometry
+objects remain unchanged.
+
+原先可选的 `geometry: 'bounds'` 表示在实体外围绘制矩形包围框，而不是沿 CAD 实体高亮。
+它不保存坐标，也不参与连通计算；曾用于手工补画记录、最终流路记录、解析去重及渲染分支。
+删除前，带此标记的手工记录已按设备标记抑制显示，正常画笔也不再生成它。
+现在移除这部分残留支持：持久化流路高亮统一沿实体绘制，不再保存该字段或迁移旧数据。
+临时阀门定位框和 Three.js 自身的几何对象不受影响。
+
+#### Composition example / 合并示例
+
+With no device-state override on handle `26`, excluding `43` preserves the complete
+automatic route while removing `43` from the final snapshot. Each painted handle
+is stored as a separate addition.
+
+当句柄 `26` 没有设备状态覆盖时，排除 `43` 只从最终快照中移除该图元，自动流路仍保留完整成员。
+批量补画中的每个句柄分别保存为一条 addition。
+
+```json
+{
+  "autoFlowPaths": [{
+    "id": "route-1",
+    "name": "Automatic route",
+    "ownerHandleKey": "26",
+    "handleKeys": ["26", "43"],
+    "highlightStyleRefId": "water"
+  }],
+  "manualCorrections": {
+    "additions": [
+      { "handleKey": "44", "highlightStyleRefId": "air" },
+      { "handleKey": "33", "highlightStyleRefId": "air" },
+      { "handleKey": "55", "highlightStyleRefId": "air" }
+    ],
+    "exclusions": ["43"]
+  },
+  "flowPaths": [
+    { "handleKey": "26", "highlightStyleRefId": "water" },
+    { "handleKey": "44", "highlightStyleRefId": "air" },
+    { "handleKey": "33", "highlightStyleRefId": "air" },
+    { "handleKey": "55", "highlightStyleRefId": "air" }
+  ]
+}
+```
+
 The runtime's `flowState.flowPaths` contains automatic results only and maps to
 backend `autoFlowPaths`. Final `flowPaths` is generated at save/copy serialization
 time, never read as a routing input. All fields are submitted in one Phase JSON

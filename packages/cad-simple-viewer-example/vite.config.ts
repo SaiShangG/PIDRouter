@@ -23,7 +23,7 @@ function assertViewerRuntimeExists(): void {
   if (!existsSync(runtimePath)) {
     throw new Error(
       'viewer-runtime.iife.js was not found. Build @mlightcad/cad-html-plugin first ' +
-        '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
+      '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
     )
   }
 }
@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => {
           target: processAssistantTarget,
           changeOrigin: true
         },
-        '/Uploads': {
+        '/uploads': {
           target: processAssistantTarget,
           changeOrigin: true
         }
