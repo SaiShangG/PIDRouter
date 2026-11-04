@@ -15,6 +15,7 @@ const FLOW_HIGHLIGHT_RENDER_ORDER = 10000
 
 export interface FlowHighlightLayer {
   id: string
+  kind?: 'device-warning'
   renderOrder: number
   style: ResolvedEntityPresentation
 }
@@ -30,6 +31,14 @@ const resolveAutomaticFlowHighlightLayers = (
     deviceState,
     diagnosticStyle
   })
+  if (overridingStyle.source === 'invalid-device-state') {
+    return [{
+      id: `invalid-device-state:${deviceState?.key ?? 'entity'}`,
+      kind: 'device-warning',
+      renderOrder: 25000,
+      style: overridingStyle
+    }]
+  }
   if (overridingStyle.source === 'diagnostic' || overridingStyle.source === 'device') {
     return [{
       id: `${overridingStyle.source}:${deviceState?.key ?? 'entity'}`,

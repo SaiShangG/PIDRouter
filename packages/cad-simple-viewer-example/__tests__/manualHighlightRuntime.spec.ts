@@ -150,13 +150,13 @@ describe('manual correction runtime', () => {
     expect(state.snapshot()).toEqual(before)
   })
 
-  it('retains supplements when automatic flow is removed and preserves device fallback', () => {
+  it('retains supplements when automatic flow is removed and preserves invalid-device warnings', () => {
     const { state, layers, device } = fixture()
     state.paint(['B'], 'water')
     expect(layers('B', [])[0].id).toBe('manual:flow:B')
     state.erase([{ handleKey: 'A', hasAutomaticFlow: true }])
     expect(layers('A', [], { ...device, highlightStyleRefId: 'missing' })[0].id)
-      .toBe('default:A')
+      .toBe('invalid-device-state:A')
   })
 
   it('restores exact corrections and isolates phases without changing automatic flow data', () => {

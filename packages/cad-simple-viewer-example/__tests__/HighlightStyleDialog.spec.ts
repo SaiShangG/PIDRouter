@@ -11,6 +11,33 @@ const value = () => ({
 })
 
 describe('HighlightStyleDialog', () => {
+  it('disables and clears automatic flow for blocking and neutral states, including imported conflicts', () => {
+    const profile = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
+    profile.devices[0].states.forEach(state => { state.autoHighlightFlow = true })
+    const dialog = new HighlightStyleDialog({
+      value: { presentationProfile: profile }, onClose: jest.fn()
+    })
+    dialog.open()
+    const controls = [...dialog.element.querySelectorAll<HTMLInputElement>(
+      '[aria-label="自动高亮流路"]'
+    )]
+    const behaviors = [...dialog.element.querySelectorAll<HTMLSelectElement>(
+      '[aria-label="流路行为"]'
+    )]
+    expect(controls.map(control => [control.checked, control.disabled])).toEqual([
+      [true, false], [false, true], [false, true]
+    ])
+    behaviors[0].value = 'neutral'
+    behaviors[0].dispatchEvent(new Event('change'))
+    expect(controls[0].checked).toBe(false)
+    expect(controls[0].disabled).toBe(true)
+    behaviors[0].value = 'conducting'
+    behaviors[0].dispatchEvent(new Event('change'))
+    expect(controls[0].disabled).toBe(false)
+    expect(controls[0].checked).toBe(false)
+    expect(profile.devices[0].states[0].autoHighlightFlow).toBe(true)
+  })
+
   it.each(['zh', 'en'] as const)('previews the missing drawing categories when Valve already exists in %s', locale => {
     const source = initializeProjectDeviceStyles(createDefaultPresentationProfile())!.profile
     const drawing = {

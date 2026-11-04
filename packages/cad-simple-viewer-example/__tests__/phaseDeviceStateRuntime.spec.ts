@@ -1,5 +1,70 @@
-import { resolveDeviceStateDefinition } from '../src/phase/phaseDeviceStateRuntime'
+import {
+  DeviceStateWarningNotifications,
+  resolveDeviceStateDefinition
+} from '../src/phase/phaseDeviceStateRuntime'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import type { DeviceState, DeviceStateStyleDefinition } from '../src/phase/types'
+
+describe('device state warning notifications', () => {
+  const fixture = () => {
+    const profile = createDefaultPresentationProfile()
+    const preset: DeviceStateStyleDefinition = {
+      id: 'closed', key: 'Close', displayName: 'Closed', enabled: true,
+      color: 0xff0000, lineWidthPx: 3, opacity: 1, order: 0,
+      flowBehavior: 'blocking', autoHighlightFlow: false
+    }
+    profile.devices = [{ id: 'valve', name: 'Valve', order: 0, states: [] }]
+    const record: DeviceState = {
+      key: 'A', deviceType: 'Valve', stateKey: 'Close', highlightStyleRefId: 'closed'
+    }
+    return { profile, preset, record, notifications: new DeviceStateWarningNotifications() }
+  }
+
+  it('notifies once for repeated invalid references in each Phase', () => {
+    const { notifications, profile, record } = fixture()
+    const before = JSON.stringify(record)
+    expect(notifications.update('project:phase-1', profile, [record])).toBe(true)
+    expect(notifications.update('project:phase-1', profile, [record])).toBe(false)
+    expect(notifications.update('project:phase-2', profile, [record])).toBe(true)
+    expect(notifications.update('project:phase-1', profile, [record])).toBe(false)
+    expect(notifications.update('project:phase-1', profile, [record, { ...record, key: 'B' }]))
+      .toBe(true)
+    expect(JSON.stringify(record)).toBe(before)
+  })
+
+  it('clears recovered references and warns again on a new invalid episode', () => {
+    const { notifications, profile, preset, record } = fixture()
+    expect(notifications.update('phase', profile, [record])).toBe(true)
+    profile.devices[0].states.push(preset)
+    expect(notifications.update('phase', profile, [record])).toBe(false)
+    profile.devices[0].states = []
+    expect(notifications.update('phase', profile, [record])).toBe(true)
+    expect(notifications.update('phase', profile, [record])).toBe(false)
+    notifications.clear()
+    expect(notifications.update('phase', profile, [record])).toBe(true)
+  })
+
+  it('does not warn for unselected devices and distinguishes changed invalid references', () => {
+    const { notifications, profile, record } = fixture()
+    expect(notifications.update('phase', profile, [])).toBe(false)
+    expect(notifications.update('phase', profile, [record])).toBe(true)
+    expect(notifications.update('phase', profile, [{ ...record, highlightStyleRefId: 'other' }]))
+      .toBe(true)
+    expect(notifications.update('phase', profile, [])).toBe(false)
+    expect(notifications.update('phase', profile, [record])).toBe(true)
+  })
+
+  it('rejects disabled and foreign presets without replacing the selected reference', () => {
+    const { profile, preset, record } = fixture()
+    profile.devices[0].states.push(preset)
+    expect(resolveDeviceStateDefinition(profile, { ...record, deviceType: ' valve ' })?.state)
+      .toBe(preset)
+    expect(resolveDeviceStateDefinition(profile, { ...record, deviceType: 'Pump' }))
+      .toBeUndefined()
+    preset.enabled = false
+    expect(resolveDeviceStateDefinition(profile, record)).toBeUndefined()
+  })
+})
 
 describe('phase device state runtime', () => {
   it('resolves a state by its globally unique style reference', () => {

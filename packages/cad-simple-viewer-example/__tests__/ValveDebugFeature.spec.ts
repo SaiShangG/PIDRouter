@@ -1,11 +1,196 @@
 /** @jest-environment jsdom */
 
 import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
+import { calculateAutomaticFlowPaths, resolveDeviceFlowPolicies } from '../src/flow/deviceFlowRuntime'
 import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import type { FlowConnectionDocumentInput, ValveDebugOverlay, ValveDebugView } from '../src/flow/types'
-import type { DeviceStateStyleDefinition, DeviceStyleDefinition } from '../src/phase/types'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import type { DeviceState, DeviceStateStyleDefinition, DeviceStyleDefinition } from '../src/phase/types'
+
+describe('invalid device state menu', () => {
+  it.each(['zh', 'en'] as const)('shows the original state and permits explicit repair in %s', initialLocale => {
+    let locale = initialLocale
+    const graphDocument: FlowConnectionDocumentInput = {
+      Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }] }],
+      Map: { Graph: { Vertices: [1], Edges: [] } }
+    }
+    const graph = buildFlowGraphIndex(graphDocument)
+    const profile = createDefaultPresentationProfile()
+    const open: DeviceStateStyleDefinition = {
+      id: 'open', key: 'Open', displayName: 'Open', enabled: true,
+      color: 0x00c853, lineWidthPx: 3, opacity: 1, order: 0,
+      autoHighlightFlow: true, flowBehavior: 'conducting'
+    }
+    profile.devices = [{ id: 'valve', name: 'Valve', order: 0, states: [open] }]
+    let record: DeviceState | undefined = {
+      key: '1', deviceType: 'Valve', stateKey: 'Close', highlightStyleRefId: 'deleted-close'
+    }
+    const original = JSON.stringify(record)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const canvas = document.createElement('canvas')
+    const feature = new ValveDebugFeature({
+      panelHost: host, graphDocument,
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point, screenToWorld: point => point,
+        pick: () => [{ id: '1' }], zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key, resolveHandleKeys: () => ['1'],
+      createOverlay: () => null,
+      getLabels: defaultValveDebugLabels, getLocale: () => locale,
+      getConfiguredStates: () => profile.devices[0].states,
+      getConfiguredStateKey: () => record?.stateKey,
+      getFlowRuntime: () => ({
+        policies: resolveDeviceFlowPolicies(graph, profile, record ? [record] : []),
+        sourceKeys: new Set<string>()
+      }),
+      requestConfiguredStateChange: (key, state) => {
+        record = { key, deviceType: 'Valve', stateKey: state.key, highlightStyleRefId: state.id }
+        return true
+      }
+    })
+    feature.attach()
+    const showMenu = () => canvas.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 })
+    )
+    showMenu()
+    const warning = document.querySelector<HTMLDivElement>('.valve-debug-context-menu-state-warning')!
+    expect(warning.hidden).toBe(false)
+    expect(warning.textContent).toContain('Close')
+    expect(warning.textContent).toContain(locale === 'zh' ? '已失效' : 'no longer available')
+    expect(document.querySelectorAll('[data-valve-state-radio]:checked')).toHaveLength(0)
+    expect(JSON.stringify(record)).toBe(original)
+    locale = locale === 'zh' ? 'en' : 'zh'
+    feature.setLocale(locale)
+    expect(warning.textContent).toContain(locale === 'zh' ? '已失效' : 'no longer available')
+
+    profile.devices[0].states = []
+    showMenu()
+    expect(warning.hidden).toBe(false)
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu-actions')!.hidden)
+      .toBe(true)
+    expect(document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.disabled)
+      .toBe(true)
+    expect(document.querySelector('[data-valve-state-options]')!.textContent)
+      .toContain(locale === 'zh' ? '没有可用状态' : 'No available states')
+
+    profile.devices[0].states = [open]
+    showMenu()
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio]')!.click()
+    document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.click()
+    showMenu()
+    expect(warning.hidden).toBe(true)
+    expect(record?.highlightStyleRefId).toBe('open')
+    record = undefined
+    showMenu()
+    expect(warning.hidden).toBe(true)
+    feature.dispose()
+    host.remove()
+  })
+})
 
 describe('ValveDebugFeature', () => {
+  it('uses runtime policies and actual sources for debug, preserving Utility selection and snapshot restoration', () => {
+    const graphDocument: FlowConnectionDocumentInput = {
+      Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }, { CadHandle: 3, Name: 'PP' }] }],
+      Map: { Graph: { Vertices: [1, 2, 3, 4], Edges: [
+        { Source: 1, Target: 2 }, { Source: 2, Target: 3 }, { Source: 3, Target: 4 }
+      ] } }
+    }
+    const graph = buildFlowGraphIndex(graphDocument)
+    const profile = createDefaultPresentationProfile()
+    const running: DeviceStateStyleDefinition = {
+      id: 'run', key: 'RUN', displayName: 'Running', enabled: true,
+      color: 0x00ff00, lineWidthPx: 3, opacity: 1,
+      flowBehavior: 'conducting', autoHighlightFlow: true, order: 0
+    }
+    const neutral: DeviceStateStyleDefinition = {
+      ...running, id: 'neutral', key: 'NEUTRAL', displayName: 'Neutral',
+      flowBehavior: 'neutral', autoHighlightFlow: true
+    }
+    profile.devices = [
+      { id: 'valve', name: 'Valve', order: 0, states: [running] },
+      { id: 'pp', name: 'PP', order: 1, states: [neutral] }
+    ]
+    profile.utilities = ['first', 'retained'].map((id, order) => ({
+      id, name: id, order, enabled: true,
+      style: { color: 0x00ff00, lineWidthPx: 3, opacity: 1, visible: true }
+    }))
+    const records: DeviceState[] = [{
+      key: '1', deviceType: 'Valve', stateKey: 'RUN', highlightStyleRefId: 'run'
+    }]
+    let paths = calculateAutomaticFlowPaths(graph, profile, records, [], {
+      idPrefix: 'test', name: 'Test'
+    }).paths
+    let pickedId = '1'
+    const canvas = document.createElement('canvas')
+    const host = document.createElement('div')
+    document.body.append(host)
+    const createOverlay = jest.fn(() => ({ dispose: jest.fn() }))
+    const request = jest.fn((key: string, state: DeviceStateStyleDefinition) => {
+      const previous = records.findIndex(record => record.key === key)
+      const record = { key, deviceType: key === '1' ? 'Valve' : 'PP',
+        stateKey: state.key, highlightStyleRefId: state.id }
+      if (previous < 0) records.push(record)
+      else records[previous] = record
+      paths = calculateAutomaticFlowPaths(graph, profile, records, paths, {
+        idPrefix: 'test', name: 'Test'
+      }).paths
+      return true
+    })
+    const feature = new ValveDebugFeature({
+      enabled: true, panelHost: host, graphDocument,
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point, screenToWorld: point => point,
+        pick: () => [{ id: pickedId }], zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key, resolveHandleKeys: id => [String(id)],
+      resolveConfiguredDeviceKey: key => graph.controlModuleByPrimaryHandle.has(key) ? key : undefined,
+      getConfiguredStates: key => profile.devices[key === '1' ? 0 : 1].states,
+      getConfiguredUtilityId: () => 'retained',
+      getUtilities: () => profile.utilities,
+      getFlowRuntime: () => ({
+        policies: calculateAutomaticFlowPaths(graph, profile, records, paths, {
+          idPrefix: 'test', name: 'Test'
+        }).policies,
+        sourceKeys: new Set(paths.map(path => path.ownerHandleKey!))
+      }),
+      requestConfiguredStateChange: request, createOverlay,
+      getLabels: defaultValveDebugLabels, getLocale: () => 'en'
+    })
+    feature.attach()
+    const selectState = () => {
+      canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+      expect(document.querySelector<HTMLSelectElement>('[data-valve-utility-select]')!.value)
+        .toBe('retained')
+      document.querySelector<HTMLInputElement>('[data-valve-state-radio]')!.click()
+      document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!.click()
+    }
+    selectState()
+    expect(host.querySelector('[data-handle-key="3"]')?.textContent).toContain('No state / blocked')
+    expect(createOverlay).toHaveBeenLastCalledWith(['1', '2'], 'path')
+
+    pickedId = '3'
+    selectState()
+    expect(paths.map(path => path.ownerHandleKey)).toEqual(['1'])
+    expect(createOverlay).toHaveBeenLastCalledWith(['1', '2', '3', '4'], 'path')
+    expect(host.querySelector('[data-handle-key="3"]')?.textContent).toContain('Non-blocking / no source')
+
+    profile.devices[1].states = []
+    feature.refreshFlowState()
+    expect(createOverlay).toHaveBeenLastCalledWith(['1', '2'], 'path')
+    pickedId = '1'
+    selectState()
+    expect(host.querySelector('[data-handle-key="3"]')?.textContent).toContain('Invalid state / blocked')
+    const calls = createOverlay.mock.calls.length
+    feature.refreshFlowState({ recompute: false })
+    expect(host.querySelector('.valve-debug-tree-label')).toBeNull()
+    expect(createOverlay.mock.calls).toHaveLength(calls)
+    feature.dispose()
+  })
+
   beforeEach(() => {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,

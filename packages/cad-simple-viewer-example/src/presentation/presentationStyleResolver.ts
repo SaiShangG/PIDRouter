@@ -1,3 +1,4 @@
+import { resolveDeviceStateDefinition } from '../phase/phaseDeviceStateRuntime'
 import type {
   DeviceState,
   DeviceStateStyleDefinition,
@@ -9,6 +10,7 @@ import type {
 export type PresentationSource =
   | 'diagnostic'
   | 'device'
+  | 'invalid-device-state'
   | 'flow'
   | 'utility'
   | 'default'
@@ -36,19 +38,11 @@ export const normalizeHighlightStyle = (
   visible: Boolean(style.visible)
 })
 
-const resolveDeviceStyle = (
-  profile: PresentationProfile,
-  state?: DeviceState
-): HighlightStyle | undefined => {
-  if (state?.highlightStyleRefId) {
-    const referencedState = profile.devices
-      .flatMap(device => device.states)
-      .find(candidate => candidate.id === state.highlightStyleRefId)
-    return referencedState
-      ? deviceStateStyle(referencedState)
-      : profile.unknownDeviceStyle ?? undefined
-  }
-  return undefined
+const invalidDeviceStateStyle: HighlightStyle = {
+  color: 0xff9800,
+  lineWidthPx: 3,
+  opacity: 1,
+  visible: true
 }
 
 const deviceStateStyle = (
@@ -85,10 +79,10 @@ export const resolveEntityPresentation = (
       .find(candidate => candidate.id === styleRefId)
     if (state) style = deviceStateStyle(state)
   }
-  const deviceStyle = resolveDeviceStyle(profile, context.deviceState)
-  if (deviceStyle) {
-    style = deviceStyle
-    source = 'device'
+  if (context.deviceState) {
+    const definition = resolveDeviceStateDefinition(profile, context.deviceState)
+    style = definition ? deviceStateStyle(definition.state) : invalidDeviceStateStyle
+    source = definition ? 'device' : 'invalid-device-state'
   }
   if (context.diagnosticStyle) {
     style = context.diagnosticStyle

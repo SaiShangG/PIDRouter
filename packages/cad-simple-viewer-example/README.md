@@ -110,6 +110,45 @@ because they are connected to a valve or have a saved device-state record.
 Right-click state selection, brush protection, manual-highlight rendering, and
 brush debug share this rule. The flow graph itself remains unchanged.
 
+### Configured-device automatic flow rules
+
+All configured device categories (including Valve, Pump and PP) use the selected
+state's `flowBehavior` and `autoHighlightFlow`, not their graph classification:
+
+- `conducting` permits traversal and starts a route only when
+  `autoHighlightFlow` is true.
+- `blocking` stops traversal before the device and never starts a route.
+- `neutral` permits traversal but never starts a route.
+- An unselected configured device blocks. Missing, disabled or mismatched state
+  references also block, retain the original state record and report a warning.
+- Blocking/neutral presets cannot enable automatic flow in the style dialog;
+  conflicting older configuration is also prevented from starting routes at runtime.
+- A source retains its valid Utility binding. An explicit menu selection changes
+  that binding; an unavailable binding falls back to the first enabled Utility
+  by `order`. With no enabled Utility, the state still applies and an error is
+  shown, but no automatic route is generated.
+
+State changes recalculate all runtime automatic sources with these rules,
+preserving route IDs, names and priorities. Saved rule changes update only the
+currently loaded Phase after a successful style save; visual-only edits redraw
+without routing. Failed style saves retain the previously active rules.
+Other Phase snapshots remain unchanged. Loading a Phase
+restores its stored routes without implicit recalculation. Manual additions and
+exclusions are not changed by routing. Debug uses the same policies and actual
+source set, distinguishing neutral, unselected and invalid-state devices.
+
+Invalid saved device-state references never fall back to normal device or
+Utility colors. The drawing keeps its CAD appearance and adds an orange frame
+with a vector `!` marker above highlight layers. The context menu retains the
+original state key, explains that its reference is invalid, and offers only
+currently available states for explicit repair. When no states remain, it
+explains how to add one instead of exposing legacy open/close actions.
+Nonblocking warnings are emitted once per newly invalid reference in each
+Phase, not on every recalculation or return to that Phase. Repairing the state
+or restoring the original preset ID removes the marker and resets that warning
+episode. Unselected devices are not marked as invalid. No warning geometry or
+replacement state is persisted in Phase data.
+
 ### Manual highlight correction data
 
 Phase JSON separates three sources and a derived final snapshot:

@@ -95,6 +95,9 @@ export type FlowTreeNodeStatus =
   | 'missing'
   | 'equipment'
   | 'line'
+  | 'neutral'
+  | 'unselected'
+  | 'missing-state'
 
 export interface FlowDebugTreeNode {
   key: string
@@ -160,6 +163,9 @@ export interface ValveDebugPanelLabels {
   equipment: string
   truncated: string
   missing: string
+  neutral?: string
+  unselected?: string
+  missingState?: string
   collapse: string
   expand: string
   collapseBranch: string

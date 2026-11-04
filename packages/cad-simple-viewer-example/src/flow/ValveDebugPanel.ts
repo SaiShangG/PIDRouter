@@ -639,7 +639,7 @@ export class ValveDebugPanel {
 
     const icon = document.createElement('span')
     icon.className = `valve-debug-tree-icon is-${node.node.kind}`
-    if (node.status === 'closed') icon.classList.add('is-closed')
+    if (['closed', 'unselected', 'missing-state'].includes(node.status)) icon.classList.add('is-closed')
     icon.textContent = node.node.kind === 'valve' ? 'V' : node.node.kind === 'line' ? 'L' : 'E'
 
     const main = document.createElement('span')
@@ -685,6 +685,9 @@ export class ValveDebugPanel {
   }
 
   private statusLabel(status: FlowDebugTreeNode['status']) {
+    if (status === 'neutral') return this.labels.neutral ?? this.labels.equipment
+    if (status === 'unselected') return this.labels.unselected ?? this.labels.truncated
+    if (status === 'missing-state') return this.labels.missingState ?? this.labels.missing
     if (status === 'start') return this.labels.start
     if (status === 'open') return this.labels.open
     if (status === 'closed') return this.labels.truncated

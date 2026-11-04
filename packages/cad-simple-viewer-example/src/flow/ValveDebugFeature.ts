@@ -6,11 +6,16 @@ import type {
   DeviceStateStyleDefinition,
   UtilityStyleDefinition
 } from '../phase/types'
+import {
+  type DeviceFlowRuntime,
+  resolveDeviceFlowPolicy
+} from './deviceFlowRuntime'
 import { buildFlowGraphIndex, normalizeFlowHandle } from './flowGraph'
 import {
   countFlowTreeNodes,
   countFlowTreeStops,
   mergeFlowHighlightKeys,
+  traverseFlowFromDevice,
   traverseFlowFromValve
 } from './flowTraversal'
 import type {
@@ -51,6 +56,8 @@ export interface ValveDebugFeatureOptions {
   resolveConfiguredDeviceKey?(handleKey: string): string | undefined
   getConfiguredStates?(handleKey: string): readonly DeviceStateStyleDefinition[]
   getConfiguredStateKey?(handleKey: string): string | undefined
+  getConfiguredUtilityId?(handleKey: string): string | undefined
+  getFlowRuntime?(): DeviceFlowRuntime
   getUtilities?(): readonly UtilityStyleDefinition[]
   requestConfiguredStateChange?(
     handleKey: string,
@@ -103,7 +110,18 @@ const injectMenuStyles = () => {
     }
     .valve-debug-context-menu-actions[hidden],
     .valve-debug-context-menu-form[hidden],
+    .valve-debug-context-menu-state-warning[hidden],
     .valve-debug-context-menu-field[hidden] { display: none; }
+    .valve-debug-context-menu-state-warning {
+      margin: 0 0 8px;
+      padding: 8px;
+      border: 1px solid #ff9800;
+      border-radius: 4px;
+      color: #ffb74d;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
     .valve-debug-context-menu-action {
       width: 100%;
       padding: 7px 8px;
@@ -326,6 +344,9 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       equipment: 'Equipment',
       truncated: 'Truncated',
       missing: 'Missing',
+      neutral: 'Non-blocking / no source',
+      unselected: 'No state / blocked',
+      missingState: 'Invalid state / blocked',
       collapse: 'Collapse debug panel',
       expand: 'Expand debug panel',
       collapseBranch: 'Collapse branch',
@@ -351,6 +372,9 @@ const getLabels = (locale: ValveDebugLocale): ValveDebugPanelLabels =>
       equipment: '设备',
       truncated: '关闭/截断',
       missing: '缺失',
+      neutral: '不参与/不主动发起',
+      unselected: '未选状态/阻断',
+      missingState: '状态失效/阻断',
       collapse: '折叠调试面板',
       expand: '展开调试面板',
       collapseBranch: '折叠分支',
@@ -365,6 +389,7 @@ export class ValveDebugFeature {
   readonly panel: ValveDebugPanel
   readonly brushPanel: BrushDebugPanel
   private readonly states = new Map<string, ValveRuntimeState>()
+  private readonly configuredStates = new Map<string, DeviceStateStyleDefinition>()
   private readonly results = new Map<string, ReturnType<typeof traverseFlowFromValve>>()
   private readonly contextMenu: HTMLDivElement
   private readonly menuTitle: HTMLDivElement
@@ -372,6 +397,7 @@ export class ValveDebugFeature {
   private readonly openMenuAction: HTMLButtonElement
   private readonly closeMenuAction: HTMLButtonElement
   private readonly configuredForm: HTMLDivElement
+  private readonly stateWarning: HTMLDivElement
   private readonly stateSection: HTMLDivElement
   private readonly stateTitle: HTMLDivElement
   private readonly stateSwatch: HTMLSpanElement
@@ -425,6 +451,10 @@ export class ValveDebugFeature {
     })
     this.configuredForm = document.createElement('div')
     this.configuredForm.className = 'valve-debug-context-menu-form'
+    this.stateWarning = document.createElement('div')
+    this.stateWarning.className = 'valve-debug-context-menu-state-warning'
+    this.stateWarning.hidden = true
+    this.stateWarning.setAttribute('role', 'status')
     this.stateSection = document.createElement('div')
     this.stateSection.className = 'valve-debug-context-menu-state-section'
     this.stateTitle = document.createElement('div')
@@ -449,6 +479,7 @@ export class ValveDebugFeature {
     this.applyMenuAction = this.createMenuAction('open', () => this.applyConfiguredSelection())
     this.applyMenuAction.dataset.valveAction = 'apply-configured'
     this.configuredForm.append(
+      this.stateWarning,
       this.stateSection,
       this.utilityLabel,
       this.utilityEmpty,
@@ -523,6 +554,7 @@ export class ValveDebugFeature {
     this.resetBrushDebug()
     this.closeMenu()
     this.states.clear()
+    this.configuredStates.clear()
     this.results.clear()
     this.activeKey = undefined
     this.disposePathOverlay()
@@ -544,6 +576,22 @@ export class ValveDebugFeature {
       this.results.clear()
       this.disposePathOverlay()
       this.renderPanel()
+    }
+
+  }
+
+  refreshFlowState(options: { recompute?: boolean } = {}) {
+    if (this.disposed) return
+    this.closeMenu()
+    if (options.recompute === false) {
+      this.states.clear()
+      this.configuredStates.clear()
+      this.activeKey = undefined
+      this.results.clear()
+      this.disposePathOverlay()
+      this.renderPanel()
+    } else {
+      this.recomputeResults()
     }
   }
 
@@ -727,12 +775,20 @@ export class ValveDebugFeature {
     const utilities = [...(this.options.getUtilities?.() ?? [])]
       .filter(utility => utility.enabled)
       .sort((left, right) => left.order - right.order)
-    const hasConfiguredStates = configuredStates.length > 0
-    this.menuActions.hidden = hasConfiguredStates
-    this.configuredForm.hidden = !hasConfiguredStates
-    if (!hasConfiguredStates) return
+    const runtime = this.getFlowRuntime()
+    const invalidState = runtime?.policies.get(key)?.issue === 'missing-state'
+    const hasConfiguredDevice = configuredStates.length > 0 || Boolean(runtime?.policies.has(key))
+    this.menuActions.hidden = hasConfiguredDevice
+    this.configuredForm.hidden = !hasConfiguredDevice
+    this.stateWarning.hidden = !invalidState
+    if (!hasConfiguredDevice) return
 
     const locale = this.options.getLocale()
+    const originalState = this.options.getConfiguredStateKey?.(key) ??
+      this.configuredStates.get(key)?.key ?? '-'
+    this.stateWarning.textContent = locale === 'zh'
+      ? `原状态 ${originalState} 已失效，请重新选择有效状态。`
+      : `Original state ${originalState} is no longer available. Select a valid state.`
     this.stateTitle.children[1].textContent = locale === 'zh' ? '设备状态' : 'Device state'
     this.utilityLabel.children[1].textContent = locale === 'zh' ? '联通流路样式' : 'Connected flow style'
     this.applyMenuAction.textContent = locale === 'zh' ? '应用' : 'Apply'
@@ -752,9 +808,18 @@ export class ValveDebugFeature {
       label.append(input, document.createTextNode(candidate.displayName))
       return label
     }))
+    if (configuredStates.length === 0) {
+      this.stateOptions.textContent = locale === 'zh'
+        ? '没有可用状态，请先在高亮样式设置中添加设备状态。'
+        : 'No available states. Add a device state in Highlight style settings first.'
+    }
     this.utilitySelect.replaceChildren(...utilities.map(utility =>
       new Option(utility.name, utility.id)
     ))
+    const currentUtilityId = this.options.getConfiguredUtilityId?.(key)
+    if (currentUtilityId && utilities.some(utility => utility.id === currentUtilityId)) {
+      this.utilitySelect.value = currentUtilityId
+    }
     this.utilityLabel.hidden = utilities.length === 0
     this.utilityEmpty.hidden = utilities.length > 0
     this.applyMenuAction.dataset.handleKey = key
@@ -820,6 +885,7 @@ export class ValveDebugFeature {
     handleKey: string,
     state: DeviceStateStyleDefinition
   ) {
+    this.configuredStates.set(handleKey, state)
     this.states.set(
       handleKey,
       state.flowBehavior === 'blocking' ? 'closed' : 'open'
@@ -830,6 +896,22 @@ export class ValveDebugFeature {
 
   private recomputeResults() {
     this.results.clear()
+    const runtime = this.getFlowRuntime()
+    if (runtime) {
+      const keys = new Set(runtime.sourceKeys)
+      if (this.activeKey) keys.add(this.activeKey)
+      keys.forEach(key => {
+        this.results.set(key, traverseFlowFromDevice(
+          this.graph,
+          key,
+          runtime.policies,
+          runtime.sourceKeys.has(key) && Boolean(runtime.policies.get(key)?.autoHighlightFlow)
+        ))
+      })
+      this.renderHighlights()
+      this.renderPanel()
+      return
+    }
     this.states.forEach((state, key) => {
       if (state === 'open' || key === this.activeKey) {
         this.results.set(key, traverseFlowFromValve(this.graph, key, this.states))
@@ -839,13 +921,35 @@ export class ValveDebugFeature {
     this.renderPanel()
   }
 
+  private getFlowRuntime(): DeviceFlowRuntime | undefined {
+    if (this.options.getFlowRuntime) return this.options.getFlowRuntime()
+    const getConfiguredStates = this.options.getConfiguredStates
+    if (!getConfiguredStates) return undefined
+    const policies = new Map<string, ReturnType<typeof resolveDeviceFlowPolicy>>()
+    this.graph.controlModuleByPrimaryHandle.forEach((_, key) => {
+      if (this.options.resolveConfiguredDeviceKey &&
+        this.options.resolveConfiguredDeviceKey(key) !== key) return
+      const definitions = getConfiguredStates(key)
+      const selected = this.configuredStates.get(key)
+      const currentKey = this.options.getConfiguredStateKey?.(key)
+      const reference = selected?.id ??
+        definitions.find(state => state.key === currentKey)?.id
+      policies.set(key, resolveDeviceFlowPolicy(
+        definitions, reference, selected !== undefined || currentKey !== undefined
+      ))
+    })
+    return {
+      policies,
+      sourceKeys: new Set([...policies].flatMap(([key, policy]) =>
+        policy.autoHighlightFlow ? [key] : []
+      ))
+    }
+  }
+
   private renderHighlights() {
     this.disposePathOverlay()
     if (this.disposed || !this.enabled || this.options.renderPathOverlay === false) return
-    const openResults = [...this.states.entries()]
-      .filter(([, state]) => state === 'open')
-      .map(([key]) => this.results.get(key) ?? traverseFlowFromValve(this.graph, key, this.states))
-    const highlightedKeys = mergeFlowHighlightKeys(openResults)
+    const highlightedKeys = mergeFlowHighlightKeys(this.results.values())
     const objectIds = [...highlightedKeys]
       .map(key => this.options.resolveObjectId(key))
       .filter((id): id is AcDbObjectId => id != null)
@@ -854,7 +958,9 @@ export class ValveDebugFeature {
 
   private renderPanel() {
     const root = this.activeKey ? this.results.get(this.activeKey)?.root : undefined
-    const state = this.activeKey ? this.states.get(this.activeKey) ?? 'closed' : undefined
+    const state = root ? (
+      ['closed', 'unselected', 'missing-state'].includes(root.status) ? 'closed' : 'open'
+    ) : undefined
     const snapshot: ValveDebugPanelSnapshot = root
       ? {
         root,

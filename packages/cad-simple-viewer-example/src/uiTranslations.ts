@@ -3,6 +3,9 @@ import type { AppLocale } from './locale'
 type TranslationPair = readonly [zh: string, en: string]
 
 const pairs: TranslationPair[] = [
+  ['设备实体不存在，无法应用状态', 'The device entity is unavailable. Its state could not be applied.'],
+  ['设备或状态配置已失效，请重新选择', 'The device or state configuration is unavailable. Please select it again.'],
+  ['部分设备状态引用失效，相关流路已阻断', 'Some device state references are invalid. Related flows are blocked.'],
   ['仅修正高亮外观，画笔跳过阀门及可交互设备，不改变设备状态或触发自动找路。橡皮可排除错误的流路高亮。', 'Correct highlight appearance only. The brush skips valves and interactive devices without changing device states or triggering routing. The eraser can exclude incorrect flow highlights.'],
   ['部分自动流路对象不存在，记录已保留', 'Some automatic flow objects are unavailable; their records have been retained.'],
   ['将复制来源 Phase 的设备状态、自动流路和人工修正，并替换当前 Phase 的对应数据。', 'Copy device states, automatic flows and manual corrections from the source Phase, replacing the corresponding data in the current Phase.'],

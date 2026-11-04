@@ -3,23 +3,22 @@ import { Copy, Download, ListPlus, Plus, Trash2, Upload, X } from 'lucide'
 import type { FlowConnectionDocumentInput } from '../flow/types'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
+import { toPersistedPresentationProfile } from '../phase/phaseWorkspaceRepository'
 import type {
   DeviceStateStyleDefinition,
   DeviceStyleDefinition,
   HighlightStyle,
   PresentationProfile
 } from '../phase/types'
-import { toPersistedPresentationProfile } from '../phase/phaseWorkspaceRepository'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom, translateUiText } from '../uiTranslations'
-import {
-  HighlightStyleImportPreviewModal,
-  type HighlightStyleImportAnalysis,
-  type HighlightStyleImportMode
-} from './HighlightStyleImportPreviewModal'
 import { generateDefaultDeviceStyles } from './defaultDeviceStyles'
 import { parseHighlightStyleDocument, type StyleValidationError } from './highlightStyleDocument'
+import {
+  type HighlightStyleImportAnalysis,
+  type HighlightStyleImportMode,
+  HighlightStyleImportPreviewModal} from './HighlightStyleImportPreviewModal'
 
 export interface HighlightStyleDraft {
   presentationProfile: PresentationProfile
@@ -544,7 +543,9 @@ export class HighlightStyleDialog {
     })
     const autoHighlightFlow = document.createElement('input')
     autoHighlightFlow.type = 'checkbox'
+    if (state.flowBehavior !== 'conducting') state.autoHighlightFlow = false
     autoHighlightFlow.checked = state.autoHighlightFlow
+    autoHighlightFlow.disabled = state.flowBehavior !== 'conducting'
     autoHighlightFlow.setAttribute('aria-label', '自动高亮流路')
     autoHighlightFlow.addEventListener('change', () => {
       state.autoHighlightFlow = autoHighlightFlow.checked
@@ -561,6 +562,11 @@ export class HighlightStyleDialog {
     flowBehavior.value = state.flowBehavior
     flowBehavior.addEventListener('change', () => {
       state.flowBehavior = flowBehavior.value as DeviceStateStyleDefinition['flowBehavior']
+      autoHighlightFlow.disabled = state.flowBehavior !== 'conducting'
+      if (autoHighlightFlow.disabled) {
+        state.autoHighlightFlow = false
+        autoHighlightFlow.checked = false
+      }
       this.emitPreview()
     })
     const style = this.asHighlightStyle(state)

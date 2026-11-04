@@ -83,6 +83,11 @@ import { ProcessAssistantDrawingRepository } from './drawing-library/ProcessAssi
 import type { DrawingRecord } from './drawing-library/types'
 import { setupFileSidebarResize } from './fileSidebarResize'
 import {
+  calculateAutomaticFlowPaths,
+  haveFlowRulesChanged,
+  resolveDeviceFlowPolicies
+} from './flow/deviceFlowRuntime'
+import {
   buildFlowGraphIndex,
   normalizeFlowHandle,
   resolveConfiguredDeviceMatch
@@ -113,6 +118,7 @@ import {
 } from './phase/PhaseConfigImportModal'
 import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import {
+  DeviceStateWarningNotifications,
   resolveDeviceStateDefinition
 } from './phase/phaseDeviceStateRuntime'
 import {
@@ -138,6 +144,7 @@ import {
 import {
   clonePresentationProfile,
   createDefaultPresentationProfile,
+  normalizePresentationProfile,
   PhaseWorkspaceStore
 } from './phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from './phase/phaseWorkspaceStyles'
@@ -155,6 +162,7 @@ import type {
 import { WorkspaceLoading, type WorkspaceLoadingTask } from './phase/workspaceLoading'
 import { setupPhaseSidebarResize } from './phaseSidebarResize'
 import { initializeDefaultDeviceStyles, initializeProjectDeviceStyles } from './presentation/defaultDeviceStyles'
+import { buildHighlightBoundsMarkerPositions } from './presentation/highlightBoundsMarker'
 import {
   HighlightStyleDialog,
   type HighlightStyleDraft
@@ -193,7 +201,7 @@ import {
 import { injectReportWorkspaceStyles } from './report/reportWorkspaceStyles'
 import { loadToolbarPreferences, saveToolbarPreferences, type ToolbarPreferences } from './toolbarPreferences'
 import { injectConfirmationModalStyles } from './ui/confirmationModalStyles'
-import { reportMessage, type ToastTone } from './ui/Toast'
+import { reportMessage, showWarningToast, type ToastTone } from './ui/Toast'
 import { ToolbarPreferencesModal } from './ui/ToolbarPreferencesModal'
 import { injectUiReferenceThemeStyles } from './uiReferenceThemeStyles'
 import { localizeDom, translateUiText } from './uiTranslations'
@@ -452,6 +460,7 @@ class CadViewerApp {
   private openHighlightPaths = new Map<AcDbObjectId, FlowPathStatus>()
   private activeFlowPathId?: string
   private valveDeviceStates = new Map<AcDbObjectId, DeviceState>()
+  private readonly deviceStateWarningNotifications = new DeviceStateWarningNotifications()
   private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
   private readonly manualCorrections = new ManualHighlightCorrectionState()
@@ -1693,6 +1702,7 @@ class CadViewerApp {
       workspace.presentationProfile
     )
     this.phaseRepository = repository
+    if (this.activeProjectId !== projectDetails.id) this.deviceStateWarningNotifications.clear()
     this.phaseSaveState.reset([])
     this.phaseSaveTasks.clear()
     this.presentationSaveTask = undefined
@@ -1760,6 +1770,7 @@ class CadViewerApp {
     this.cancelAllBackendPhaseSaves()
     this.invalidateLoadedPhaseBinding()
     this.phaseRepository = undefined
+    this.deviceStateWarningNotifications.clear()
     this.phaseSaveState.reset([])
     this.phaseSaveTasks.clear()
     this.presentationSaveTask = undefined
@@ -2005,6 +2016,20 @@ class CadViewerApp {
         const ownerId = this.resolveObjectIdByHandleKey(handleKey)
         return ownerId ? this.valveDeviceStates.get(ownerId)?.stateKey : undefined
       },
+      getConfiguredUtilityId: handleKey => {
+        const ownerId = this.resolveObjectIdByHandleKey(handleKey)
+        return ownerId ? this.openHighlightPaths.get(ownerId)?.highlightStyleRefId : undefined
+      },
+      getFlowRuntime: () => ({
+        policies: resolveDeviceFlowPolicies(
+          flowGraphIndex,
+          this.getActivePresentationProfile(),
+          [...this.valveDeviceStates.values()]
+        ),
+        sourceKeys: new Set([...this.openHighlightPaths.values()].flatMap(path =>
+          path.ownerHandleKey ? [path.ownerHandleKey] : []
+        ))
+      }),
       getUtilities: () => this.getActivePresentationProfile().utilities,
       requestConfiguredStateChange: (handleKey, state, utilityId) =>
         this.applyConfiguredValveState(handleKey, state, utilityId),
@@ -3860,74 +3885,6 @@ class CadViewerApp {
     })
   }
 
-  private getOpenHighlightObjectIds(
-    objectId: AcDbObjectId,
-    connectedHandles: Set<number> = new Set()
-  ) {
-    const objectIds = new Set<AcDbObjectId>([objectId])
-    connectedHandles.forEach(handleId => {
-      const handleKey = normalizeFlowHandle(handleId)
-      if (handleKey === undefined) return
-      const connectedObjectId = this.resolveObjectIdByHandleKey(handleKey)
-      if (connectedObjectId) objectIds.add(connectedObjectId)
-    })
-    return objectIds
-  }
-
-  private getFlowConnectionTraversal(objectId: AcDbObjectId) {
-    const connectedHandles = new Set<number>()
-    const visitedHandleKeys = new Set<string>()
-    const pendingHandleKeys = handleKeysFromObjectId(objectId)
-      .map(normalizeFlowHandle)
-      .filter((key): key is string => key != null)
-    const rootKeys = new Set(pendingHandleKeys)
-
-    while (pendingHandleKeys.length > 0) {
-      const handleKey = pendingHandleKeys.shift()
-      if (!handleKey || visitedHandleKeys.has(handleKey)) continue
-
-      visitedHandleKeys.add(handleKey)
-      if (
-        !rootKeys.has(handleKey) &&
-        this.getFlowBoundaryBehavior(handleKey) === 'blocking'
-      ) {
-        continue
-      }
-      const handleId = Number.parseInt(handleKey, 16)
-      if (!rootKeys.has(handleKey) && Number.isFinite(handleId)) {
-        connectedHandles.add(handleId)
-      }
-      flowGraphIndex.adjacency.get(handleKey)?.forEach(nextKey => {
-        if (!visitedHandleKeys.has(nextKey)) pendingHandleKeys.push(nextKey)
-      })
-    }
-
-    return { connectedHandles }
-  }
-
-  private getFlowBoundaryBehavior(handleKey: string) {
-    if (!flowGraphIndex.valveKeys.has(handleKey)) return 'neutral' as const
-    const normalizedHandle = normalizeFlowHandle(handleKey)
-    const state = [...this.valveDeviceStates.values()].find(candidate =>
-      normalizeFlowHandle(candidate.key) === normalizedHandle
-    )
-    const configuredState = state
-      ? resolveDeviceStateDefinition(
-        this.getActivePresentationProfile(),
-        state
-      )?.state
-      : undefined
-    if (configuredState) return configuredState.flowBehavior
-    return 'blocking' as const
-  }
-
-  private isFlowBoundaryObject(objectId: AcDbObjectId) {
-    return handleKeysFromObjectId(objectId).some(handleKey => {
-      const normalized = normalizeFlowHandle(handleKey)
-      return normalized ? flowGraphIndex.valveKeys.has(normalized) : false
-    })
-  }
-
   private resolveObjectIdByHandleKey(handleKey: string) {
     const db = AcApDocManager.instance.curDocument?.database
     if (!db) return undefined
@@ -3947,6 +3904,11 @@ class CadViewerApp {
     return resolveConfiguredDeviceMatch(flowGraphIndex, handleKey, profile.devices)
   }
 
+  private getDeviceStatePresentationContext(state: DeviceState, profile: PresentationProfile) {
+    const match = this.getConfiguredDeviceMatch(state.key, profile)
+    return match ? { ...state, deviceType: match.device.name } : state
+  }
+
   private getHighlightHandleKeys(objectIds: Iterable<AcDbObjectId>) {
     return collectHighlightHandleKeys(objectIds, objectId =>
       handleKeysFromObjectId(objectId)
@@ -3959,12 +3921,17 @@ class CadViewerApp {
     utilityId: string | undefined
   ) {
     const ownerId = this.resolveObjectIdByHandleKey(handleKey)
-    if (!ownerId) return false
+    if (!ownerId) {
+      log.warn('[DeviceFlow] Device entity is unavailable:', handleKey)
+      this.showMessage('设备实体不存在，无法应用状态', 'error')
+      return false
+    }
     const device = this.getConfiguredDeviceMatch(handleKey)?.device
-    if (!device) return false
-    const utility = this.getActivePresentationProfile().utilities.find(
-      candidate => candidate.id === utilityId && candidate.enabled
-    )
+    if (!device || !device.states.some(candidate => candidate.id === state.id && candidate.enabled)) {
+      log.warn('[DeviceFlow] Device or selected state is unavailable:', handleKey, state.id)
+      this.showMessage('设备或状态配置已失效，请重新选择', 'error')
+      return false
+    }
     this.removeOpenHighlightRootsForIds(new Set([ownerId]))
     this.valveDeviceStates.set(ownerId, {
       key: handleKey,
@@ -3972,38 +3939,9 @@ class CadViewerApp {
       deviceType: device.name,
       highlightStyleRefId: state.id
     })
-    this.openHighlightGroups.delete(ownerId)
-    this.openHighlightConnections.delete(ownerId)
-    this.openHighlightPaths.delete(ownerId)
-
-    if (state.flowBehavior === 'conducting' && state.autoHighlightFlow && utility) {
-      const traversal = this.getFlowConnectionTraversal(ownerId)
-      const highlightedIds = this.getOpenHighlightObjectIds(
-        ownerId,
-        traversal.connectedHandles
-      )
-      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-      this.openHighlightGroups.set(ownerId, highlightedIds)
-      this.openHighlightPaths.set(ownerId, {
-        id: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}-${handleKey}`,
-        name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
-        ownerHandleKey: handleKey,
-        handleKeys: this.getHighlightHandleKeys(highlightedIds),
-        highlightStyleRefId: utility.id
-      })
-    } else if (
-      state.flowBehavior === 'conducting' &&
-      state.autoHighlightFlow &&
-      !utility
-    ) {
-      this.showMessage(
-        this.appLocale === 'zh'
-          ? '没有已启用的 Utility，已应用设备状态但未创建流路高亮'
-          : 'No enabled Utility. The device state was applied without a flow highlight.',
-        'error'
-      )
-    }
-    this.recomputeOpenHighlightGroups()
+    this.recomputeOpenHighlightGroups(
+      utilityId ? new Map([[handleKey, utilityId]]) : undefined
+    )
     this.captureLoadedPhaseState()
     return true
   }
@@ -4026,27 +3964,66 @@ class CadViewerApp {
     return removedHighlight
   }
 
-  private recomputeOpenHighlightGroups() {
-    ;[...this.openHighlightGroups.keys()].forEach(ownerId => {
-      const flowPath = this.openHighlightPaths.get(ownerId)
-      if (!flowPath?.ownerHandleKey) return
-      const traversal = this.isFlowBoundaryObject(ownerId)
-        ? this.getFlowConnectionTraversal(ownerId)
-        : { connectedHandles: new Set<number>() }
-      this.openHighlightConnections.set(ownerId, traversal.connectedHandles)
-      const highlightedIds = this.getOpenHighlightObjectIds(
-        ownerId,
-        traversal.connectedHandles
-      )
-      this.openHighlightGroups.set(ownerId, highlightedIds)
-      if (flowPath) {
-        this.openHighlightPaths.set(ownerId, {
-          ...flowPath,
-          handleKeys: this.getHighlightHandleKeys(highlightedIds)
-        })
+  private recomputeOpenHighlightGroups(utilitySelections?: ReadonlyMap<string, string>) {
+    const profile = this.getActivePresentationProfile()
+    const result = calculateAutomaticFlowPaths(
+      flowGraphIndex,
+      profile,
+      [...this.valveDeviceStates.values()],
+      [...this.openHighlightPaths.values()],
+      {
+        idPrefix: `flow-${this.loadedPhase?.phaseId ?? 'runtime'}`,
+        name: this.appLocale === 'zh' ? '连通流路' : 'Connected flow',
+        utilitySelections
       }
+    )
+    this.openHighlightGroups.clear()
+    this.openHighlightConnections.clear()
+    this.openHighlightPaths.clear()
+    result.paths.forEach(path => {
+      const ids = new Set(path.handleKeys.flatMap(key => {
+        const id = this.resolveObjectIdByHandleKey(key)
+        return id === undefined ? [] : [id]
+      }))
+      const ownerId = path.ownerHandleKey
+        ? this.resolveObjectIdByHandleKey(path.ownerHandleKey)
+        : ids.values().next().value
+      if (ownerId === undefined) {
+        log.warn('[DeviceFlow] Flow owner is unavailable; saved data is retained:', path.id)
+        return
+      }
+      this.openHighlightGroups.set(ownerId, ids)
+      this.openHighlightPaths.set(ownerId, path)
+      this.openHighlightConnections.set(ownerId, new Set(
+        path.handleKeys.filter(key => key !== path.ownerHandleKey)
+          .map(key => Number.parseInt(key, 16))
+      ))
     })
+    result.diagnostics.forEach(diagnostic => log.warn('[DeviceFlow]', diagnostic))
+    this.notifyInvalidDeviceStates(profile)
+    if (result.diagnostics.some(item => item.kind === 'missing-utility')) {
+      this.showMessage(
+        this.appLocale === 'zh'
+          ? '没有已启用的 Utility，已应用设备状态但未创建流路高亮'
+          : 'No enabled Utility. The device state was applied without a flow highlight.',
+        'error'
+      )
+    }
     this.syncOpenHighlightRoots()
+    this.valveDebugFeature?.refreshFlowState()
+  }
+
+  private notifyInvalidDeviceStates(
+    profile = this.getActivePresentationProfile(),
+    deviceStates: readonly DeviceState[] = [...this.valveDeviceStates.values()],
+    phaseId = this.loadedPhase?.phaseId ?? 'runtime'
+  ) {
+    if (this.deviceStateWarningNotifications.update(
+      `${this.activeProjectId ?? 'local'}:${phaseId}`, profile,
+      deviceStates.map(state => this.getDeviceStatePresentationContext(state, profile))
+    )) {
+      showWarningToast(translateUiText(this.appLocale, '部分设备状态引用失效，相关流路已阻断'))
+    }
   }
 
   private syncOpenHighlightRoots(affectedIds?: ReadonlySet<AcDbObjectId>) {
@@ -4099,14 +4076,18 @@ class CadViewerApp {
       desiredLayers.forEach(layer => {
         let root = roots.get(layer.id)
         if (!root) {
-          const createdRoot = layout.createEntityPreviewRoot([id], {
-            missingEntity: 'skip'
-          }) as PreviewRoot | null
+          const createdRoot = layer.kind === 'device-warning'
+            ? this.createHighlightBoundsFrame(id, layer.style, true)
+            : layout.createEntityPreviewRoot([id], {
+              missingEntity: 'skip'
+            }) as PreviewRoot | null
           if (!createdRoot) return
 
           root = createdRoot
           root.name = `SelectionOpenHighlight:${layer.id}`
-          upgradePreviewWideLines(root, layer.style, view.width, view.height)
+          if (layer.kind !== 'device-warning') {
+            upgradePreviewWideLines(root, layer.style, view.width, view.height)
+          }
             ; (layout.internalObject as LayoutObjectHost).add(root)
           roots.set(layer.id, root)
           changedHighlight = true
@@ -4142,31 +4123,20 @@ class CadViewerApp {
 
   private createHighlightBoundsFrame(
     objectId: AcDbObjectId,
-    style: ResolvedEntityPresentation
+    style: ResolvedEntityPresentation,
+    warning = false
   ): PreviewRoot | null {
     const view = AcApDocManager.instance.curView
     const bounds = view.cadScene.activeLayout?.computeEntityPreviewBounds2d([objectId], 1)
     if (!bounds || ![
       bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y
-    ].every(Number.isFinite)) {
+    ].every(Number.isFinite) ||
+      bounds.max.x < bounds.min.x || bounds.max.y < bounds.min.y) {
       log.warn('[ManualHighlight] Unable to create device bounds marker:', objectId)
       return null
     }
-    const padding = Math.max(
-      Math.max(bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y) * 0.06,
-      1
-    )
-    const minX = bounds.min.x - padding
-    const minY = bounds.min.y - padding
-    const maxX = bounds.max.x + padding
-    const maxY = bounds.max.y + padding
     const geometry = new LineSegmentsGeometry()
-    geometry.setPositions([
-      minX, minY, 0, maxX, minY, 0,
-      maxX, minY, 0, maxX, maxY, 0,
-      maxX, maxY, 0, minX, maxY, 0,
-      minX, maxY, 0, minX, minY, 0
-    ])
+    geometry.setPositions(buildHighlightBoundsMarkerPositions(bounds, warning))
     const material = new LineMaterial({
       color: style.color,
       linewidth: style.lineWidthPx,
@@ -4239,6 +4209,7 @@ class CadViewerApp {
   private async savePresentationProfile(profile: PresentationProfile) {
     const projectId = this.activeProjectId
     const repository = this.phaseRepository
+    const loadedPhase = this.loadedPhase
     this.phaseSaveState.beginStyles()
     let failed = false
     try {
@@ -4246,16 +4217,8 @@ class CadViewerApp {
       if (!profile.defaultStyleSeed || profile.defaultStyleSeed.status === 'pending') {
         profile.defaultStyleSeed = { status: 'configured' }
       }
-      this.phaseStore.updatePresentationProfile(profile)
-      const normalizedProfile = this.phaseStore.snapshot().presentationProfile
-      if (this.activeProjectId !== undefined) {
-        this.projectPresentationProfiles.set(
-          this.activeProjectId,
-          clonePresentationProfile(normalizedProfile)
-        )
-      }
-      this.phaseStore.persist()
-      if (this.activeProjectId !== undefined) {
+      const normalizedProfile = normalizePresentationProfile(profile)
+      if (projectId !== undefined) {
         const presentationProfile = toPersistedPresentationProfile(
           normalizedProfile
         )
@@ -4267,14 +4230,34 @@ class CadViewerApp {
         this.syncPhaseContextBar()
         const previous = this.presentationSaveTask ?? Promise.resolve()
         const task = previous.catch(() => undefined).then(() =>
-          this.processAssistantProjectApi.saveStyle(projectId!, jsonData)
+          this.processAssistantProjectApi.saveStyle(projectId, jsonData)
         )
         this.presentationSaveTask = task
         await task
         if (this.presentationSaveTask === task) this.presentationSaveTask = undefined
-        if (this.phaseRepository === repository) this.phaseSaveState.acceptStyles(presentationProfile)
+        if (projectId === this.activeProjectId && this.phaseRepository === repository) {
+          this.phaseSaveState.acceptStyles(presentationProfile)
+        }
       }
-      this.syncOpenHighlightRoots()
+      if (projectId !== this.activeProjectId || repository !== this.phaseRepository) return
+      const previousProfile = this.getActivePresentationProfile()
+      this.phaseStore.updatePresentationProfile(normalizedProfile)
+      if (projectId !== undefined) {
+        this.projectPresentationProfiles.set(
+          projectId,
+          clonePresentationProfile(normalizedProfile)
+        )
+      }
+      this.phaseStore.persist()
+      if (loadedPhase && loadedPhase === this.loadedPhase &&
+        haveFlowRulesChanged(previousProfile, normalizedProfile)) {
+        this.recomputeOpenHighlightGroups()
+        this.captureLoadedPhaseState()
+      } else {
+        this.syncOpenHighlightRoots()
+        this.notifyInvalidDeviceStates(normalizedProfile)
+        this.valveDebugFeature?.refreshFlowState()
+      }
       this.phasePanel?.render()
       this.showMessage('高亮样式已保存', 'success')
     } catch (error) {
@@ -4404,7 +4387,10 @@ class CadViewerApp {
   ): FlowHighlightLayer[] {
     const profile =
       draft?.presentationProfile ?? this.getActivePresentationProfile()
-    const deviceState = this.valveDeviceStates.get(objectId)
+    const savedDeviceState = this.valveDeviceStates.get(objectId)
+    const deviceState = savedDeviceState
+      ? this.getDeviceStatePresentationContext(savedDeviceState, profile)
+      : undefined
     const handleKey = this.getManualHighlightHandleKey(objectId)
     return resolveFlowHighlightLayers(
       profile,
@@ -4628,13 +4614,15 @@ class CadViewerApp {
       styleWarnings.forEach(warning => {
         log.warn('[PhasePidOverlay] Missing style reference:', warning)
       })
-      this.showMessage(
-        '部分高亮样式引用不存在，已使用默认样式。',
-        'warning'
-      )
+      if (styleWarnings.some(warning =>
+        warning.kind === 'missing-flow-style' || warning.kind === 'missing-manual-style')) {
+        this.showMessage(
+          '部分高亮样式引用不存在，已使用默认样式。',
+          'warning'
+        )
+      }
     }
 
-    const restoredValveKeys = new Set<string>()
     Object.values(phase.flowState.deviceStates ?? {}).forEach(deviceState => {
       log.info('[PhasePidOverlay] Looking for valve:', {
         phaseId,
@@ -4655,7 +4643,7 @@ class CadViewerApp {
       }
       const configuredState = resolveDeviceStateDefinition(
         state.presentationProfile,
-        deviceState
+        this.getDeviceStatePresentationContext(deviceState, state.presentationProfile)
       )?.state
       if (!configuredState && deviceState.deviceType && deviceState.stateKey) {
         log.warn('[PhasePidOverlay] Unable to resolve device state:', {
@@ -4674,9 +4662,6 @@ class CadViewerApp {
         colorValue: configuredState?.color
       })
       this.valveDeviceStates.set(ownerId, { ...deviceState })
-      if (configuredState?.flowBehavior === 'conducting') {
-        restoredValveKeys.add(deviceState.key)
-      }
     })
     this.activeFlowPathId = phase.flowState.activeFlowPathId
     const missingAutomaticHandles = new Set<string>()
@@ -4718,13 +4703,16 @@ class CadViewerApp {
       )
     }
     this.syncOpenHighlightRoots()
-    this.valveDebugFeature?.restoreOpenStates([...restoredValveKeys], { recompute: false })
+    this.valveDebugFeature?.refreshFlowState({ recompute: false })
     this.restoreTextNotes(phaseId, phase.textNotes ?? [])
     this.loadedPhase = {
       processId,
       sequenceId,
       phaseId
     }
+    this.notifyInvalidDeviceStates(
+      state.presentationProfile, Object.values(phase.flowState.deviceStates ?? {}), phaseId
+    )
     this.loadedDrawingAssetId =
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
     document.title = `${phase.drawing.kind === 'assigned'

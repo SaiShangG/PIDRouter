@@ -32,7 +32,7 @@ describe('presentationStyleResolver', () => {
         flowPath,
         deviceState: { key: '1a', stateKey: 'CLOSED', deviceType: 'VALVE', highlightStyleRefId: 'closed-style' }
       })
-    ).toMatchObject({ color: 0x112233, source: 'utility' })
+    ).toMatchObject({ color: 0xff9800, source: 'invalid-device-state' })
     profile.devices.push({
       id: 'VALVE',
       name: 'VALVE',
@@ -202,7 +202,7 @@ describe('presentationStyleResolver', () => {
     })).toMatchObject({ color: 0x00cc66, source: 'device' })
   })
 
-  it('uses the default unknown-device style when a state style is missing', () => {
+  it('uses an explicit warning instead of default or unknown-device colors for an invalid state', () => {
     const profile = createDefaultPresentationProfile()
     profile.unknownDeviceStyle = {
       color: 0xff00ff,
@@ -225,10 +225,10 @@ describe('presentationStyleResolver', () => {
         highlightStyleRefId: 'missing-style'
       }
     })).toMatchObject({
-      color: 0xff00ff,
-      lineWidthPx: 5,
-      opacity: 0.7,
-      source: 'device'
+      color: 0xff9800,
+      lineWidthPx: 3,
+      opacity: 1,
+      source: 'invalid-device-state'
     })
   })
 })

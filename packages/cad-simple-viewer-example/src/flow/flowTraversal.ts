@@ -1,3 +1,5 @@
+import type { FlowBehavior } from '../phase/types'
+import type { DeviceFlowPolicy } from './deviceFlowRuntime'
 import type {
   FlowDebugTreeNode,
   FlowGraphIndex,
@@ -6,7 +8,6 @@ import type {
   ValveRuntimeState,
   ValveRuntimeStateInput
 } from './types'
-import type { FlowBehavior } from '../phase/types'
 
 type FlowBoundaryBehaviorInput = ReadonlyMap<string, FlowBehavior>
 
@@ -33,27 +34,27 @@ const valveState = (
   return states.has(key) ? 'open' : 'closed'
 }
 
-/** Traverses one valve through the undirected Document graph. */
-export const traverseFlowFromValve = (
+/** Traverses a configured source using the same policies as automatic highlighting. */
+export const traverseFlowFromDevice = (
   graph: FlowGraphIndex,
   startKey: string,
-  valveStates: ValveRuntimeStateInput,
-  boundaryBehaviors?: FlowBoundaryBehaviorInput
+  policies: ReadonlyMap<string, DeviceFlowPolicy>,
+  sourceEnabled = policies.get(startKey)?.autoHighlightFlow ?? false
 ): FlowTraversalResult => {
   const start = graph.nodes.get(startKey) ?? {
     key: startKey,
     handle: Number.parseInt(startKey, 16),
-    kind: 'valve' as const,
+    kind: 'equipment' as const,
     label: startKey,
     missingEntity: true
   }
   const diagnostics: string[] = []
   if (!graph.nodes.has(startKey)) diagnostics.push(`Missing graph node ${startKey}`)
 
-  const startBehavior = boundaryBehaviors?.get(startKey)
-  const startState = startBehavior
-    ? startBehavior === 'blocking' ? 'closed' : 'open'
-    : valveState(valveStates, startKey)
+  const startPolicy = policies.get(startKey)
+  const startState = startPolicy?.flowBehavior === 'blocking' ? 'closed' : 'open'
+  const canStart = sourceEnabled &&
+    startPolicy?.flowBehavior === 'conducting' && startPolicy.autoHighlightFlow
   const startNeighbors = graph.adjacency.get(startKey) ?? []
   const diagnosedMissing = new Set<string>()
   if (start.missingEntity) {
@@ -66,7 +67,9 @@ export const traverseFlowFromValve = (
   const root: FlowDebugTreeNode = {
     key: startKey,
     node: start,
-    status: nodeStatus(start, startState, true),
+    status: startPolicy?.issue ?? (
+      startPolicy?.flowBehavior === 'neutral' ? 'neutral' : nodeStatus(start, startState, true)
+    ),
     depth: 0,
     children: []
   }
@@ -75,14 +78,14 @@ export const traverseFlowFromValve = (
   const highlighted = new Set<string>()
   const stoppedValves = new Set<string>()
 
-  if (startState === 'open') {
+  if (canStart) {
     highlighted.add(startKey)
-  } else {
+  } else if (startState === 'closed') {
     stoppedValves.add(startKey)
   }
 
   const queue: Array<{ key: string; tree: FlowDebugTreeNode }> = []
-  if (startState === 'open') queue.push({ key: startKey, tree: root })
+  if (canStart) queue.push({ key: startKey, tree: root })
 
   while (queue.length > 0) {
     const current = queue.shift()!
@@ -101,13 +104,9 @@ export const traverseFlowFromValve = (
         diagnostics.push(`Missing entity ${neighborKey}`)
         diagnosedMissing.add(neighborKey)
       }
-      const behavior = neighbor.kind === 'valve'
-        ? boundaryBehaviors?.get(neighborKey)
-        : undefined
-      const state = neighbor.kind === 'valve'
-        ? behavior
-          ? behavior === 'blocking' ? 'closed' : 'open'
-          : valveState(valveStates, neighborKey)
+      const policy = policies.get(neighborKey)
+      const state = policy
+        ? policy.flowBehavior === 'blocking' ? 'closed' : 'open'
         : undefined
 
       // Keep cycle/convergence detection internally, but do not add duplicate
@@ -118,13 +117,16 @@ export const traverseFlowFromValve = (
       const child: FlowDebugTreeNode = {
         key: neighborKey,
         node: neighbor,
-        status: nodeStatus(neighbor, state, false),
+        status: policy?.issue ?? (
+          policy?.flowBehavior === 'neutral' ? 'neutral' :
+            state ? state : nodeStatus(neighbor, state, false)
+        ),
         depth: current.tree.depth + 1,
         children: []
       }
       current.tree.children.push(child)
 
-      if (neighbor.kind === 'valve' && state === 'closed') {
+      if (state === 'closed') {
         stoppedValves.add(neighborKey)
         continue
       }
@@ -144,6 +146,30 @@ export const traverseFlowFromValve = (
   }
 }
 
+/** Compatibility adapter for callers that supply legacy open/closed valve states. */
+export const traverseFlowFromValve = (
+  graph: FlowGraphIndex,
+  startKey: string,
+  valveStates: ValveRuntimeStateInput,
+  boundaryBehaviors?: FlowBoundaryBehaviorInput
+): FlowTraversalResult => {
+  const policies = new Map<string, DeviceFlowPolicy>()
+  graph.valveKeys.forEach(key => {
+    const open = valveState(valveStates, key) === 'open'
+    policies.set(key, {
+      flowBehavior: open ? 'conducting' : 'blocking',
+      autoHighlightFlow: open
+    })
+  })
+  boundaryBehaviors?.forEach((flowBehavior, key) => {
+    policies.set(key, {
+      flowBehavior,
+      autoHighlightFlow: flowBehavior !== 'blocking'
+    })
+  })
+  return traverseFlowFromDevice(graph, startKey, policies)
+}
+
 export const mergeFlowHighlightKeys = (
   results: Iterable<FlowTraversalResult>
 ) => {
@@ -156,5 +182,5 @@ export const countFlowTreeNodes = (root: FlowDebugTreeNode): number =>
   1 + root.children.reduce((count, child) => count + countFlowTreeNodes(child), 0)
 
 export const countFlowTreeStops = (root: FlowDebugTreeNode): number =>
-  (root.status === 'closed' ? 1 : 0) +
+  (['closed', 'unselected', 'missing-state'].includes(root.status) ? 1 : 0) +
   root.children.reduce((count, child) => count + countFlowTreeStops(child), 0)
