@@ -741,7 +741,7 @@ export class PhaseWorkspacePanel {
           if (!selected) return
           const confirmed = await this.phaseDeleteConfirmation.confirm({
             title: '替换 Phase？',
-            message: `${translateUiText(this.getLocale(), '目标 Phase')} ${String(selected.number).padStart(2, '0')} · ${selected.name}：${translateUiText(this.getLocale(), '名称和内容将被来源 Phase 替换，编号和 ID 保持不变。原有内容无法撤销。')}`,
+            message: `${translateUiText(this.getLocale(), '目标 Phase')} ${String(selected.number).padStart(2, '0')} · ${selected.name}：${translateUiText(this.getLocale(), '仅内容将被来源 Phase 替换，名称、编号和 ID 保持不变。原有内容无法撤销。')}`,
             confirmLabel: '确认替换 Phase',
             tone: 'danger'
           })

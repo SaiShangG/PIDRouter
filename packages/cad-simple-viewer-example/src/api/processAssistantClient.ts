@@ -73,6 +73,7 @@ export class ProcessAssistantClient {
     let response: Response
     try {
       response = await this.fetchImpl(url, {
+        ...(method === 'GET' ? { cache: 'no-store' as const } : {}),
         ...requestInit,
         method,
         headers,

@@ -920,6 +920,7 @@ export class PhaseWorkspaceStore {
       ...clonePhase(source),
       id: target.id,
       number: target.number,
+      name: target.name,
       sourcePhaseId: source.id,
       createdAt: target.createdAt,
       updatedAt: timestamp
@@ -1005,7 +1006,9 @@ export class PhaseWorkspaceStore {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     const previousAssetId =
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
-    if (previousAssetId !== drawing.id) phase.manualCorrections = undefined
+    phase.flowState = { flowPaths: [] }
+    phase.manualCorrections = undefined
+    phase.sourcePhaseId = undefined
     this.state.drawingAssets[drawing.id] = { ...drawing }
     phase.drawing = {
       kind: 'assigned',

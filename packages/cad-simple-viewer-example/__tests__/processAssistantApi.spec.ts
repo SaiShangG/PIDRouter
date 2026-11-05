@@ -17,6 +17,25 @@ const createClient = (fetchMock: jest.MockedFunction<typeof fetch>) =>
   })
 
 describe('ProcessAssistantClient', () => {
+  it('bypasses cached workspace data on repeated GET requests', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response('[{"id":1,"name":"Old Phase"}]', {
+        headers: { 'Content-Type': 'application/json' }
+      }))
+      .mockResolvedValueOnce(new Response('[{"id":2,"name":"Imported Phase"}]', {
+        headers: { 'Content-Type': 'application/json' }
+      })) as jest.MockedFunction<typeof fetch>
+    const client = createClient(fetchMock)
+
+    await expect(client.request('GET', '/api/v1/Phase?operationId=10'))
+      .resolves.toEqual([{ id: 1, name: 'Old Phase' }])
+    await expect(client.request('GET', '/api/v1/Phase?operationId=10'))
+      .resolves.toEqual([{ id: 2, name: 'Imported Phase' }])
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).toMatchObject({ method: 'GET', cache: 'no-store' })
+    }
+  })
+
   it('sends requests directly to the configured target server', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
       new Response('[]', { headers: { 'Content-Type': 'application/json' } })
@@ -182,6 +201,51 @@ describe('ProcessAssistant endpoint services', () => {
     expect(body.get('Name')).toBe('Configuration import')
     expect(body.get('SkillName')).toBe('procedure-configuration')
     expect(body.get('JsonArgs')).toBe('{}')
+  })
+
+  it('preserves Chinese filenames and contents through multipart encoding', async () => {
+    const files = [
+      new File(['first workbook'], '\u5de5\u827a\u914d\u7f6e.xlsx'),
+      new File(['second workbook'], '\u9636\u6bb5\u914d\u7f6e.xls'),
+      new File(['third workbook'], 'Phase \u914d\u7f6e\uff08\u6e05\u6d17\uff09.XLSX')
+    ]
+    const name = files.map(file => file.name).join(', ')
+    const fetchMock = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        message: null,
+        result: null
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    ) as jest.MockedFunction<typeof fetch>
+    const general = new ProcessAssistantGeneralApi(createClient(fetchMock))
+
+    await general.run({
+      files,
+      projectId: 10,
+      name,
+      skillName: 'procedure-configuration'
+    })
+
+    const [url, options] = fetchMock.mock.calls[0]
+    const request = new Request(url, options)
+    expect(request.headers.get('Content-Type')).toMatch(
+      /^multipart\/form-data; boundary=/
+    )
+    const decoded = await request.formData()
+    const uploaded = decoded.getAll('files')
+    expect(uploaded).toHaveLength(files.length)
+    for (const [index, file] of files.entries()) {
+      const received = uploaded[index]
+      if (typeof received === 'string') {
+        throw new Error('Expected an uploaded file, not a text field')
+      }
+      expect(received.name).toBe(file.name)
+      expect(await received.arrayBuffer()).toEqual(await file.arrayBuffer())
+    }
+    expect(decoded.get('Name')).toBe(name)
+    expect(decoded.get('SkillName')).toBe('procedure-configuration')
   })
 
   it('uses the direct skill export endpoints', async () => {

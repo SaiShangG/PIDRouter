@@ -213,7 +213,7 @@ const pairs: TranslationPair[] = [
   ['来源 Phase', 'Source Phase'], ['新 Phase 编号', 'New Phase number'],
   ['复制方式', 'Copy mode'], ['创建新 Phase', 'Create new Phase'], ['替换现有 Phase', 'Replace existing Phase'],
   ['目标 Phase', 'Target Phase'], ['替换 Phase？', 'Replace Phase?'], ['确认替换 Phase', 'Replace Phase'],
-  ['名称和内容将被来源 Phase 替换，编号和 ID 保持不变。原有内容无法撤销。', 'The name and content will be copied from the source Phase. The number and ID will remain unchanged. The previous content cannot be restored.'],
+  ['仅内容将被来源 Phase 替换，名称、编号和 ID 保持不变。原有内容无法撤销。', 'Only the content will be copied from the source Phase. The name, number and ID will remain unchanged. The previous content cannot be restored.'],
   ['Phase 已替换', 'Phase replaced'],
   ['新 Phase 名称', 'New Phase name'], ['复制', 'Copy'], ['删除 Phase', 'Delete Phase'],
   ['修改阶段名称', 'Rename Phase'], ['重命名图纸', 'Rename drawing'], ['更换图纸', 'Replace drawing'],

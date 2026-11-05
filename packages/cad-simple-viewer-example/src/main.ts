@@ -3071,10 +3071,9 @@ class CadViewerApp {
             .find(sequence => sequence.id === request.targetSequenceId)
           const targetIndex = targetSequence?.phases.findIndex(phase => phase.id === request.targetPhaseId) ?? -1
           if (targetIndex < 0) throw new Error('Target Phase was not found')
-          await this.phaseRepository.updatePhase(
+          await this.phaseRepository.updatePhaseContent(
             request.targetSequenceId,
-            replacement,
-            targetIndex + 1
+            replacement
           )
           if (wasLoaded) this.invalidateLoadedPhaseBinding()
           this.phaseStore.replacePhase(request.processId, request.targetSequenceId, replacement)

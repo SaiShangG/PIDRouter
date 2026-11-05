@@ -348,6 +348,19 @@ export class PhaseWorkspaceRepository {
     return this.writePhase(sequenceId, phase, orderIndex, signal)
   }
 
+  async updatePhaseContent(
+    sequenceId: string,
+    phase: PhaseSnapshot,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const current = await this.options.phases.get(
+      this.requireBackendId(phase.id, 'Phase'),
+      signal
+    )
+    const orderIndex = current.orderIndex ?? current.index ?? current.id ?? 0
+    await this.writePhase(sequenceId, phase, orderIndex, signal)
+  }
+
   private writePhase(
     sequenceId: string,
     phase: PhaseSnapshot,

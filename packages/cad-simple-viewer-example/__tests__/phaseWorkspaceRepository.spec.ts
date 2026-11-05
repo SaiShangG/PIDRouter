@@ -3,6 +3,49 @@ import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
+  it.each([30, 0, undefined])('preserves backend Order %s when replacing Phase content', async orderIndex => {
+    const records = [
+      { id: 20, index: 7000, orderIndex: 10, name: 'Source' },
+      { id: 21, index: 7005, orderIndex: 20, name: 'Other' },
+      { id: 22, index: 7011, orderIndex, name: 'Target' }
+    ].map(phase => ({
+      ...phase,
+      jsonData: JSON.stringify({
+        Index: phase.index, OrderId: phase.orderIndex ?? phase.index, Name: phase.name,
+        Comment: null, autoFlowPaths: [], flowPaths: [], deviceStates: null, textNotes: []
+      })
+    }))
+    const phases = {
+      list: jest.fn().mockImplementation(async () => records),
+      get: jest.fn().mockImplementation(async (id: number) => records.find(phase => phase.id === id)),
+      create: jest.fn(),
+      update: jest.fn().mockImplementation(async (id: number, phase) => {
+        records[records.findIndex(record => record.id === id)] = phase
+      }),
+      delete: jest.fn()
+    }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '', projectId: 1,
+      files: { list: jest.fn().mockResolvedValue([]), upload: jest.fn() },
+      procedures: { list: jest.fn().mockResolvedValue([{ id: 1, name: 'Process' }]), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      operations: { list: jest.fn().mockResolvedValue([{ id: 10, name: 'Sequence' }]), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      phases
+    })
+    const before = await repository.load()
+    const sequence = before.processes[0].sequences[0]
+    const target = sequence.phases.find(phase => phase.id === '22')!
+    await repository.updatePhaseContent('10', { ...target, name: 'Source' })
+
+    expect(phases.get).toHaveBeenCalledWith(22, undefined)
+    expect(phases.update).toHaveBeenCalledTimes(1)
+    const payload = phases.update.mock.calls[0][1]
+    expect(payload).toMatchObject({ id: 22, index: 7011, orderIndex: orderIndex ?? 7011, name: 'Source' })
+    expect(JSON.parse(payload.jsonData).OrderId).toBe(orderIndex ?? 7011)
+    const after = await repository.load()
+    expect(after.processes[0].sequences[0].phases.map(phase => phase.id))
+      .toEqual(sequence.phases.map(phase => phase.id))
+  })
+
   it('round-trips Tank ownership through backend Phase JSON', async () => {
     const phases = {
       list: jest.fn(), get: jest.fn(), create: jest.fn(),

@@ -39,6 +39,51 @@ const createProcessContext = (store: PhaseWorkspaceStore) => {
 }
 
 describe('PhaseWorkspaceStore', () => {
+  it.each(['drawing-1', 'drawing-2'])('clears highlights when binding a plain drawing %s', drawingId => {
+    const store = createStore()
+    const { process, sequence } = createProcessContext(store)
+    const source = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1, name: 'Source',
+      source: { kind: 'new', drawing, displayName: 'PID' }
+    })
+    store.updatePhaseState(process.id, sequence.id, source.id, {
+      flowState: {
+        ...flowState(['A']),
+        activeFlowPathId: 'flow-1',
+        deviceStates: {
+          A: { key: 'A', stateKey: 'OPEN', deviceType: 'VALVE', highlightStyleRefId: 'water' }
+        }
+      },
+      manualCorrections: {
+        additions: [{ handleKey: 'B', highlightStyleRefId: 'water' }], exclusions: ['C']
+      },
+      textNotes: []
+    })
+    const target = store.copyPhase(process.id, sequence.id, source.id, sequence.id, 2, 'Target')
+
+    store.associateDrawing(process.id, sequence.id, target.id, { ...drawing, id: drawingId }, 'Plain PID')
+
+    const phases = store.snapshot().processes[0].sequences[0].phases
+    expect(phases[1]).toMatchObject({
+      id: target.id, number: target.number, name: target.name,
+      drawing: { kind: 'assigned', assetId: drawingId, displayName: 'Plain PID' },
+      flowState: { flowPaths: [] }, textNotes: []
+    })
+    expect(phases[1].flowState).toEqual({ flowPaths: [] })
+    expect(phases[1].manualCorrections).toBeUndefined()
+    expect(phases[1].sourcePhaseId).toBeUndefined()
+    expect(phases[0].flowState.deviceStates?.A.stateKey).toBe('OPEN')
+    expect(phases[0].manualCorrections?.additions).toHaveLength(1)
+
+    const restored = new PhaseWorkspaceStore(store.snapshot()).snapshot()
+    expect(restored.processes[0].sequences[0].phases[1].flowState).toEqual({ flowPaths: [] })
+    expect(restored.processes[0].sequences[0].phases[1].manualCorrections).toBeUndefined()
+    store.associateMarkedPhase(process.id, sequence.id, target.id, process.id, sequence.id, source.id)
+    const marked = store.snapshot().processes[0].sequences[0].phases[1]
+    expect(marked.flowState).toEqual(phases[0].flowState)
+    expect(marked.manualCorrections).toEqual(phases[0].manualCorrections)
+  })
+
   it('discards obsolete edit modes while retaining corrections through copying and persistence', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)
@@ -298,7 +343,7 @@ describe('PhaseWorkspaceStore', () => {
     ).toThrow('Phase 3 already exists')
   })
 
-  it('replaces Phase content and name while retaining the target ID and number', () => {
+  it('replaces Phase content while retaining the target ID, number and name', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)
     const source = store.createPhase({
@@ -326,11 +371,13 @@ describe('PhaseWorkspaceStore', () => {
     expect(replacement).toMatchObject({
       id: target.id,
       number: target.number,
-      name: source.name,
+      name: target.name,
       drawing: source.drawing,
       sourcePhaseId: source.id,
       createdAt: target.createdAt
     })
+    expect(store.snapshot().processes[0].sequences[0].phases[1].name).toBe(target.name)
+    expect(replacement.flowState).toEqual(store.snapshot().processes[0].sequences[0].phases[0].flowState)
     expect(store.snapshot().processes[0].sequences[0].phases.map(phase => phase.id))
       .toEqual([source.id, target.id])
     replacement.flowState.flowPaths[0].handleKeys.push('changed')
