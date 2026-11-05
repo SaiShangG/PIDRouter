@@ -74,7 +74,7 @@ export class BrushDebugPanel {
     this.locale = locale
     this.clearButton.textContent = this.text('清空列表')
     this.hint.textContent = this.text(
-      '画笔和橡皮命中的非设备实体在此去重累积。点击实体可闪烁定位，不改变高亮或设备状态。'
+      '画笔和橡皮命中的实体在此去重累积，自动模式跳过设备。点击实体可闪烁定位，不改变高亮或设备状态。'
     )
     this.empty.textContent = this.text(
       '启用画笔后在图纸上涂画，查看命中的实体。未拾取到的对象不会出现在列表中。'

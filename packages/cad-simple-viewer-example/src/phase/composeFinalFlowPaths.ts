@@ -37,7 +37,8 @@ export const composeFinalFlowPaths = (
       deviceState,
       undefined,
       phase.flowState.activeFlowPathId,
-      { addition, excluded: exclusions.has(handleKey), device: Boolean(deviceState) }
+      { addition, excluded: exclusions.has(handleKey), device: Boolean(deviceState) },
+      phase.highlightMode
     )
     return layers.filter(layer =>
       (layer.style.source === 'flow' || layer.style.source === 'utility') &&

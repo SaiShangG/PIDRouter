@@ -17,14 +17,22 @@ describe('PhaseWorkspaceRepository', () => {
     })
     const phase = {
       id: '20', number: 1, name: 'Rinse', tankId: 'file:5:E65',
+      highlightMode: 'manual' as const,
       drawing: { kind: 'unassigned' as const }, flowState: { flowPaths: [] },
       createdAt: '', updatedAt: ''
     }
     await repository.updatePhase('10', phase, 1)
     const payload = phases.update.mock.calls[0][1]
     expect(JSON.parse(payload.jsonData).tankId).toBe(phase.tankId)
+    expect(JSON.parse(payload.jsonData).highlightMode).toBe('manual')
     phases.get.mockResolvedValue({ ...payload, id: 20 })
     expect((await repository.loadPhase('20', {}, 0)).tankId).toBe(phase.tankId)
+    expect((await repository.loadPhase('20', {}, 0)).highlightMode).toBe('manual')
+    phases.get.mockResolvedValue({
+      ...payload, id: 20,
+      jsonData: JSON.stringify({ ...JSON.parse(payload.jsonData), highlightMode: 'invalid' })
+    })
+    await expect(repository.loadPhase('20', {}, 0)).rejects.toThrow('invalid highlight snapshot data')
     await repository.updatePhase('10', { ...phase, tankId: undefined }, 1)
     expect(JSON.parse(phases.update.mock.calls[1][1].jsonData)).not.toHaveProperty('tankId')
   })
@@ -84,6 +92,7 @@ describe('PhaseWorkspaceRepository', () => {
       OrderId: 1,
       Name: 'Transfer',
       Comment: null,
+      highlightMode: 'auto',
       drawing: { fileId: 5, displayName: 'Supply PID' },
       autoFlowPaths: [],
       flowPaths: [],
@@ -465,6 +474,7 @@ describe('PhaseWorkspaceRepository', () => {
       OrderId: 1,
       Name: 'Transfer',
       Comment: null,
+      highlightMode: 'auto',
       drawing: { fileId: 5, displayName: 'PID' },
       autoFlowPaths: [{
         id: 'flow-1', name: 'Main', handleKeys: ['26', '43'],

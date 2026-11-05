@@ -63,6 +63,18 @@ const findButton = (element: HTMLElement, label: string) =>
   )!
 
 describe('StyleSourceDialog', () => {
+  it('explains that manual mode includes valves and devices without changing states', () => {
+    const dialog = new StyleSourceDialog({
+      mode: 'brush', highlightMode: 'manual', profile: createProfile(),
+      getLocale: () => 'en', onApply: jest.fn(), onClose: jest.fn()
+    })
+    dialog.open()
+    expect(dialog.element.textContent).toContain('including valves and devices')
+    expect(dialog.element.textContent).toContain('Device states and automatic routing are unchanged')
+    expect(dialog.element.textContent).not.toContain('skips valves')
+    findButton(dialog.element, 'Cancel').click()
+  })
+
   afterEach(() => {
     document.body.replaceChildren()
   })
@@ -80,7 +92,7 @@ describe('StyleSourceDialog', () => {
     dialog.open()
     expect(dialog.element.parentElement).toBe(document.body)
     expect(dialog.element.textContent).toContain('Device style preset')
-    expect(dialog.element.textContent).toContain('device states and automatic routing are unchanged')
+    expect(dialog.element.textContent).toContain('without changing device states or triggering routing')
     expect(dialog.element.textContent).not.toContain('Custom')
     expect(findButton(dialog.element, 'Utility preset').getAttribute('aria-checked'))
       .toBe('true')

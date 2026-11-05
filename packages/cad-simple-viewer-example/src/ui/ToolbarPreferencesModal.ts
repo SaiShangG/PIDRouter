@@ -191,7 +191,7 @@ export class ToolbarPreferencesModal {
   private groupName(id: string): string {
     if (['select', 'pan', 'zoom-extent', 'zoom-window'].includes(id)) return '浏览'
     if (id === 'layer') return '图层'
-    if (['brush-highlight', 'brush-erase', 'annotation', 'rev-vis'].includes(id)) return '高亮与标注'
+    if (['highlight-auto', 'brush-highlight', 'brush-erase', 'annotation', 'rev-vis'].includes(id)) return '高亮与标注'
     if (id === 'measure') return '测量'
     if (['switch-bg', 'monochrome', 'toolbar-placement', 'theme', 'locale'].includes(id)) return '显示设置'
     return '其他功能'

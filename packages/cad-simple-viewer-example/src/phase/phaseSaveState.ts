@@ -1,6 +1,6 @@
 import { isEqual } from 'lodash-es'
-import { translate, type AppLocale } from '../locale'
 
+import { type AppLocale,translate } from '../locale'
 import type { PhaseSnapshot } from './types'
 
 export type PhaseChangeKind = 'details' | 'drawing' | 'highlights' | 'devices' | 'notes' | 'order' | 'styles'
@@ -9,6 +9,7 @@ const values = (phase: PhaseSnapshot): Record<Exclude<PhaseChangeKind, 'order' |
   details: { name: phase.name, number: phase.number, tankId: phase.tankId ?? null },
   drawing: phase.drawing,
   highlights: {
+    highlightMode: phase.highlightMode ?? 'auto',
     flowPaths: phase.flowState.flowPaths,
     activeFlowPathId: phase.flowState.activeFlowPathId ?? null,
     manualCorrections: phase.manualCorrections ?? { additions: [], exclusions: [] }

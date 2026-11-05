@@ -1,6 +1,7 @@
 import type {
   DeviceState,
   FlowPathStatus,
+  HighlightMode,
   HighlightStyle,
   ManualHighlightAddition,
   PresentationProfile
@@ -86,10 +87,12 @@ export const resolveFlowHighlightLayers = (
   deviceState?: DeviceState,
   diagnosticStyle?: HighlightStyle,
   activeFlowPathId?: string,
-  manual?: ManualEntityHighlight
+  manual?: ManualEntityHighlight,
+  highlightMode: HighlightMode = 'auto'
 ): FlowHighlightLayer[] => {
   const device = Boolean(deviceState || manual?.device)
-  const addition = manual?.excluded || device ? undefined : manual?.addition
+  const manualMode = highlightMode === 'manual'
+  const addition = manual?.excluded || (!manualMode && device) ? undefined : manual?.addition
   const automaticLayers = resolveAutomaticFlowHighlightLayers(
     profile,
     manual?.excluded || addition ? [] : flowPaths,
@@ -97,6 +100,10 @@ export const resolveFlowHighlightLayers = (
     diagnosticStyle,
     activeFlowPathId
   )
+  const diagnosticLayers = automaticLayers.filter(layer =>
+    layer.style.source === 'invalid-device-state' || layer.style.source === 'diagnostic'
+  )
+  if (manualMode && manual?.excluded) return diagnosticLayers
   if (!addition) return automaticLayers
   const manualLayer: FlowHighlightLayer = {
     id: `manual:flow:${addition.handleKey}`,
@@ -110,5 +117,5 @@ export const resolveFlowHighlightLayers = (
       }
     })
   }
-  return [manualLayer]
+  return manualMode ? [manualLayer, ...diagnosticLayers] : [manualLayer]
 }

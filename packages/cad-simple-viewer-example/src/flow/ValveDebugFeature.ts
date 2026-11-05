@@ -34,6 +34,7 @@ export type ValveDebugLocale = 'zh' | 'en'
 export interface ValveDebugFeatureOptions {
   enabled?: boolean
   brushDebugEnabled?: boolean
+  canChangeState?(): boolean
   panelHost: HTMLElement
   graphDocument: FlowConnectionDocumentInput
   getView(): ValveDebugView | undefined
@@ -641,7 +642,7 @@ export class ValveDebugFeature {
   }
 
   private readonly handleContextMenu = (event: MouseEvent) => {
-    if (this.disposed) return
+    if (this.disposed || this.options.canChangeState?.() === false) return
     console.log('[ValveDebugFeature] Right-click received / 收到右键点击', {
       target: event.target,
       currentTarget: event.currentTarget,
@@ -732,6 +733,7 @@ export class ValveDebugFeature {
   }
 
   private setValveState(key: string, state: ValveRuntimeState) {
+    if (this.disposed || this.options.canChangeState?.() === false) return
     if (this.states.get(key) === state) {
       this.closeMenu()
       return
@@ -744,6 +746,7 @@ export class ValveDebugFeature {
   }
 
   private requestValveState(key: string, state: ValveRuntimeState) {
+    if (this.disposed || this.options.canChangeState?.() === false) return
     if (this.states.get(key) === state) {
       this.closeMenu()
       return
@@ -860,6 +863,7 @@ export class ValveDebugFeature {
   }
 
   private applyConfiguredSelection() {
+    if (this.disposed || this.options.canChangeState?.() === false) return
     const handleKey = this.applyMenuAction.dataset.handleKey
     const stateId = this.selectedConfiguredStateId()
     const configuredState = handleKey
@@ -896,6 +900,7 @@ export class ValveDebugFeature {
     handleKey: string,
     state: DeviceStateStyleDefinition
   ) {
+    if (this.disposed || this.options.canChangeState?.() === false) return
     this.configuredStates.set(handleKey, state)
     this.states.set(
       handleKey,
@@ -906,7 +911,7 @@ export class ValveDebugFeature {
   }
 
   private recomputeResults() {
-    if (!this.enabled) {
+    if (!this.enabled || this.options.canChangeState?.() === false) {
       this.results.clear()
       this.lastRuntime = undefined
       this.disposePathOverlay()

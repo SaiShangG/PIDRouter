@@ -84,6 +84,35 @@ Development and deployment network settings, including the runtime API override,
 
 ## Usage
 
+### Automatic and manual highlighting
+
+The viewer toolbar's **Automatic highlighting** toggle belongs to the loaded
+Phase, not the user's toolbar preferences. New Phases and older data without
+`highlightMode` use `auto`; copies and inherited Phases retain their source mode.
+The toggle is disabled without an editable loaded Phase and while loading or
+drawing a stroke.
+
+- **On (`auto`)** preserves configured-device state selection, automatic routing,
+  device-style precedence and brush protection.
+- **Off (`manual`)** retains existing automatic routes and device highlights but
+  stops state-changing device interactions and automatic route recalculation,
+  including recalculation after flow-rule edits. The brush can highlight every
+  visible picked entity, including valves, devices, text and overlapping entities.
+  The eraser can exclude retained automatic and device highlights. Neither tool
+  changes equipment state or CAD geometry.
+- Manual additions override normal highlights, and exclusions hide them.
+  Invalid-device warning frames remain visible even after painting or erasing.
+  Returning to automatic mode restores device protection and precedence without
+  deleting manual records or recalculating stored routes merely for the switch.
+
+Mode changes are saved with the Phase in local workspace data and backend overlay
+JSON, participate in dirty/save tracking, and survive reopening. The viewer and
+derived `flowPaths` share the mode-aware resolver. Consumers of backend overlays
+must honor `highlightMode` and `manualCorrections` when displaying `deviceStates`;
+those records retain the original business states even when their highlights
+have been overridden or erased. Invalid mode values are reported and rejected
+on workspace/backend loading rather than silently replacing saved data.
+
 ### Brush debugging
 
 Enable **Feature settings > Development > Brush debug** to show the shared
@@ -91,8 +120,8 @@ Enable **Feature settings > Development > Brush debug** to show the shared
 and **Brush debug** buttons to switch views.
 
 Brush debug accumulates unique entity IDs hit by brush/eraser strokes, excluding
-valves, pumps, and other protected interactive devices using the same protection
-rules as painting. Each row shows its DXF entity type, layer, CAD handle, and latest operation;
+valves, pumps, and other protected interactive devices in automatic mode only,
+using the same protection rules as painting. Each row shows its DXF entity type, layer, CAD handle, and latest operation;
 missing persistent handles remain visible for diagnosis. Click a row to blink
 that exact entity for 1.2 seconds without zooming, editing its highlight, changing
 device states, or adding Phase data. Unavailable previews are marked explicitly.
@@ -107,8 +136,9 @@ a configured Title (case-insensitive, ignoring surrounding whitespace).
 Graph-inferred ownership does not make connected pipe segments devices.
 Unmatched entities do not gain device interaction or brush protection merely
 because they are connected to a valve or have a saved device-state record.
-Right-click state selection, brush protection, manual-highlight rendering, and
-brush debug share this rule. The flow graph itself remains unchanged.
+Right-click state selection, automatic-mode brush protection, manual-highlight
+rendering, and brush debug share this recognition rule. Manual mode removes brush
+protection without changing device recognition or the flow graph.
 
 ### Configured-device automatic flow rules
 
@@ -159,8 +189,9 @@ Phase JSON separates three sources and a derived final snapshot:
   survive round trips; restoration does not infer owners or run routing.
 - `manualCorrections`: each `additions` record contains one `handleKey` and a
   required `highlightStyleRefId`; a batch stroke creates multiple records.
-  `exclusions` store erased flow handles. The brush skips valves and
-  interactive devices; it does not add manual device markers.
+  `exclusions` store erased automatic-flow handles and, in manual mode, erased
+  device highlights. Automatic mode skips valves and interactive devices;
+  manual mode permits ordinary entity highlighting on them.
 - `flowPaths`: derived final visible flow entries, composed from automatic routes
   and corrections using the same layering resolver as the viewer. Each entry has
   only `handleKey` and `highlightStyleRefId`. Device-state indicators remain in

@@ -65,6 +65,7 @@ export const cloneManualHighlightCorrections = (
 export interface ManualHighlightEraseHit {
   handleKey: string
   hasAutomaticFlow: boolean
+  hasDeviceHighlight?: boolean
 }
 
 export class ManualHighlightCorrectionState {
@@ -193,12 +194,15 @@ export class ManualHighlightCorrectionState {
     const normalizedHits = hits.map(hit => {
       const handleKey = normalizeCadHandle(hit.handleKey)
       if (handleKey === undefined) return invalid('erase.handleKey')
-      return { handleKey, hasAutomaticFlow: hit.hasAutomaticFlow }
+      return {
+        handleKey,
+        hasAutomaticHighlight: hit.hasAutomaticFlow || hit.hasDeviceHighlight === true
+      }
     })
     let changed = false
-    normalizedHits.forEach(({ handleKey, hasAutomaticFlow }) => {
+    normalizedHits.forEach(({ handleKey, hasAutomaticHighlight }) => {
       if (this.additions.delete(handleKey)) changed = true
-      if (hasAutomaticFlow && !this.exclusions.has(handleKey)) {
+      if (hasAutomaticHighlight && !this.exclusions.has(handleKey)) {
         this.exclusions.add(handleKey)
         changed = true
       }

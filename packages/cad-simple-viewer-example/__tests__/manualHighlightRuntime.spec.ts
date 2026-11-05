@@ -1,3 +1,4 @@
+import { composeFinalFlowPaths } from '../src/phase/composeFinalFlowPaths'
 import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
 import { findPhaseOverlayStyleWarnings } from '../src/phase/phaseOverlayStyleResolver'
 import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
@@ -5,7 +6,7 @@ import {
   createDefaultPresentationProfile,
   PhaseWorkspaceStore
 } from '../src/phase/phaseWorkspaceStore'
-import type { DeviceState, FlowPathStatus, PhaseSnapshot } from '../src/phase/types'
+import type { DeviceState, FlowPathStatus, HighlightMode, PhaseSnapshot } from '../src/phase/types'
 import { resolveFlowHighlightLayers } from '../src/presentation/resolveFlowHighlightLayers'
 
 const fixture = () => {
@@ -36,7 +37,7 @@ const fixture = () => {
     }
   ]
   const state = new ManualHighlightCorrectionState()
-  const layers = (handleKey: string, paths = flows, deviceState?: DeviceState) =>
+  const layers = (handleKey: string, paths = flows, deviceState?: DeviceState, highlightMode?: HighlightMode) =>
     resolveFlowHighlightLayers(
       profile,
       paths.filter(flow => flow.handleKeys.includes(handleKey)),
@@ -47,12 +48,80 @@ const fixture = () => {
         addition: state.getAddition(handleKey),
         excluded: state.isExcluded(handleKey),
         device: handleKey === 'A'
-      }
+      },
+      highlightMode
     )
   return { state, profile, device, flows, layers }
 }
 
 describe('manual correction runtime', () => {
+  it('paints and erases retained device highlights in manual mode without modifying device state', () => {
+    const { state, device, flows, layers } = fixture()
+    const before = JSON.stringify({ device, flows })
+    const baseline = layers('A', [], device)
+    expect(layers('A', [], device, 'manual')).toEqual(baseline)
+    state.beginStroke()
+    state.paint(['A', 'B', 'C'], 'water')
+    state.endStroke()
+    for (const handle of ['A', 'B', 'C']) {
+      expect(layers(handle, flows, handle === 'A' ? device : undefined, 'manual')[0])
+        .toMatchObject({ id: `manual:flow:${handle}`, style: { color: 0x123456 } })
+    }
+    state.beginStroke()
+    state.erase([{ handleKey: 'A', hasAutomaticFlow: false, hasDeviceHighlight: true }])
+    state.endStroke()
+    expect(state.snapshot().exclusions).toEqual(['A'])
+    expect(layers('A', [], device, 'manual')).toEqual([])
+    expect(layers('A', [], device, 'auto')).toEqual(baseline)
+    state.undo()
+    expect(layers('A', [], device, 'manual')[0].id).toBe('manual:flow:A')
+    state.redo()
+    expect(layers('A', [], device, 'manual')).toEqual([])
+    expect(JSON.stringify({ device, flows })).toBe(before)
+  })
+
+  it('round-trips manual device overrides and exclusions with the same final visible snapshot', async () => {
+    const { state, device, profile, flows } = fixture()
+    const phase: PhaseSnapshot = {
+      id: '20', number: 1, name: 'Manual', drawing: { kind: 'unassigned' },
+      highlightMode: 'manual', flowState: { flowPaths: flows, deviceStates: { A: device } },
+      createdAt: 'now', updatedAt: 'now'
+    }
+    const update = jest.fn().mockResolvedValue(undefined)
+    const get = jest.fn()
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '', projectId: 1, getPresentationProfile: () => profile,
+      files: { list: jest.fn(), upload: jest.fn() },
+      procedures: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      operations: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      phases: { list: jest.fn(), create: jest.fn(), update, get, delete: jest.fn() }
+    })
+    state.paint(['A', 'C'], 'water')
+    state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
+    phase.manualCorrections = state.snapshot()
+    await repository.updatePhase('10', phase, 1)
+    const payload = update.mock.calls[0][1]
+    expect(JSON.parse(payload.jsonData).flowPaths).toEqual([
+      { handleKey: '10', highlightStyleRefId: 'water' },
+      { handleKey: '12', highlightStyleRefId: 'water' }
+    ])
+    get.mockResolvedValue({ ...payload, id: 20 })
+    const loaded = await repository.loadPhase('20', {}, 0)
+    expect(loaded.highlightMode).toBe('manual')
+    expect(loaded.flowState.deviceStates).toEqual({ A: device })
+    expect(composeFinalFlowPaths(loaded, profile)).toEqual(composeFinalFlowPaths(phase, profile))
+    state.erase([{ handleKey: 'A', hasAutomaticFlow: false, hasDeviceHighlight: true }])
+    phase.manualCorrections = state.snapshot()
+    await repository.updatePhase('10', phase, 1)
+    const erased = update.mock.calls[1][1]
+    get.mockResolvedValue({ ...erased, id: 20 })
+    const restored = await repository.loadPhase('20', {}, 0)
+    expect(restored.manualCorrections?.exclusions).toEqual(['B', 'A'])
+    expect(resolveFlowHighlightLayers(profile, [], restored.flowState.deviceStates?.A,
+      undefined, undefined, { excluded: true, device: true }, restored.highlightMode)).toEqual([])
+    expect(restored.flowState.deviceStates).toEqual({ A: device })
+  })
+
   it('ignores saved manual valve marks while retaining device state and eraser behavior', () => {
     const { state, device, flows, layers } = fixture()
     const before = JSON.stringify({ device, flows })

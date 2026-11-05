@@ -47,6 +47,8 @@ export interface DeviceStateStyleDefinition {
 
 export type FlowBehavior = 'conducting' | 'blocking' | 'neutral'
 
+export type HighlightMode = 'auto' | 'manual'
+
 export interface DeviceStyleDefinition {
   id: string
   name: string
@@ -132,6 +134,7 @@ export interface PhaseSnapshot {
   tankId?: string
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
+  highlightMode?: HighlightMode
   flowState: FlowStateSnapshot
   manualCorrections?: ManualHighlightCorrections
   textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]

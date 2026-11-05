@@ -3,6 +3,23 @@ import type { FlowPathStatus } from '../src/phase/types'
 import { resolveFlowHighlightLayers } from '../src/presentation/resolveFlowHighlightLayers'
 
 describe('resolveFlowHighlightLayers', () => {
+  it('keeps diagnostic frames when manually painting or erasing an invalid device', () => {
+    const profile = createDefaultPresentationProfile()
+    const device = {
+      key: 'A', stateKey: 'Close', deviceType: 'Valve', highlightStyleRefId: 'deleted'
+    }
+    const warning = resolveFlowHighlightLayers(profile, [], device)[0]
+    expect(resolveFlowHighlightLayers(profile, [], device, undefined, undefined, {
+      excluded: true, device: true
+    }, 'manual')).toEqual([warning])
+    expect(resolveFlowHighlightLayers(profile, [], device, undefined, undefined, {
+      excluded: false, device: true,
+      addition: { handleKey: 'A', highlightStyleRefId: 'missing-manual-style' }
+    }, 'manual')).toEqual([
+      expect.objectContaining({ id: 'manual:flow:A' }), warning
+    ])
+  })
+
   const createFixture = () => {
     const profile = createDefaultPresentationProfile()
     profile.utilities.push(

@@ -8,6 +8,18 @@ const phase = (): PhaseSnapshot => ({
 })
 
 describe('PhaseSaveState', () => {
+  it('tracks mode changes as highlight edits without making legacy defaults dirty', () => {
+    const tracker = new PhaseSaveState()
+    const original = phase()
+    tracker.accept(original)
+    original.highlightMode = 'auto'
+    expect(tracker.get(original).saved).toBe(true)
+    original.highlightMode = 'manual'
+    expect(tracker.get(original).changes).toEqual(['highlights'])
+    tracker.accept(original)
+    expect(tracker.get(original).saved).toBe(true)
+  })
+
   it('ignores absent optional fields added by workspace snapshot cloning', () => {
     const tracker = new PhaseSaveState()
     const original = phase()

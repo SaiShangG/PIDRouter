@@ -1,8 +1,9 @@
+import { HighlightModeValidationError, normalizeHighlightMode } from './highlightMode'
 import {
   ManualHighlightCorrectionsValidationError,
   normalizeManualHighlightCorrections
 } from './manualHighlightCorrections'
-import type { FlowPathStatus, ManualHighlightCorrections } from './types'
+import type { FlowPathStatus, HighlightMode, ManualHighlightCorrections } from './types'
 
 export enum TextAttachmentPoint {
   TopLeft = 1,
@@ -63,6 +64,7 @@ export interface PhasePidOverlay {
   Comment: string | null
   tankId?: string
   drawing?: PhasePidOverlayDrawing
+  highlightMode?: HighlightMode
   flowPaths: PhasePidOverlayFlowPath[]
   autoFlowPaths: FlowPathStatus[]
   activeFlowPathId?: string
@@ -72,6 +74,7 @@ export interface PhasePidOverlay {
 }
 
 export type PhasePidOverlayWarningCode =
+  | 'invalid-highlight-mode'
   | 'invalid-auto-flow-path'
   | 'invalid-manual-corrections'
   | 'invalid-drawing'
@@ -279,6 +282,13 @@ export const parsePhasePidOverlay = (
   }
 
   const warnings: PhasePidOverlayWarning[] = []
+  let highlightMode: HighlightMode = 'auto'
+  try {
+    highlightMode = normalizeHighlightMode(value.highlightMode)
+  } catch (error) {
+    if (!(error instanceof HighlightModeValidationError)) throw error
+    warnings.push({ code: 'invalid-highlight-mode', path: 'highlightMode' })
+  }
   const autoFlowPaths: FlowPathStatus[] = []
   const autoIds = new Set<string>()
   value.autoFlowPaths.forEach((candidate, index) => {
@@ -388,6 +398,7 @@ export const parsePhasePidOverlay = (
       Name: value.Name.trim(),
       Comment: typeof value.Comment === 'string' ? value.Comment : null,
       ...(drawing ? { drawing } : {}),
+      highlightMode,
       flowPaths,
       autoFlowPaths,
       ...(isNonEmptyString(value.activeFlowPathId) ? { activeFlowPathId: value.activeFlowPathId } : {}),

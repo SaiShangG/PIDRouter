@@ -1,11 +1,11 @@
 /** @jest-environment jsdom */
 
-import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
-import { calculateAutomaticFlowPaths, resolveDeviceFlowPolicies } from '../src/flow/deviceFlowRuntime'
 import type { DeviceFlowRuntime } from '../src/flow/deviceFlowRuntime'
+import { calculateAutomaticFlowPaths, resolveDeviceFlowPolicies } from '../src/flow/deviceFlowRuntime'
+import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
 import * as flowTraversal from '../src/flow/flowTraversal'
-import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import type { FlowConnectionDocumentInput, ValveDebugOverlay, ValveDebugView } from '../src/flow/types'
+import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type { DeviceState, DeviceStateStyleDefinition, DeviceStyleDefinition } from '../src/phase/types'
 
@@ -93,6 +93,91 @@ describe('invalid device state menu', () => {
 })
 
 describe('ValveDebugFeature', () => {
+  it('blocks configured menus and stale actions in manual mode and restores them in automatic mode', () => {
+    let automatic = true
+    const canvas = document.createElement('canvas')
+    const host = document.createElement('div')
+    document.body.append(host)
+    const state: DeviceStateStyleDefinition = {
+      id: 'open', key: 'Open', displayName: 'Open', color: 0x00ff00,
+      lineWidthPx: 3, opacity: 1, enabled: true, order: 0,
+      autoHighlightFlow: true, flowBehavior: 'conducting'
+    }
+    const pick = jest.fn(() => [{ id: '1' }])
+    const request = jest.fn(() => true)
+    const feature = new ValveDebugFeature({
+      enabled: false, panelHost: host, canChangeState: () => automatic,
+      graphDocument: {
+        Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }] }],
+        Map: { Graph: { Vertices: [1], Edges: [] } }
+      },
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point, screenToWorld: point => point,
+        pick, zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key, resolveHandleKeys: () => ['1'],
+      getConfiguredStates: () => [state], requestConfiguredStateChange: request,
+      getLabels: defaultValveDebugLabels, getLocale: () => 'en',
+      createOverlay: () => null
+    })
+    feature.attach()
+    const openMenu = () => canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    openMenu()
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio]')!.click()
+    const apply = document.querySelector<HTMLButtonElement>('[data-valve-action="apply-configured"]')!
+    automatic = false
+    apply.click()
+    expect(request).not.toHaveBeenCalled()
+    feature.refreshFlowState({ recompute: false })
+    expect(document.querySelector<HTMLDivElement>('.valve-debug-context-menu')!.hidden).toBe(true)
+    pick.mockClear()
+    openMenu()
+    expect(pick).not.toHaveBeenCalled()
+    automatic = true
+    openMenu()
+    document.querySelector<HTMLInputElement>('[data-valve-state-radio]')!.click()
+    apply.click()
+    expect(request).toHaveBeenCalledTimes(1)
+    feature.dispose()
+    host.remove()
+  })
+
+  it('does not apply an asynchronous legacy state confirmation after entering manual mode', async () => {
+    let automatic = true
+    let confirm: ((value: boolean) => void) | undefined
+    const canvas = document.createElement('canvas')
+    const host = document.createElement('div')
+    document.body.append(host)
+    const changed = jest.fn()
+    const feature = new ValveDebugFeature({
+      panelHost: host, canChangeState: () => automatic,
+      graphDocument: {
+        Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }] }],
+        Map: { Graph: { Vertices: [1], Edges: [] } }
+      },
+      getView: () => ({
+        canvas, width: 100, height: 100, isDirty: false,
+        viewportToCanvas: point => point, screenToWorld: point => point,
+        pick: () => [{ id: '1' }], zoomTo: () => undefined
+      }),
+      resolveObjectId: key => key, resolveHandleKeys: () => ['1'],
+      requestStateChange: () => new Promise<boolean>(resolve => { confirm = resolve }),
+      onStateChanged: changed, createOverlay: () => null,
+      getLabels: defaultValveDebugLabels, getLocale: () => 'en'
+    })
+    feature.attach()
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-valve-action="open"]')!.click()
+    expect(confirm).toBeDefined()
+    automatic = false
+    confirm!(true)
+    await Promise.resolve()
+    expect(changed).not.toHaveBeenCalled()
+    feature.dispose()
+    host.remove()
+  })
+
   it.each([false, true])('builds debug trees only on demand with debug enabled=%s', enabled => {
     const graphDocument: FlowConnectionDocumentInput = {
       Areas: [{ ControlModules: [{ CadHandle: 1, Name: 'Valve' }, { CadHandle: 3, Name: 'Valve' }] }],

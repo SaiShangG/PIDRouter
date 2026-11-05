@@ -3,6 +3,12 @@ import type { AppLocale } from './locale'
 type TranslationPair = readonly [zh: string, en: string]
 
 const pairs: TranslationPair[] = [
+  ['自动高亮', 'Automatic highlighting'],
+  ['自动高亮：开启', 'Automatic highlighting: on'],
+  ['自动高亮：关闭', 'Automatic highlighting: off'],
+  ['当前没有可编辑的 Phase，无法切换高亮模式', 'No editable Phase is available. The highlight mode cannot be changed.'],
+  ['手动模式下无法更改设备状态，请先开启自动高亮', 'Device states cannot be changed in manual mode. Enable automatic highlighting first.'],
+  ['手动模式：画笔高亮经过的所有可见实体，包括阀门及设备；橡皮可擦除已有高亮。不改变设备状态或触发自动找路。', 'Manual mode: the brush highlights all visible entities it crosses, including valves and devices; the eraser removes existing highlights. Device states and automatic routing are unchanged.'],
   ['设备实体不存在，无法应用状态', 'The device entity is unavailable. Its state could not be applied.'],
   ['设备或状态配置已失效，请重新选择', 'The device or state configuration is unavailable. Please select it again.'],
   ['部分设备状态引用失效，相关流路已阻断', 'Some device state references are invalid. Related flows are blocked.'],
@@ -28,7 +34,7 @@ const pairs: TranslationPair[] = [
   ['无持久化句柄', 'No persistent handle'],
   ['画笔命中', 'Brush hit'], ['橡皮命中', 'Eraser hit'],
   ['无法定位：实体不存在或无法生成预览', 'Cannot locate: entity missing or preview unavailable'],
-  ['画笔和橡皮命中的非设备实体在此去重累积。点击实体可闪烁定位，不改变高亮或设备状态。', 'Non-device brush and eraser hits accumulate here without duplicates. Click an entity to blink it without changing highlights or device states.'],
+  ['画笔和橡皮命中的实体在此去重累积，自动模式跳过设备。点击实体可闪烁定位，不改变高亮或设备状态。', 'Brush and eraser hits accumulate here without duplicates; automatic mode skips devices. Click an entity to blink it without changing highlights or device states.'],
   ['启用画笔后在图纸上涂画，查看命中的实体。未拾取到的对象不会出现在列表中。', 'Paint on the drawing to inspect picked entities. Objects that were not picked will not appear here.'],
   ['显示工具栏', 'Show toolbar'], ['默认折叠', 'Start collapsed'],
   ['工具栏位置', 'Toolbar position'], ['边缘间距（像素）', 'Edge inset (px)'],
