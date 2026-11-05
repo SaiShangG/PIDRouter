@@ -16,7 +16,11 @@ Drawing parsing, geometry processing, and rendering are primarily performed loca
   per stroke in manual mode; other entities retain normal brush behavior.
   Automatic mode still skips configured devices. Both brushes share style
   selection, undo/redo, and saved phase corrections without changing device
-  states or automatic routing.
+  states or automatic routing. Once enabled, the valve brush and its selected
+  style remain enabled across Phase switches in the current session. Drawing
+  is paused during loading and resumes only when the target Phase is ready.
+  Turning the tool off, pressing Escape, or choosing the ordinary brush or
+  eraser cancels this continuation; each Phase retains its own highlights.
 - Import and export phase configurations and report data
 - Export self-contained HTML, PDF, and SVG files
 - Switch between English and Chinese interfaces

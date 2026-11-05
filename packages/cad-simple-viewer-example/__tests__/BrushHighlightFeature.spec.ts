@@ -244,6 +244,178 @@ describe('BrushHighlightFeature', () => {
     feature.dispose()
   })
 
+  it('keeps only the valve brush enabled while suspending same-drawing phase switches', () => {
+    const { canvas, view } = createView()
+    const onEntitiesChanged = jest.fn()
+    const onStrokeEnded = jest.fn()
+    let loading = false
+    const feature = new BrushHighlightFeature({
+      getView: () => loading ? undefined : view,
+      onEntitiesChanged,
+      onStrokeEnded,
+      setOperationCursor: target => { target.canvas.style.cursor = 'valve-cursor' }
+    })
+    feature.activate('paint', 'valve-toggle')
+    canvas.dispatchEvent(pointer('pointerdown'))
+    loading = true
+    feature.suspend()
+    feature.suspend()
+    expect(feature.isEnabled).toBe(true)
+    expect(feature.isActive).toBe(false)
+    expect(feature.isDrawing).toBe(false)
+    expect(onStrokeEnded).toHaveBeenCalledTimes(1)
+    expect(view.mode).toBe(0)
+    stroke(canvas, 10)
+    expect(onEntitiesChanged).toHaveBeenCalledTimes(1)
+    expect(feature.resume()).toBe(false)
+    expect(feature.isEnabled).toBe(true)
+
+    loading = false
+    expect(feature.resume()).toBe(true)
+    expect(feature.resume()).toBe(false)
+    expect(feature.isActive).toBe(true)
+    expect(feature.currentPaintMode).toBe('valve-toggle')
+    expect(view.mode).toBe(2)
+    expect(canvas.style.cursor).toBe('valve-cursor')
+    stroke(canvas, 10)
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['paint', ['B']]
+    ])
+    feature.dispose()
+  })
+
+  it('rebinds a suspended valve brush to a different drawing without retaining old canvas listeners', () => {
+    const first = createView()
+    const second = createView()
+    let view = first.view
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged
+    })
+    feature.activate('paint', 'valve-toggle')
+    feature.suspend()
+    view = second.view
+    feature.attach()
+    expect(feature.isEnabled).toBe(true)
+    expect(feature.isActive).toBe(false)
+    expect(feature.resume()).toBe(true)
+    stroke(first.canvas, 0)
+    expect(onEntitiesChanged).not.toHaveBeenCalled()
+    stroke(second.canvas, 10)
+    expect(onEntitiesChanged).toHaveBeenCalledWith('paint', ['B'])
+    expect(first.view.mode).toBe(0)
+    expect(second.view.mode).toBe(2)
+    feature.dispose()
+    expect(second.view.mode).toBe(0)
+  })
+
+  it('retains the valve brush intent if the attached view is replaced before suspension', () => {
+    const first = createView()
+    const second = createView()
+    let view = first.view
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged: jest.fn()
+    })
+    feature.activate('paint', 'valve-toggle')
+    view = second.view
+    feature.attach()
+    expect(feature.isEnabled).toBe(true)
+    expect(feature.isActive).toBe(false)
+    expect(first.view.mode).toBe(0)
+    expect(feature.resume()).toBe(true)
+    expect(second.view.mode).toBe(2)
+    feature.dispose()
+  })
+
+  it.each(['paint', 'erase'] as const)('does not resume the ordinary %s tool after a phase switch', operation => {
+    const { view } = createView()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged: jest.fn()
+    })
+    feature.activate(operation)
+    feature.suspend()
+    expect(feature.isEnabled).toBe(false)
+    expect(feature.resume()).toBe(false)
+    expect(view.mode).toBe(0)
+    feature.dispose()
+  })
+
+  it.each(['escape', 'deactivate', 'toggle off', 'reset', 'dispose'])(
+    'cancels the suspended valve brush on %s instead of restoring it later',
+    action => {
+      const { view } = createView()
+      let loading = false
+      const feature = new BrushHighlightFeature({
+        getView: () => loading ? undefined : view, onEntitiesChanged: jest.fn()
+      })
+      feature.activate('paint', 'valve-toggle')
+      loading = true
+      feature.suspend()
+      if (action === 'escape') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      } else if (action === 'toggle off') {
+        expect(feature.activate('paint', 'valve-toggle')).toBe(false)
+      } else if (action === 'reset') {
+        feature.reset()
+      } else if (action === 'dispose') {
+        feature.dispose()
+      } else {
+        feature.deactivate()
+      }
+      loading = false
+      expect(feature.isEnabled).toBe(false)
+      expect(feature.resume()).toBe(false)
+      feature.dispose()
+    }
+  )
+
+  it.each(['paint', 'erase'] as const)('cancels suspended valve continuation when switching to ordinary %s', operation => {
+    const { view } = createView()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged: jest.fn()
+    })
+    feature.activate('paint', 'valve-toggle')
+    feature.suspend()
+    expect(feature.activate(operation)).toBe(true)
+    expect(feature.currentPaintMode).toBe('standard')
+    feature.suspend()
+    expect(feature.resume()).toBe(false)
+    feature.dispose()
+  })
+
+  it('keeps phase highlights and undo history independent while continuing the valve brush', () => {
+    const { canvas, view } = createView()
+    const phases = [new ManualHighlightCorrectionState(), new ManualHighlightCorrectionState()]
+    let phase = phases[0]
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      shouldToggleEntity: () => true,
+      isEntityHighlighted: id => phase.getAddition(id) !== undefined,
+      onStrokeStarted: () => phase.beginStroke(),
+      onStrokeEnded: () => { phase.endStroke() },
+      onEntitiesChanged: (operation, ids) => {
+        if (operation === 'paint') phase.paint(ids, 'steam')
+        else phase.erase(ids.map(handleKey => ({ handleKey, hasAutomaticFlow: false })))
+      }
+    })
+    feature.activate('paint', 'valve-toggle')
+    stroke(canvas, 0)
+    feature.suspend()
+    phase = phases[1]
+    feature.resume()
+    expect(phase.additionCount).toBe(0)
+    expect(phase.canUndo).toBe(false)
+    stroke(canvas, 0)
+    expect(phase.getAddition('A')?.highlightStyleRefId).toBe('steam')
+    feature.suspend()
+    phase = phases[0]
+    feature.resume()
+    stroke(canvas, 0)
+    expect(phase.additionCount).toBe(0)
+    expect(phases[1].additionCount).toBe(1)
+    feature.dispose()
+  })
+
   it('toggles saved valve and flow highlights with undo, redo and restored corrections without changing states', () => {
     const { canvas, view } = createView()
     const state = new ManualHighlightCorrectionState()

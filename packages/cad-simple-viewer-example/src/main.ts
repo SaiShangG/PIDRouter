@@ -447,7 +447,7 @@ class CadViewerApp {
     hide: () => AcApDocManager.instance.hideBusyIndicator(),
     changed: active => {
       if (active) {
-        this.brushHighlightFeature?.deactivate()
+        this.brushHighlightFeature?.suspend()
         this.valveDebugFeature?.resetBrushDebug()
         this.syncManualCorrectionControls()
         this.getSimpleUiPlugin()?.refreshToolbar()
@@ -1465,7 +1465,7 @@ class CadViewerApp {
         action: () => this.openBrushStyleDialog('valve-toggle'),
         toggle: {
           getValue: () =>
-            this.brushHighlightFeature?.isActive === true &&
+            this.brushHighlightFeature?.isEnabled === true &&
             this.brushHighlightFeature.currentOperation === 'paint' &&
             this.brushHighlightFeature.currentPaintMode === 'valve-toggle',
           on: {},
@@ -2127,7 +2127,7 @@ class CadViewerApp {
   }
 
   private openBrushStyleDialog(paintMode: BrushPaintMode = 'standard') {
-    if (this.brushHighlightFeature?.isActive) {
+    if (this.brushHighlightFeature?.isEnabled) {
       if (this.brushHighlightFeature.currentOperation === 'paint' &&
         this.brushHighlightFeature.currentPaintMode === paintMode) {
         this.brushHighlightFeature.deactivate()
@@ -2319,7 +2319,7 @@ class CadViewerApp {
   }
 
   private clearManualBrushState() {
-    this.brushHighlightFeature?.reset()
+    this.brushHighlightFeature?.suspend()
     this.manualHighlightRender.cancel()
     this.manualCorrections.restore()
     this.manualCorrectionScope++
@@ -3770,7 +3770,7 @@ class CadViewerApp {
     loading: WorkspaceLoadingTask
   ) {
     const activationToken = ++this.phaseActivationToken
-    this.brushHighlightFeature?.deactivate()
+    this.brushHighlightFeature?.suspend()
     if (captureCurrentState) this.captureLoadedPhaseState()
     if (captureCurrentState && this.loadedPhase) {
       this.cancelBackendPhaseSave(this.loadedPhase.phaseId)
@@ -5126,7 +5126,7 @@ class CadViewerApp {
   }
 
   private invalidateLoadedPhaseBinding() {
-    this.brushHighlightFeature?.deactivate()
+    this.brushHighlightFeature?.suspend()
     this.manualHighlightRender.cancel()
     this.manualCorrections.clearHistory()
     this.manualCorrectionScope++
@@ -5142,7 +5142,10 @@ class CadViewerApp {
   }
 
   private setLoadingState(loading: boolean) {
-    if (loading) this.valveDebugFeature?.resetBrushDebug()
+    if (loading) {
+      this.brushHighlightFeature?.suspend()
+      this.valveDebugFeature?.resetBrushDebug()
+    }
     this.isLoadingFile = loading
     this.syncManualCorrectionControls()
     this.getSimpleUiPlugin()?.refreshToolbar()
@@ -5151,6 +5154,7 @@ class CadViewerApp {
 
   private finishLoadingState() {
     this.isLoadingFile = false
+    if (this.canEditManualCorrections()) this.brushHighlightFeature?.resume()
     this.updateEmptyStateVisibility()
     this.syncPhaseContextBar()
   }

@@ -29,6 +29,7 @@ export class BrushHighlightFeature {
   private readonly sampleSpacingPx: number
   private attachedView?: AcEdBaseView
   private active = false
+  private suspended = false
   private operation: BrushOperation = 'paint'
   private paintMode: BrushPaintMode = 'standard'
   private previousMode?: AcEdViewMode
@@ -50,27 +51,32 @@ export class BrushHighlightFeature {
     if (this.disposed) return
     const view = this.options.getView()
     if (!view || view === this.attachedView) return
-    if (this.active) this.deactivate()
+    if (this.active) this.suspend()
     this.detachView()
     this.attachedView = view
   }
 
   activate(operation: BrushOperation, paintMode: BrushPaintMode = 'standard') {
     if (this.disposed) return false
+    const nextPaintMode = operation === 'paint' ? paintMode : 'standard'
+    if (this.isEnabled && this.operation === operation && this.paintMode === nextPaintMode) {
+      this.deactivate()
+      return false
+    }
+    if (this.suspended) this.deactivate()
+    return this.start(operation, nextPaintMode)
+  }
+
+  private start(operation: BrushOperation, paintMode: BrushPaintMode) {
     const view = this.options.getView()
     if (!view) return false
     this.attach()
     if (!this.attachedView) return false
 
-    const nextPaintMode = operation === 'paint' ? paintMode : 'standard'
-    if (this.active && this.operation === operation && this.paintMode === nextPaintMode) {
-      this.deactivate()
-      return false
-    }
-
     this.releasePointer()
     this.operation = operation
-    this.paintMode = nextPaintMode
+    this.paintMode = paintMode
+    this.suspended = false
     if (!this.active) {
       this.previousMode = view.mode
       this.previousCursor = view.editor.currentCursor
@@ -86,23 +92,43 @@ export class BrushHighlightFeature {
   }
 
   deactivate() {
-    if (!this.active) return
-    this.removePointerListeners()
-    this.releasePointer()
-    document.removeEventListener('keydown', this.handleKeyDown, true)
+    this.stop(false)
+  }
 
-    const view = this.attachedView
-    if (view?.mode === AcEdViewMode.BRUSH) {
-      view.mode = this.previousMode ?? AcEdViewMode.SELECTION
-    }
-    if (view && this.previousCursor !== undefined) {
-      view.setCursor(this.previousCursor)
+  suspend() {
+    this.stop(
+      this.isEnabled && this.operation === 'paint' && this.paintMode === 'valve-toggle'
+    )
+  }
+
+  resume() {
+    if (this.disposed || !this.suspended) return false
+    return this.start(this.operation, this.paintMode)
+  }
+
+  private stop(suspended: boolean) {
+    const wasActive = this.active
+    const wasEnabled = this.isEnabled
+    this.suspended = suspended
+    if (this.active) {
+      this.removePointerListeners()
+      this.releasePointer()
+      const view = this.attachedView
+      if (view?.mode === AcEdViewMode.BRUSH) {
+        view.mode = this.previousMode ?? AcEdViewMode.SELECTION
+      }
+      if (view && this.previousCursor !== undefined) {
+        view.setCursor(this.previousCursor)
+      }
+      this.active = false
+      this.previousMode = undefined
+      this.previousCursor = undefined
     }
 
-    this.active = false
-    this.previousMode = undefined
-    this.previousCursor = undefined
-    this.options.onActiveChanged?.()
+    if (!this.suspended) {
+      document.removeEventListener('keydown', this.handleKeyDown, true)
+    }
+    if (wasActive || wasEnabled !== this.isEnabled) this.options.onActiveChanged?.()
   }
 
   reset() {
@@ -118,6 +144,10 @@ export class BrushHighlightFeature {
 
   get isActive() {
     return this.active
+  }
+
+  get isEnabled() {
+    return this.active || this.suspended
   }
 
   get currentOperation() {
@@ -178,7 +208,7 @@ export class BrushHighlightFeature {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
-    if (!this.active || event.key !== 'Escape') return
+    if (!this.isEnabled || event.key !== 'Escape') return
     event.preventDefault()
     event.stopPropagation()
     this.deactivate()
