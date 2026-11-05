@@ -9,6 +9,7 @@ const pairs: TranslationPair[] = [
   ['当前无法切换高亮模式', 'The highlight mode cannot be changed right now.'],
   ['手动模式下无法更改设备状态，请先开启自动高亮', 'Device states cannot be changed in manual mode. Enable automatic highlighting first.'],
   ['手动模式：画笔高亮经过的所有可见实体，包括阀门及设备；橡皮可擦除已有高亮。不改变设备状态或触发自动找路。', 'Manual mode: the brush highlights all visible entities it crosses, including valves and devices; the eraser removes existing highlights. Device states and automatic routing are unchanged.'],
+  ['手动模式：阀门画笔经过阀门时切换高亮，同一笔划仅切换一次；其他实体保持普通画笔行为。不改变设备状态或触发自动找路。', 'Manual mode: the valve brush toggles valve highlights once per stroke; other entities retain normal brush behavior. Device states and automatic routing are unchanged.'],
   ['设备实体不存在，无法应用状态', 'The device entity is unavailable. Its state could not be applied.'],
   ['设备或状态配置已失效，请重新选择', 'The device or state configuration is unavailable. Please select it again.'],
   ['部分设备状态引用失效，相关流路已阻断', 'Some device state references are invalid. Related flows are blocked.'],

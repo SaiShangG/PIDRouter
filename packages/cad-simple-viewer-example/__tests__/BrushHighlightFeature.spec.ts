@@ -7,8 +7,12 @@ import {
   type BrushOperation
 } from '../src/brush/BrushHighlightFeature'
 import { HighlightRenderScheduler } from '../src/brush/HighlightRenderScheduler'
+import { buildFlowGraphIndex } from '../src/flow/flowGraph'
 import { defaultValveDebugLabels, ValveDebugFeature } from '../src/flow/ValveDebugFeature'
 import { ManualHighlightCorrectionState } from '../src/phase/manualHighlightCorrections'
+import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import type { DeviceState, FlowPathStatus } from '../src/phase/types'
+import { resolveFlowHighlightLayers } from '../src/presentation/resolveFlowHighlightLayers'
 
 jest.mock('@mlightcad/cad-simple-viewer', () => ({
   AcEdCorsorType: { Crosshair: 0 },
@@ -121,6 +125,195 @@ describe('BrushHighlightFeature', () => {
     expect(onEntitiesChanged.mock.calls).toEqual([
       ['paint', ['A']], ['paint', ['A']]
     ])
+    feature.dispose()
+  })
+
+  it('toggles valves once per stroke while continuing to paint non-valve entities', () => {
+    const { canvas, view } = createView()
+    const highlighted = new Set<string>()
+    const onEntitiesChanged = jest.fn((operation: BrushOperation, ids: readonly string[]) => {
+      ids.forEach(id => operation === 'paint' ? highlighted.add(id) : highlighted.delete(id))
+    })
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      shouldToggleEntity: id => id === 'A',
+      isEntityHighlighted: id => highlighted.has(id),
+      onEntitiesChanged
+    })
+    feature.activate('paint', 'valve-toggle')
+    canvas.dispatchEvent(pointer('pointerdown', 0))
+    canvas.dispatchEvent(pointer('pointermove', 10))
+    canvas.dispatchEvent(pointer('pointermove', 0))
+    canvas.dispatchEvent(pointer('pointerup', 0, 0))
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['paint', ['B']]
+    ])
+    expect([...highlighted]).toEqual(['A', 'B'])
+
+    onEntitiesChanged.mockClear()
+    canvas.dispatchEvent(pointer('pointerdown', 0))
+    canvas.dispatchEvent(pointer('pointermove', 10))
+    canvas.dispatchEvent(pointer('pointermove', 0))
+    canvas.dispatchEvent(pointer('pointerup', 0, 0))
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['erase', ['A']], ['paint', ['B']]
+    ])
+    expect([...highlighted]).toEqual(['B'])
+    stroke(canvas, 0)
+    expect(highlighted.has('A')).toBe(true)
+    feature.dispose()
+  })
+
+  it('separates mixed toggle hits and ignores duplicate picks within one stroke', () => {
+    const { canvas, view } = createView()
+    view.pick = jest.fn(() => ['A', 'B', 'C', 'A'].map(id => ({
+      id, minX: 0, minY: 0, maxX: 1, maxY: 1
+    })))
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      shouldToggleEntity: id => id !== 'B',
+      isEntityHighlighted: id => id !== 'C',
+      onEntitiesChanged
+    })
+    feature.activate('paint', 'valve-toggle')
+    stroke(canvas, 0)
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['erase', ['A']], ['paint', ['B', 'C']]
+    ])
+    feature.dispose()
+  })
+
+  it('never applies valve toggling to the standard brush or eraser', () => {
+    const { canvas, view } = createView()
+    const shouldToggleEntity = jest.fn(() => true)
+    const isEntityHighlighted = jest.fn(() => true)
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, shouldToggleEntity, isEntityHighlighted, onEntitiesChanged
+    })
+    feature.activate('paint')
+    stroke(canvas, 0)
+    stroke(canvas, 0)
+    feature.activate('erase', 'valve-toggle')
+    stroke(canvas, 10)
+    expect(feature.currentPaintMode).toBe('standard')
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['paint', ['A']], ['erase', ['B']]
+    ])
+    expect(shouldToggleEntity).not.toHaveBeenCalled()
+    expect(isEntityHighlighted).not.toHaveBeenCalled()
+    feature.dispose()
+  })
+
+  it('paints normally when the application disallows toggling a hit', () => {
+    const { canvas, view } = createView()
+    const isEntityHighlighted = jest.fn(() => true)
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      shouldToggleEntity: () => false,
+      isEntityHighlighted,
+      onEntitiesChanged
+    })
+    feature.activate('paint', 'valve-toggle')
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).toHaveBeenCalledWith('paint', ['A'])
+    expect(isEntityHighlighted).not.toHaveBeenCalled()
+    feature.dispose()
+  })
+
+  it('finishes the active stroke when switching brush modes and toggles only the same tool off', () => {
+    const { canvas, view } = createView()
+    const onStrokeEnded = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, onEntitiesChanged: jest.fn(), onStrokeEnded
+    })
+    feature.activate('paint')
+    canvas.dispatchEvent(pointer('pointerdown'))
+    expect(feature.activate('paint', 'valve-toggle')).toBe(true)
+    expect(onStrokeEnded).toHaveBeenCalledTimes(1)
+    expect(feature.isDrawing).toBe(false)
+    expect(feature.currentPaintMode).toBe('valve-toggle')
+    expect(view.mode).toBe(2)
+    expect(feature.activate('paint')).toBe(true)
+    expect(feature.currentPaintMode).toBe('standard')
+    expect(feature.activate('paint', 'valve-toggle')).toBe(true)
+    expect(feature.activate('paint', 'valve-toggle')).toBe(false)
+    expect(view.mode).toBe(0)
+    feature.dispose()
+  })
+
+  it('toggles saved valve and flow highlights with undo, redo and restored corrections without changing states', () => {
+    const { canvas, view } = createView()
+    const state = new ManualHighlightCorrectionState()
+    const profile = createDefaultPresentationProfile()
+    profile.utilities.push({
+      id: 'water', name: 'Water', enabled: true, order: 0,
+      style: { color: 0x123456, lineWidthPx: 3, opacity: 1, visible: true }
+    })
+    profile.devices.push({
+      id: 'valve', name: 'Valve', order: 0,
+      states: [{
+        id: 'closed', key: 'CLOSE', displayName: 'Closed', enabled: true,
+        color: 0x888888, lineWidthPx: 3, opacity: 1,
+        autoHighlightFlow: false, flowBehavior: 'blocking', order: 0
+      }]
+    })
+    const device: DeviceState = {
+      key: 'A', stateKey: 'CLOSE', deviceType: 'Valve', highlightStyleRefId: 'closed'
+    }
+    const flow: FlowPathStatus = {
+      id: 'flow', name: 'Flow', handleKeys: ['C'], highlightStyleRefId: 'water'
+    }
+    const graph = buildFlowGraphIndex({
+      Areas: [{
+        Id: 'area',
+        ControlModules: [{ CadHandle: 10, Name: 'Valve' }, { CadHandle: 12, Name: 'Valve' }],
+        ContainCadEntityHandles: [10, 11, 12]
+      }],
+      Map: { Graph: { Edges: [{ Source: 10, Target: 11 }] } }
+    })
+    expect(graph.primaryHandleByCadHandle.get('B')).toBe('A')
+    const before = JSON.stringify({ device, flow })
+    const layers = (id: string) => resolveFlowHighlightLayers(
+      profile, id === 'C' ? [flow] : [], id === 'A' ? device : undefined,
+      undefined, undefined,
+      { addition: state.getAddition(id), excluded: state.isExcluded(id) }
+    )
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      shouldToggleEntity: id => graph.valveKeys.has(id),
+      isEntityHighlighted: id =>
+        layers(id).some(layer => layer.style.visible && layer.style.opacity > 0),
+      onStrokeStarted: () => state.beginStroke(),
+      onStrokeEnded: () => { state.endStroke() },
+      onEntitiesChanged: (operation, ids) => {
+        if (operation === 'paint') state.paint(ids, 'water')
+        else state.erase(ids.map(handleKey => ({
+          handleKey, hasAutomaticFlow: handleKey === 'C', hasDeviceHighlight: handleKey === 'A'
+        })))
+      }
+    })
+    feature.activate('paint', 'valve-toggle')
+    stroke(canvas, 0)
+    expect(layers('A')).toEqual([])
+    expect(state.snapshot().exclusions).toEqual(['A'])
+    stroke(canvas, 0)
+    expect(layers('A')[0].id).toBe('manual:flow:A')
+    stroke(canvas, 20)
+    expect(layers('C')).toEqual([])
+    state.undo()
+    expect(layers('C')[0].id).toBe('flow')
+    state.redo()
+    expect(layers('C')).toEqual([])
+    state.restore(state.snapshot())
+    stroke(canvas, 20)
+    expect(layers('C')[0].id).toBe('manual:flow:C')
+    stroke(canvas, 10)
+    stroke(canvas, 10)
+    expect(layers('B')[0].id).toBe('manual:flow:B')
+    expect(JSON.stringify({ device, flow })).toBe(before)
     feature.dispose()
   })
 

@@ -12,6 +12,11 @@ Drawing parsing, geometry processing, and rendering are primarily performed loca
 - Create phase snapshots and copy configurations from previous or historical phases
 - Configure device states, colors, line widths, opacity, and flow-path highlighting rules
 - Add or erase drawing highlights with brush tools
+- Use the **Valve toggle brush** below **Brush** to toggle valve highlights once
+  per stroke in manual mode; other entities retain normal brush behavior.
+  Automatic mode still skips configured devices. Both brushes share style
+  selection, undo/redo, and saved phase corrections without changing device
+  states or automatic routing.
 - Import and export phase configurations and report data
 - Export self-contained HTML, PDF, and SVG files
 - Switch between English and Chinese interfaces

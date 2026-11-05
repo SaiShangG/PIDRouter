@@ -9,6 +9,7 @@ export const en: Record<string, string> = {
   'toolbar.select': 'Select',
   'toolbar.pan': 'Pan',
   'toolbar.brush': 'Brush',
+  'toolbar.valveBrush': 'Valve toggle brush',
   'toolbar.eraser': 'Eraser',
   'toolbar.zoomExtent': 'Zoom Extents',
   'toolbar.zoomWindow': 'Zoom Window',

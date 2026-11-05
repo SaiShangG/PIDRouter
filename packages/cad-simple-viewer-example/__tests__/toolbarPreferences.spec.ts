@@ -17,12 +17,12 @@ describe('toolbar preferences', () => {
   it('enables only the requested toolbar groups by default', () => {
     const rootIds = [
       'select', 'pan', 'zoom-extent', 'zoom-window', 'layer',
-      'brush-highlight', 'brush-erase', 'agent', 'measure', 'export',
+      'brush-highlight', 'brush-valve-toggle', 'brush-erase', 'agent', 'measure', 'export',
       'annotation', 'rev-vis', 'switch-bg', 'monochrome', 'toolbar-placement', 'theme', 'locale'
     ]
     const preferences = defaultToolbarPreferences()
     expect(rootIds.filter(id => !preferences.hiddenIds.includes(id))).toEqual([
-      'select', 'pan', 'zoom-extent', 'zoom-window', 'brush-highlight', 'brush-erase',
+      'select', 'pan', 'zoom-extent', 'zoom-window', 'brush-highlight', 'brush-valve-toggle', 'brush-erase',
       'annotation', 'switch-bg', 'monochrome', 'toolbar-placement'
     ])
     preferences.hiddenIds.push('select')

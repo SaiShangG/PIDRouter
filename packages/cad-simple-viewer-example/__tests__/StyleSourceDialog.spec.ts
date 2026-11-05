@@ -75,6 +75,30 @@ describe('StyleSourceDialog', () => {
     findButton(dialog.element, 'Cancel').click()
   })
 
+  it.each(['zh', 'en'] as const)('explains manual valve toggling in %s without changing style choices', locale => {
+    const dialog = new StyleSourceDialog({
+      mode: 'brush', highlightMode: 'manual', toggleValves: true, profile: createProfile(),
+      getLocale: () => locale, onApply: jest.fn(), onClose: jest.fn()
+    })
+    dialog.open()
+    expect(dialog.element.textContent).toContain(
+      locale === 'en' ? 'toggles valve highlights once per stroke' : '同一笔划仅切换一次'
+    )
+    expect(dialog.element.querySelectorAll('[role="radio"]')).toHaveLength(2)
+    findButton(dialog.element, locale === 'en' ? 'Cancel' : '取消').click()
+  })
+
+  it('retains the device protection explanation for the valve brush in automatic mode', () => {
+    const dialog = new StyleSourceDialog({
+      mode: 'brush', highlightMode: 'auto', toggleValves: true, profile: createProfile(),
+      getLocale: () => 'en', onApply: jest.fn(), onClose: jest.fn()
+    })
+    dialog.open()
+    expect(dialog.element.textContent).toContain('skips valves and interactive devices')
+    expect(dialog.element.textContent).not.toContain('toggles valve highlights')
+    findButton(dialog.element, 'Cancel').click()
+  })
+
   afterEach(() => {
     document.body.replaceChildren()
   })

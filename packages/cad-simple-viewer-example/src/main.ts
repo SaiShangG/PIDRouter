@@ -34,7 +34,7 @@ import {
   AcGePoint2d,
   log
 } from '@mlightcad/data-model'
-import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save, Zap } from 'lucide'
+import { Brush, Eraser, FileUp, Languages, Palette, PanelLeft, Save, ToggleRight, Zap } from 'lucide'
 import type { Object3D } from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
@@ -63,7 +63,8 @@ import type { AuthService, AuthUser } from './auth/authService'
 import { injectLoginStyles } from './auth/loginStyles'
 import {
   BrushHighlightFeature,
-  type BrushOperation
+  type BrushOperation,
+  type BrushPaintMode
 } from './brush/BrushHighlightFeature'
 import { HighlightRenderScheduler } from './brush/HighlightRenderScheduler'
 import { ManualCorrectionControls } from './brush/ManualCorrectionControls'
@@ -1448,7 +1449,25 @@ class CadViewerApp {
         toggle: {
           getValue: () =>
             this.brushHighlightFeature?.isActive === true &&
-            this.brushHighlightFeature.currentOperation === 'paint',
+            this.brushHighlightFeature.currentOperation === 'paint' &&
+            this.brushHighlightFeature.currentPaintMode === 'standard',
+          on: {},
+          off: {}
+        }
+      },
+      {
+        id: 'brush-valve-toggle', label: 'toolbar.valveBrush', requiresDocument: true,
+        icon: () => {
+          const icon = document.createElement('span')
+          icon.append(createPhaseIcon(ToggleRight))
+          return icon
+        },
+        action: () => this.openBrushStyleDialog('valve-toggle'),
+        toggle: {
+          getValue: () =>
+            this.brushHighlightFeature?.isActive === true &&
+            this.brushHighlightFeature.currentOperation === 'paint' &&
+            this.brushHighlightFeature.currentPaintMode === 'valve-toggle',
           on: {},
           off: {}
         }
@@ -2093,6 +2112,13 @@ class CadViewerApp {
         this.syncManualCorrectionControls()
         this.getSimpleUiPlugin()?.refreshToolbar()
       },
+      shouldToggleEntity: objectId =>
+        this.highlightMode === 'manual' &&
+        handleKeysFromObjectId(objectId).some(handleKey => flowGraphIndex.valveKeys.has(handleKey)),
+      isEntityHighlighted: objectId =>
+        this.resolveHighlightLayersForObjectId(objectId, this.getActivePresentationProfile())
+          .some(layer => layer.style.source !== 'invalid-device-state' &&
+            layer.style.source !== 'diagnostic' && layer.style.visible && layer.style.opacity > 0),
       onEntitiesChanged: (operation, objectIds) => {
         this.handleBrushEntitiesChanged(operation, objectIds)
       }
@@ -2100,9 +2126,10 @@ class CadViewerApp {
     this.brushHighlightFeature.attach()
   }
 
-  private openBrushStyleDialog() {
+  private openBrushStyleDialog(paintMode: BrushPaintMode = 'standard') {
     if (this.brushHighlightFeature?.isActive) {
-      if (this.brushHighlightFeature.currentOperation === 'paint') {
+      if (this.brushHighlightFeature.currentOperation === 'paint' &&
+        this.brushHighlightFeature.currentPaintMode === paintMode) {
         this.brushHighlightFeature.deactivate()
         return
       }
@@ -2113,6 +2140,7 @@ class CadViewerApp {
     const dialog = new StyleSourceDialog({
       mode: 'brush',
       highlightMode: this.highlightMode,
+      toggleValves: paintMode === 'valve-toggle',
       profile,
       initialValue:
         this.brushStyleSelection ?? this.loadBrushStyleSelection(profile),
@@ -2120,7 +2148,7 @@ class CadViewerApp {
       onApply: selection => {
         this.brushStyleSelection = selection
         localStorage.setItem(BRUSH_STYLE_STORAGE_KEY, JSON.stringify(selection))
-        if (this.resolveBrushStyleRefId()) this.brushHighlightFeature?.activate('paint')
+        if (this.resolveBrushStyleRefId()) this.brushHighlightFeature?.activate('paint', paintMode)
       },
       onClose: () => undefined
     })

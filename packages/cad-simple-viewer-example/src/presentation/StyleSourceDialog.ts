@@ -39,6 +39,7 @@ export interface StyleSourceSelection {
 export interface StyleSourceDialogOptions {
   mode: 'brush' | 'flow'
   highlightMode?: HighlightMode
+  toggleValves?: boolean
   profile: PresentationProfile
   initialValue?: StyleSourceSelection
   getLocale?: () => AppLocale
@@ -160,7 +161,9 @@ export class StyleSourceDialog {
     if (this.options.mode === 'brush') {
       const hint = document.createElement('p')
       hint.textContent = this.options.highlightMode === 'manual'
-        ? '手动模式：画笔高亮经过的所有可见实体，包括阀门及设备；橡皮可擦除已有高亮。不改变设备状态或触发自动找路。'
+        ? this.options.toggleValves
+          ? '手动模式：阀门画笔经过阀门时切换高亮，同一笔划仅切换一次；其他实体保持普通画笔行为。不改变设备状态或触发自动找路。'
+          : '手动模式：画笔高亮经过的所有可见实体，包括阀门及设备；橡皮可擦除已有高亮。不改变设备状态或触发自动找路。'
         : '仅修正高亮外观，画笔跳过阀门及可交互设备，不改变设备状态或触发自动找路。橡皮可排除错误的流路高亮。'
       body.append(hint)
     }

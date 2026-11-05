@@ -6,6 +6,7 @@ import {
 import type { AcDbObjectId } from '@mlightcad/data-model'
 
 export type BrushOperation = 'paint' | 'erase'
+export type BrushPaintMode = 'standard' | 'valve-toggle'
 
 export interface BrushHighlightFeatureOptions {
   getView(): AcEdBaseView | undefined
@@ -15,6 +16,8 @@ export interface BrushHighlightFeatureOptions {
   onActiveChanged?(): void
   onStrokeStarted?(operation: BrushOperation): void
   onStrokeEnded?(): void
+  shouldToggleEntity?(objectId: AcDbObjectId): boolean
+  isEntityHighlighted?(objectId: AcDbObjectId): boolean
   onEntitiesChanged(operation: BrushOperation, objectIds: readonly AcDbObjectId[]): void
 }
 
@@ -27,6 +30,7 @@ export class BrushHighlightFeature {
   private attachedView?: AcEdBaseView
   private active = false
   private operation: BrushOperation = 'paint'
+  private paintMode: BrushPaintMode = 'standard'
   private previousMode?: AcEdViewMode
   private previousCursor?: AcEdCorsorType
   private pointerId?: number
@@ -51,20 +55,22 @@ export class BrushHighlightFeature {
     this.attachedView = view
   }
 
-  activate(operation: BrushOperation) {
+  activate(operation: BrushOperation, paintMode: BrushPaintMode = 'standard') {
     if (this.disposed) return false
     const view = this.options.getView()
     if (!view) return false
     this.attach()
     if (!this.attachedView) return false
 
-    if (this.active && this.operation === operation) {
+    const nextPaintMode = operation === 'paint' ? paintMode : 'standard'
+    if (this.active && this.operation === operation && this.paintMode === nextPaintMode) {
       this.deactivate()
       return false
     }
 
     this.releasePointer()
     this.operation = operation
+    this.paintMode = nextPaintMode
     if (!this.active) {
       this.previousMode = view.mode
       this.previousCursor = view.editor.currentCursor
@@ -116,6 +122,10 @@ export class BrushHighlightFeature {
 
   get currentOperation() {
     return this.operation
+  }
+
+  get currentPaintMode() {
+    return this.paintMode
   }
 
   get isDrawing() {
@@ -271,9 +281,21 @@ export class BrushHighlightFeature {
 
     const idsToReport = ids.filter(id => !this.strokeHitIds.has(id))
     idsToReport.forEach(id => this.strokeHitIds.add(id))
-    if (idsToReport.length > 0) {
-      this.options.onEntitiesChanged(this.operation, idsToReport)
-    }
+    const groups = new Map<BrushOperation, AcDbObjectId[]>()
+    idsToReport.forEach(id => {
+      const operation = this.operation === 'paint' &&
+        this.paintMode === 'valve-toggle' &&
+        this.options.shouldToggleEntity?.(id) &&
+        this.options.isEntityHighlighted?.(id)
+        ? 'erase'
+        : this.operation
+      const group = groups.get(operation) ?? []
+      group.push(id)
+      groups.set(operation, group)
+    })
+    groups.forEach((objectIds, operation) => {
+      this.options.onEntitiesChanged(operation, objectIds)
+    })
   }
 
   private suppressEvent(event: Event) {
