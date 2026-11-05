@@ -1,4 +1,3 @@
-import { HighlightModeValidationError, normalizeHighlightMode } from './highlightMode'
 import {
   cloneManualHighlightCorrections,
   ManualHighlightCorrectionsValidationError
@@ -134,7 +133,6 @@ const clonePhase = (phase: PhaseSnapshot): PhaseSnapshot => ({
   tankId: phase.tankId,
   drawing: { ...phase.drawing },
   sourcePhaseId: phase.sourcePhaseId,
-  highlightMode: normalizeHighlightMode(phase.highlightMode),
   flowState: cloneFlowState(phase.flowState),
   manualCorrections: cloneManualHighlightCorrections(phase.manualCorrections),
   textNotes: phase.textNotes?.map(note => ({
@@ -571,7 +569,6 @@ const normalizeState = (state: PhaseWorkspaceState): PhaseWorkspaceState => {
           number: phase.number,
           name: phase.name,
           tankId: typeof phase.tankId === 'string' ? phase.tankId.trim() || undefined : undefined,
-          highlightMode: normalizeHighlightMode(phase.highlightMode),
           manualCorrections: cloneManualHighlightCorrections(phase.manualCorrections),
           flowState: {
             flowPaths: normalizeFlowPaths(
@@ -629,8 +626,7 @@ export class PhaseWorkspaceStore {
       }
       return new PhaseWorkspaceStore()
     } catch (error) {
-      if (error instanceof ManualHighlightCorrectionsValidationError ||
-        error instanceof HighlightModeValidationError) throw error
+      if (error instanceof ManualHighlightCorrectionsValidationError) throw error
       return new PhaseWorkspaceStore()
     }
   }
@@ -845,7 +841,6 @@ export class PhaseWorkspaceStore {
       drawing: phaseDrawing,
       tankId: sourcePhase?.tankId,
       sourcePhaseId: sourcePhase?.id,
-      highlightMode: normalizeHighlightMode(sourcePhase?.highlightMode),
       flowState: sourcePhase
         ? cloneFlowState(sourcePhase.flowState)
         : { flowPaths: [] },
@@ -941,13 +936,10 @@ export class PhaseWorkspaceStore {
     processId: string,
     sequenceId: string,
     phaseId: string,
-    state: Pick<PhaseSnapshot, 'flowState' | 'textNotes' | 'manualCorrections' | 'highlightMode'>
+    state: Pick<PhaseSnapshot, 'flowState' | 'textNotes' | 'manualCorrections'>
   ) {
     const phase = this.requirePhase(processId, sequenceId, phaseId)
     const corrections = cloneManualHighlightCorrections(state.manualCorrections)
-    if (state.highlightMode !== undefined) {
-      phase.highlightMode = normalizeHighlightMode(state.highlightMode)
-    }
     phase.flowState = cloneFlowState(state.flowState)
     if (corrections !== undefined) phase.manualCorrections = corrections
     phase.textNotes = state.textNotes?.map(note => ({
@@ -1048,7 +1040,6 @@ export class PhaseWorkspaceStore {
       phase.drawing.kind === 'assigned' ? phase.drawing.assetId : undefined
     phase.drawing = { ...sourcePhase.drawing }
     phase.sourcePhaseId = sourcePhase.id
-    phase.highlightMode = normalizeHighlightMode(sourcePhase.highlightMode)
     phase.flowState = cloneFlowState(sourcePhase.flowState)
     phase.manualCorrections = cloneManualHighlightCorrections(sourcePhase.manualCorrections)
     phase.updatedAt = this.now()

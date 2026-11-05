@@ -39,42 +39,47 @@ const createProcessContext = (store: PhaseWorkspaceStore) => {
 }
 
 describe('PhaseWorkspaceStore', () => {
-  it('isolates highlight modes and retains them through copying, persistence and legacy loading', () => {
+  it('discards obsolete edit modes while retaining corrections through copying and persistence', () => {
     const store = createStore()
     const { process, sequence } = createProcessContext(store)
     const first = store.createPhase({
       processId: process.id, sequenceId: sequence.id, number: 1, name: 'Manual',
       source: { kind: 'new', drawing, displayName: 'PID' }
     })
-    expect(first.highlightMode).toBe('auto')
+    expect(first).not.toHaveProperty('highlightMode')
     store.updatePhaseState(process.id, sequence.id, first.id, {
-      flowState: flowState(['A']), highlightMode: 'manual'
+      flowState: flowState(['A']),
+      manualCorrections: { additions: [{ handleKey: 'A', highlightStyleRefId: 'water' }], exclusions: ['B'] }
     })
     const inherited = store.createPhase({
       processId: process.id, sequenceId: sequence.id, number: 2, name: 'Inherited',
       source: { kind: 'previous' }
     })
-    expect(inherited.highlightMode).toBe('manual')
+    expect(inherited).not.toHaveProperty('highlightMode')
+    expect(inherited.manualCorrections?.additions[0].handleKey).toBe('A')
     const copied = store.copyPhase(process.id, sequence.id, first.id, sequence.id, 3, 'Copy')
-    expect(copied.highlightMode).toBe('manual')
+    expect(copied).not.toHaveProperty('highlightMode')
     const automatic = store.createPhase({
       processId: process.id, sequenceId: sequence.id, number: 4, name: 'Automatic',
       source: { kind: 'unassigned' }
     })
-    expect(automatic.highlightMode).toBe('auto')
+    expect(automatic).not.toHaveProperty('highlightMode')
     store.associateMarkedPhase(process.id, sequence.id, automatic.id, process.id, sequence.id, first.id)
-    expect(store.snapshot().processes[0].sequences[0].phases[3].highlightMode).toBe('manual')
+    expect(store.snapshot().processes[0].sequences[0].phases[3].manualCorrections)
+      .toEqual(inherited.manualCorrections)
     const setItem = jest.fn()
     expect(store.persist({ setItem })).toBe(true)
     const restored = PhaseWorkspaceStore.load({ getItem: () => setItem.mock.calls[0][1] })
     expect(restored.snapshot()).toEqual(store.snapshot())
     const legacy = restored.snapshot()
-    delete legacy.processes[0].sequences[0].phases[0].highlightMode
-    expect(new PhaseWorkspaceStore(legacy).snapshot().processes[0].sequences[0].phases[0].highlightMode)
-      .toBe('auto')
-    Object.assign(legacy.processes[0].sequences[0].phases[0], { highlightMode: 'invalid' })
-    expect(() => PhaseWorkspaceStore.load({ getItem: () => JSON.stringify(legacy) }))
-      .toThrow('Invalid Phase highlight mode')
+    for (const highlightMode of ['auto', 'manual', 'invalid']) {
+      Object.assign(legacy.processes[0].sequences[0].phases[0], { highlightMode })
+      const loaded = PhaseWorkspaceStore.load({ getItem: () => JSON.stringify(legacy) })
+      expect(loaded.snapshot().processes[0].sequences[0].phases[0])
+        .not.toHaveProperty('highlightMode')
+      expect(loaded.snapshot().processes[0].sequences[0].phases[0].manualCorrections)
+        .toEqual(inherited.manualCorrections)
+    }
   })
 
   it('retains Tank assignments through snapshots, reload and copying', () => {

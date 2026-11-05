@@ -134,7 +134,6 @@ export interface PhaseSnapshot {
   tankId?: string
   drawing: PhaseDrawingAssociation
   sourcePhaseId?: string
-  highlightMode?: HighlightMode
   flowState: FlowStateSnapshot
   manualCorrections?: ManualHighlightCorrections
   textNotes?: import('./phasePidOverlay').PhasePidOverlayTextNote[]

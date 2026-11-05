@@ -35,21 +35,12 @@ const createValidOverlay = () => ({
 })
 
 describe('parsePhasePidOverlay', () => {
-  it.each(['auto', 'manual'] as const)('preserves the %s highlight mode', highlightMode => {
+  it.each(['auto', 'manual', 'invalid', false, undefined])('ignores obsolete persisted edit mode %s', highlightMode => {
     const result = parsePhasePidOverlay({ ...createValidOverlay(), highlightMode })
     expect(result.status).toBe('valid')
     if (result.status !== 'valid') throw new Error('Expected valid overlay')
-    expect(result.overlay.highlightMode).toBe(highlightMode)
+    expect(result.overlay).not.toHaveProperty('highlightMode')
     expect(result.warnings).toEqual([])
-  })
-
-  it('defaults legacy data to automatic mode and reports invalid modes explicitly', () => {
-    const legacy = parsePhasePidOverlay(createValidOverlay())
-    if (legacy.status !== 'valid') throw new Error('Expected valid overlay')
-    expect(legacy.overlay.highlightMode).toBe('auto')
-    const invalid = parsePhasePidOverlay({ ...createValidOverlay(), highlightMode: false })
-    if (invalid.status !== 'valid') throw new Error('Expected valid root')
-    expect(invalid.warnings).toEqual([{ code: 'invalid-highlight-mode', path: 'highlightMode' }])
   })
 
   it('does not convert legacy style sources into style references', () => {

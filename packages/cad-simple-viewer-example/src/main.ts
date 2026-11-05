@@ -111,7 +111,6 @@ import {
   translate
 } from './locale'
 import { DrawingAssetStore } from './phase/drawingAssetStore'
-import { normalizeHighlightMode } from './phase/highlightMode'
 import { ManualHighlightCorrectionState } from './phase/manualHighlightCorrections'
 import { resolveWorkspacePhase, shouldHotSwitchPhase } from './phase/phaseActivationUtils'
 import {
@@ -474,6 +473,7 @@ class CadViewerApp {
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
   private readonly manualCorrections = new ManualHighlightCorrectionState()
   private highlightMode: HighlightMode = 'auto'
+  private readonly phaseHighlightModes = new Map<string, HighlightMode>()
   private brushStrokeStyleRefId?: string
   private manualCorrectionControls?: ManualCorrectionControls
   private manualCorrectionScope = 0
@@ -2238,7 +2238,7 @@ class CadViewerApp {
       : undefined
     if (operation === 'paint' && !styleRefId) return
     const hits = objectIds.flatMap(objectId => {
-      if (this.highlightMode === 'auto' && operation === 'paint' &&
+      if (this.highlightMode === 'auto' &&
         this.isBrushProtectedObject(objectId, profile)) return []
       const handleKey = this.getManualHighlightHandleKey(objectId)
       if (!handleKey) {
@@ -2336,12 +2336,19 @@ class CadViewerApp {
     this.brushHighlightFeature?.deactivate()
     this.manualHighlightRender.flush()
     this.highlightMode = this.highlightMode === 'auto' ? 'manual' : 'auto'
+    const { processId, sequenceId, phaseId } = this.loadedPhase
+    this.phaseHighlightModes.set(
+      this.getPhaseHighlightModeKey(processId, sequenceId, phaseId),
+      this.highlightMode
+    )
     this.manualCorrectionScope++
-    this.syncOpenHighlightRoots()
     this.valveDebugFeature?.refreshFlowState({ recompute: this.highlightMode === 'auto' })
-    this.captureLoadedPhaseState()
     this.syncManualCorrectionControls()
     this.getSimpleUiPlugin()?.refreshToolbar()
+  }
+
+  private getPhaseHighlightModeKey(processId: string, sequenceId: string, phaseId: string) {
+    return JSON.stringify([this.activeProjectId ?? 'local', processId, sequenceId, phaseId])
   }
 
   private syncManualCorrectionControls() {
@@ -4493,10 +4500,8 @@ class CadViewerApp {
       this.activeFlowPathId,
       {
         addition: handleKey ? this.manualCorrections.getAddition(handleKey) : undefined,
-        excluded: handleKey ? this.manualCorrections.isExcluded(handleKey) : false,
-        device: this.isBrushProtectedObject(objectId, profile)
-      },
-      this.highlightMode
+        excluded: handleKey ? this.manualCorrections.isExcluded(handleKey) : false
+      }
     )
   }
 
@@ -4562,7 +4567,6 @@ class CadViewerApp {
     const flowPaths = [...flowPathsById.values()].filter(flowPath => flowPath.handleKeys.length > 0)
     const manualCorrections = this.manualCorrections.snapshot()
     const nextState = {
-      highlightMode: this.highlightMode,
       flowState: {
         flowPaths,
         ...(this.captureActiveFlowPathId()
@@ -4579,7 +4583,6 @@ class CadViewerApp {
         : {})
     }
     const stateChanged =
-      normalizeHighlightMode(currentPhase.highlightMode) !== this.highlightMode ||
       JSON.stringify(currentPhase.flowState) !==
       JSON.stringify(nextState.flowState) ||
       JSON.stringify(currentPhase.textNotes ?? []) !==
@@ -4700,7 +4703,9 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
-    this.highlightMode = normalizeHighlightMode(phase.highlightMode)
+    this.highlightMode = this.phaseHighlightModes.get(
+      this.getPhaseHighlightModeKey(processId, sequenceId, phaseId)
+    ) ?? 'auto'
     this.flowRuntimeCache = undefined
     this.clearPhaseTextNotes()
     const styleWarnings = findPhaseOverlayStyleWarnings(

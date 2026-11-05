@@ -10,7 +10,6 @@ import type {
 } from '../api/processAssistantTypes'
 import { NETWORK_DEFAULTS } from '../networkConfig'
 import { composeFinalFlowPaths } from './composeFinalFlowPaths'
-import { normalizeHighlightMode } from './highlightMode'
 import { normalizeManualHighlightCorrections } from './manualHighlightCorrections'
 import {
   parsePhasePidOverlay,
@@ -441,7 +440,7 @@ export class PhaseWorkspaceRepository {
     const parsed = parsePhasePidOverlay(phase.jsonData ?? '')
     if (parsed.status !== 'valid' || parsed.warnings.some(warning =>
       warning.code === 'invalid-manual-corrections' || warning.code === 'invalid-auto-flow-path' ||
-      warning.code === 'invalid-flow-path' || warning.code === 'invalid-highlight-mode')) {
+      warning.code === 'invalid-flow-path')) {
       throw new Error(`Phase ${phase.id} contains invalid highlight snapshot data`)
     }
     const timestamp = this.now()
@@ -451,7 +450,6 @@ export class PhaseWorkspaceRepository {
       number: toNumber(phase.index, position + 1),
       name: phase.name?.trim() || `Phase ${phase.id}`,
       tankId: overlay?.tankId,
-      highlightMode: normalizeHighlightMode(overlay?.highlightMode),
       drawing: this.readDrawing(overlay?.drawing, drawingAssets),
       flowState: overlay ? this.readFlowState(overlay) : { flowPaths: [] },
       ...(overlay?.manualCorrections
@@ -586,7 +584,6 @@ export class PhaseWorkspaceRepository {
       OrderId: 1,
       Name: '',
       Comment: null,
-      highlightMode: 'auto',
       flowPaths: [],
       autoFlowPaths: [],
       deviceStates: null,
@@ -647,7 +644,6 @@ export class PhaseWorkspaceRepository {
       OrderId: orderIndex,
       Name: phase.name,
       Comment: null,
-      highlightMode: normalizeHighlightMode(phase.highlightMode),
       ...(phase.tankId ? { tankId: phase.tankId } : {}),
       drawing:
         fileId !== undefined && phase.drawing.kind === 'assigned'

@@ -8,16 +8,18 @@ const phase = (): PhaseSnapshot => ({
 })
 
 describe('PhaseSaveState', () => {
-  it('tracks mode changes as highlight edits without making legacy defaults dirty', () => {
+  it('ignores edit mode metadata while tracking persistent manual corrections', () => {
     const tracker = new PhaseSaveState()
     const original = phase()
     tracker.accept(original)
-    original.highlightMode = 'auto'
-    expect(tracker.get(original).saved).toBe(true)
-    original.highlightMode = 'manual'
+    const legacy = { ...original, highlightMode: 'auto' }
+    expect(tracker.get(legacy).saved).toBe(true)
+    legacy.highlightMode = 'manual'
+    expect(tracker.get(legacy).saved).toBe(true)
+    original.manualCorrections = {
+      additions: [{ handleKey: 'A', highlightStyleRefId: 'water' }], exclusions: ['B']
+    }
     expect(tracker.get(original).changes).toEqual(['highlights'])
-    tracker.accept(original)
-    expect(tracker.get(original).saved).toBe(true)
   })
 
   it('ignores absent optional fields added by workspace snapshot cloning', () => {

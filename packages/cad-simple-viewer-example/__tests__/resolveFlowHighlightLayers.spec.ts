@@ -10,12 +10,12 @@ describe('resolveFlowHighlightLayers', () => {
     }
     const warning = resolveFlowHighlightLayers(profile, [], device)[0]
     expect(resolveFlowHighlightLayers(profile, [], device, undefined, undefined, {
-      excluded: true, device: true
-    }, 'manual')).toEqual([warning])
+      excluded: true
+    })).toEqual([warning])
     expect(resolveFlowHighlightLayers(profile, [], device, undefined, undefined, {
-      excluded: false, device: true,
+      excluded: false,
       addition: { handleKey: 'A', highlightStyleRefId: 'missing-manual-style' }
-    }, 'manual')).toEqual([
+    })).toEqual([
       expect.objectContaining({ id: 'manual:flow:A' }), warning
     ])
   })
@@ -131,7 +131,7 @@ describe('resolveFlowHighlightLayers', () => {
     }
     const before = JSON.stringify(device)
     const warning = resolveFlowHighlightLayers(profile, [water], device, undefined, undefined, {
-      excluded: true, device: true,
+      excluded: true,
       addition: { handleKey: 'A', highlightStyleRefId: 'water' }
     })
     expect(warning).toEqual([{

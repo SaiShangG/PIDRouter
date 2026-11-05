@@ -87,13 +87,16 @@ Development and deployment network settings, including the runtime API override,
 ### Automatic and manual highlighting
 
 The viewer toolbar's **Automatic highlighting** toggle belongs to the loaded
-Phase, not the user's toolbar preferences. New Phases and older data without
-`highlightMode` use `auto`; copies and inherited Phases retain their source mode.
+Phase's editing session, not its saved data or the user's toolbar preferences.
+Modes are remembered in memory for each Project/Process/Sequence/Phase during
+the current application session. Switching away and back restores the chosen
+mode; reloading the application, new Phases and copies start in `auto`.
 The toggle is disabled without an editable loaded Phase and while loading or
 drawing a stroke.
 
 - **On (`auto`)** preserves configured-device state selection, automatic routing,
-  device-style precedence and brush protection.
+  and device protection at brush/eraser operation entry points. It does not
+  suppress or undo previously saved manual device corrections.
 - **Off (`manual`)** retains existing automatic routes and device highlights but
   stops state-changing device interactions and automatic route recalculation,
   including recalculation after flow-rule edits. The brush can highlight every
@@ -102,16 +105,22 @@ drawing a stroke.
   changes equipment state or CAD geometry.
 - Manual additions override normal highlights, and exclusions hide them.
   Invalid-device warning frames remain visible even after painting or erasing.
-  Returning to automatic mode restores device protection and precedence without
-  deleting manual records or recalculating stored routes merely for the switch.
+  Returning to automatic mode changes only future editing permissions; it does
+  not change the picture, delete manual records or recalculate stored routes.
+  Manual corrections remain authoritative after automatic route recalculation.
+  Only undo or explicitly clearing corrections restores the corresponding base
+  presentation.
 
-Mode changes are saved with the Phase in local workspace data and backend overlay
-JSON, participate in dirty/save tracking, and survive reopening. The viewer and
-derived `flowPaths` share the mode-aware resolver. Consumers of backend overlays
-must honor `highlightMode` and `manualCorrections` when displaying `deviceStates`;
-those records retain the original business states even when their highlights
-have been overridden or erased. Invalid mode values are reported and rejected
-on workspace/backend loading rather than silently replacing saved data.
+Mode changes are not submitted to the backend, written to local workspace data,
+or tracked as unsaved Phase changes. Obsolete persisted `highlightMode` values
+are ignored on loading and omitted on subsequent saves. Manual additions and
+exclusions are still saved with each Phase and survive switching or reopening,
+even when the editing mode resets to automatic. The viewer and derived
+`flowPaths` share a resolver that does not depend on editing mode. Consumers of
+backend overlays must apply exclusions and additions before rendering
+`deviceStates`; those records retain the original business states even when
+their highlights have been overridden or erased. No backend mode field is
+required.
 
 ### Brush debugging
 
@@ -136,9 +145,10 @@ a configured Title (case-insensitive, ignoring surrounding whitespace).
 Graph-inferred ownership does not make connected pipe segments devices.
 Unmatched entities do not gain device interaction or brush protection merely
 because they are connected to a valve or have a saved device-state record.
-Right-click state selection, automatic-mode brush protection, manual-highlight
-rendering, and brush debug share this recognition rule. Manual mode removes brush
-protection without changing device recognition or the flow graph.
+Right-click state selection, automatic-mode brush/eraser protection and brush
+debug share this recognition rule. Rendering saved corrections never depends on
+device protection. Manual mode removes operation protection without changing
+device recognition or the flow graph.
 
 ### Configured-device automatic flow rules
 
@@ -189,9 +199,9 @@ Phase JSON separates three sources and a derived final snapshot:
   survive round trips; restoration does not infer owners or run routing.
 - `manualCorrections`: each `additions` record contains one `handleKey` and a
   required `highlightStyleRefId`; a batch stroke creates multiple records.
-  `exclusions` store erased automatic-flow handles and, in manual mode, erased
-  device highlights. Automatic mode skips valves and interactive devices;
-  manual mode permits ordinary entity highlighting on them.
+  `exclusions` store erased automatic-flow and device highlights. These records
+  apply in every editing mode. Automatic editing skips valves and interactive
+  devices; manual editing permits ordinary entity highlighting on them.
 - `flowPaths`: derived final visible flow entries, composed from automatic routes
   and corrections using the same layering resolver as the viewer. Each entry has
   only `handleKey` and `highlightStyleRefId`. Device-state indicators remain in

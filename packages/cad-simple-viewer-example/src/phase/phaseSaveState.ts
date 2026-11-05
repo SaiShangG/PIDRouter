@@ -9,7 +9,6 @@ const values = (phase: PhaseSnapshot): Record<Exclude<PhaseChangeKind, 'order' |
   details: { name: phase.name, number: phase.number, tankId: phase.tankId ?? null },
   drawing: phase.drawing,
   highlights: {
-    highlightMode: phase.highlightMode ?? 'auto',
     flowPaths: phase.flowState.flowPaths,
     activeFlowPathId: phase.flowState.activeFlowPathId ?? null,
     manualCorrections: phase.manualCorrections ?? { additions: [], exclusions: [] }
