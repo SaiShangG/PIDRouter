@@ -472,8 +472,7 @@ class CadViewerApp {
   private readonly phaseTextNoteIds = new Map<AcDbObjectId, string>()
   private readonly phaseTextNoteCreatedAt = new Map<AcDbObjectId, string>()
   private readonly manualCorrections = new ManualHighlightCorrectionState()
-  private highlightMode: HighlightMode = 'auto'
-  private readonly phaseHighlightModes = new Map<string, HighlightMode>()
+  private highlightMode: HighlightMode = 'manual'
   private brushStrokeStyleRefId?: string
   private manualCorrectionControls?: ManualCorrectionControls
   private manualCorrectionScope = 0
@@ -560,9 +559,9 @@ class CadViewerApp {
       AcApI18n.mergeLocaleMessage(locale, {
         simpleUi: {
           toolbar: {
-            highlightAuto: translateUiText(locale, '自动高亮'),
-            highlightAutoOn: translateUiText(locale, '自动高亮：开启'),
-            highlightAutoOff: translateUiText(locale, '自动高亮：关闭')
+            highlightAuto: translateUiText(locale, '全局高亮模式'),
+            highlightAutoOn: translateUiText(locale, '全局模式：自动'),
+            highlightAutoOff: translateUiText(locale, '全局模式：手动')
           }
         }
       })
@@ -1425,7 +1424,7 @@ class CadViewerApp {
         id: 'highlight-auto',
         label: 'toolbar.highlightAuto',
         requiresDocument: true,
-        disabled: () => !this.loadedPhase || !this.canEditManualCorrections(),
+        disabled: () => !this.canToggleHighlightMode(),
         icon: () => {
           const icon = document.createElement('span')
           icon.append(createPhaseIcon(Zap))
@@ -2329,26 +2328,22 @@ class CadViewerApp {
   }
 
   private toggleHighlightMode() {
-    if (!this.loadedPhase || !this.canEditManualCorrections()) {
-      this.showMessage('当前没有可编辑的 Phase，无法切换高亮模式', 'warning')
+    if (!this.canToggleHighlightMode()) {
+      this.showMessage('当前无法切换高亮模式', 'warning')
       return
     }
     this.brushHighlightFeature?.deactivate()
     this.manualHighlightRender.flush()
     this.highlightMode = this.highlightMode === 'auto' ? 'manual' : 'auto'
-    const { processId, sequenceId, phaseId } = this.loadedPhase
-    this.phaseHighlightModes.set(
-      this.getPhaseHighlightModeKey(processId, sequenceId, phaseId),
-      this.highlightMode
-    )
     this.manualCorrectionScope++
     this.valveDebugFeature?.refreshFlowState({ recompute: this.highlightMode === 'auto' })
     this.syncManualCorrectionControls()
     this.getSimpleUiPlugin()?.refreshToolbar()
   }
 
-  private getPhaseHighlightModeKey(processId: string, sequenceId: string, phaseId: string) {
-    return JSON.stringify([this.activeProjectId ?? 'local', processId, sequenceId, phaseId])
+  private canToggleHighlightMode() {
+    return !this.workspaceLoading.active && !this.isLoadingFile &&
+      !this.pendingPhase && !this.brushHighlightFeature?.isDrawing
   }
 
   private syncManualCorrectionControls() {
@@ -4702,9 +4697,6 @@ class CadViewerApp {
     )
     const phase = sequence?.phases.find(item => item.id === phaseId)
     if (!phase) return false
-    this.highlightMode = this.phaseHighlightModes.get(
-      this.getPhaseHighlightModeKey(processId, sequenceId, phaseId)
-    ) ?? 'auto'
     this.flowRuntimeCache = undefined
     this.clearPhaseTextNotes()
     const styleWarnings = findPhaseOverlayStyleWarnings(
@@ -5098,7 +5090,6 @@ class CadViewerApp {
     this.flowRuntimeCache = undefined
     this.valveDebugFeature?.reset()
     this.clearManualBrushState()
-    this.highlightMode = 'auto'
     if (preserveHighlightRoots) {
       this.openHighlightGroups.clear()
       this.openHighlightConnections.clear()
@@ -5118,7 +5109,6 @@ class CadViewerApp {
     this.tankOptions = []
     this.phasePanel?.resetTankSelection()
     this.loadedPhase = undefined
-    this.highlightMode = 'auto'
     this.loadedDrawingAssetId = undefined
     this.pendingPhase = undefined
     this.phaseActivationToken++

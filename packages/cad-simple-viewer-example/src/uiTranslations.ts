@@ -3,10 +3,10 @@ import type { AppLocale } from './locale'
 type TranslationPair = readonly [zh: string, en: string]
 
 const pairs: TranslationPair[] = [
-  ['自动高亮', 'Automatic highlighting'],
-  ['自动高亮：开启', 'Automatic highlighting: on'],
-  ['自动高亮：关闭', 'Automatic highlighting: off'],
-  ['当前没有可编辑的 Phase，无法切换高亮模式', 'No editable Phase is available. The highlight mode cannot be changed.'],
+  ['全局高亮模式', 'Global highlight mode'],
+  ['全局模式：自动', 'Global mode: automatic'],
+  ['全局模式：手动', 'Global mode: manual'],
+  ['当前无法切换高亮模式', 'The highlight mode cannot be changed right now.'],
   ['手动模式下无法更改设备状态，请先开启自动高亮', 'Device states cannot be changed in manual mode. Enable automatic highlighting first.'],
   ['手动模式：画笔高亮经过的所有可见实体，包括阀门及设备；橡皮可擦除已有高亮。不改变设备状态或触发自动找路。', 'Manual mode: the brush highlights all visible entities it crosses, including valves and devices; the eraser removes existing highlights. Device states and automatic routing are unchanged.'],
   ['设备实体不存在，无法应用状态', 'The device entity is unavailable. Its state could not be applied.'],
