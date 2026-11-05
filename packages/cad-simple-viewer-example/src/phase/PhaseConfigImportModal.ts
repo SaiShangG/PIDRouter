@@ -25,6 +25,7 @@ export class PhaseConfigImportModal {
   private labels?: PhaseConfigImportLabels
   private resolve?: (files?: File[]) => void
   private submit?: (files: File[]) => Promise<void>
+  private uploading = false
 
   constructor() {
     this.element.className = 'phase-config-import-modal'
@@ -48,6 +49,7 @@ export class PhaseConfigImportModal {
     labels: PhaseConfigImportLabels,
     submit: (files: File[]) => Promise<void>
   ): Promise<File[] | undefined> {
+    if (this.uploading) throw new Error('A configuration import is already in progress')
     this.close()
     this.labels = labels
     this.submit = submit
@@ -232,7 +234,7 @@ export class PhaseConfigImportModal {
   }
 
   private async startUpload() {
-    if (this.files.length === 0 || !this.labels || !this.submit) return
+    if (this.uploading || this.files.length === 0 || !this.labels || !this.submit) return
     const dropZone = this.element.querySelector<HTMLButtonElement>(
       '.phase-config-import-dropzone'
     )
@@ -247,6 +249,15 @@ export class PhaseConfigImportModal {
     const progressTrack = progress?.querySelector<HTMLElement>('[role="progressbar"]')
     const progressBar = progressTrack?.querySelector<HTMLElement>('i')
     if (!dropZone || !confirm || !progress || !progressStatus || !progressValue || !progressTrack || !progressBar) return
+    this.uploading = true
+    const closeButtons = this.element.querySelectorAll<HTMLButtonElement>(
+      '.phase-config-import-close, .phase-config-import-cancel'
+    )
+    closeButtons.forEach(button => { button.disabled = true })
+    const validation = this.element.querySelector<HTMLParagraphElement>(
+      '.phase-config-import-validation'
+    )
+    if (validation) validation.hidden = true
     dropZone.disabled = true
     confirm.disabled = true
     progress.hidden = false
@@ -258,17 +269,18 @@ export class PhaseConfigImportModal {
       progressBar.style.width = '100%'
       progressStatus.textContent = this.labels?.complete ?? ''
       this.finish(this.files)
-    } catch {
-      const validation = this.element.querySelector<HTMLParagraphElement>(
-        '.phase-config-import-validation'
-      )
+    } catch (error) {
       if (validation) {
-        validation.textContent = this.labels.uploadFailed
+        const detail = error instanceof Error ? error.message : String(error)
+        validation.textContent = `${this.labels.uploadFailed} ${detail}`
         validation.hidden = false
       }
       dropZone.disabled = false
       confirm.disabled = false
       progress.hidden = true
+    } finally {
+      this.uploading = false
+      closeButtons.forEach(button => { button.disabled = false })
     }
   }
 
@@ -278,6 +290,7 @@ export class PhaseConfigImportModal {
   }
 
   private close() {
+    if (this.uploading) return
     this.finish(undefined)
   }
 

@@ -136,6 +136,142 @@ describe('ProcessAssistantClient', () => {
   })
 })
 
+describe('general skill completion', () => {
+  const request = {
+    files: [],
+    projectId: 10,
+    name: 'Phase import',
+    skillName: 'procedure-configuration'
+  }
+  const json = (value: unknown) => new Response(JSON.stringify(value), {
+    headers: { 'Content-Type': 'application/json' }
+  })
+  const submitted = () => json({ success: true, result: 'import-task' })
+  const task = (status: number, result: unknown = null) => ({
+    id: 'import-task', status, result
+  })
+
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('refreshes an initially empty workspace only after the matching import succeeds', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(submitted())
+      .mockResolvedValueOnce(json([{
+        id: 'another-task', status: 2, result: { success: true }
+      }]))
+      .mockResolvedValueOnce(json([task(0)]))
+      .mockResolvedValueOnce(json([task(1)]))
+      .mockResolvedValueOnce(json([task(2, { success: true })])) as jest.MockedFunction<typeof fetch>
+    const refreshWorkspace = jest.fn()
+    const complete = new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request).then(refreshWorkspace)
+
+    await jest.advanceTimersByTimeAsync(2000)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(refreshWorkspace).not.toHaveBeenCalled()
+
+    await jest.advanceTimersByTimeAsync(1000)
+    await complete
+    expect(refreshWorkspace).toHaveBeenCalledTimes(1)
+    for (const [url, options] of fetchMock.mock.calls.slice(1)) {
+      expect(url).toBe('http://api.example.test/api/v1/PeriodicTask?id=import-task')
+      expect(options).toMatchObject({ method: 'GET', cache: 'no-store' })
+    }
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it.each([
+    [false, null, 'Import rejected'],
+    [true, null, 'Skill submission did not return a task ID'],
+    [true, '  ', 'Skill submission did not return a task ID']
+  ])('rejects unsuccessful or missing task submissions (%s, %s)', async (success, result, message) => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(json({
+      success, result, message: success ? null : message
+    })) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request)).rejects.toThrow(message)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [2, { success: false, message: 'Workbook is invalid' }, 'Workbook is invalid'],
+    [2, { success: false }, 'Skill execution failed'],
+    [2, null, 'Skill execution failed'],
+    [3, null, 'Skill task failed'],
+    [4, null, 'Skill task was canceled'],
+    [99, null, 'Skill task returned an invalid status']
+  ])('rejects failed or invalid task results (%s, %j)', async (status, result, message) => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(submitted())
+      .mockResolvedValueOnce(json([task(status, result)])) as jest.MockedFunction<typeof fetch>
+    const refreshWorkspace = jest.fn()
+
+    await expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request).then(refreshWorkspace)).rejects.toThrow(message)
+    expect(refreshWorkspace).not.toHaveBeenCalled()
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it.each([[], [task(0)], [task(1)]])('times out while tasks remain unavailable or unfinished: %j', async (...tasks) => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(submitted())
+      .mockImplementation(async () => json(tasks)) as jest.MockedFunction<typeof fetch>
+    const refreshWorkspace = jest.fn()
+    const complete = expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request).then(refreshWorkspace))
+      .rejects.toThrow('Timed out waiting for the skill task')
+
+    await jest.advanceTimersByTimeAsync(119_999)
+    expect(refreshWorkspace).not.toHaveBeenCalled()
+    expect(jest.getTimerCount()).toBe(1)
+    await jest.advanceTimersByTimeAsync(1)
+    await complete
+    expect(fetchMock).toHaveBeenCalledTimes(121)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('propagates task status request failures instead of reporting success', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(submitted())
+      .mockResolvedValueOnce(new Response('Unavailable', { status: 503 })) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request)).rejects.toMatchObject({ status: 503 })
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('stops polling and clears its timer when aborted', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(submitted())
+      .mockResolvedValueOnce(json([task(1)])) as jest.MockedFunction<typeof fetch>
+    const controller = new AbortController()
+    const complete = expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request, controller.signal))
+      .rejects.toMatchObject({ name: 'AbortError' })
+
+    await jest.advanceTimersByTimeAsync(0)
+    expect(jest.getTimerCount()).toBe(1)
+    controller.abort()
+    await complete
+    expect(jest.getTimerCount()).toBe(0)
+    await jest.advanceTimersByTimeAsync(1000)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not submit an already aborted import', async () => {
+    const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(new ProcessAssistantGeneralApi(createClient(fetchMock))
+      .runAndWait(request, controller.signal))
+      .rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('ProcessAssistant endpoint services', () => {
   it('uploads general skill files as multipart form data', async () => {
     const fetchMock = jest.fn().mockResolvedValue(

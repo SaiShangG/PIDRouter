@@ -119,5 +119,42 @@ describe('PhaseConfigImportModal', () => {
     expect(modal.element.hidden).toBe(false)
     expect(confirm?.disabled).toBe(false)
     expect(modal.element.textContent).toContain('Upload failed')
+    expect(modal.element.textContent).toContain('Request failed')
+    expect(modal.element.querySelector<HTMLButtonElement>(
+      '.phase-config-import-cancel'
+    )?.disabled).toBe(false)
+  })
+
+  it('keeps the dialog busy until import and workspace refresh both finish', async () => {
+    const modal = new PhaseConfigImportModal()
+    let finish!: () => void
+    const submit = jest.fn(() => new Promise<void>(resolve => { finish = resolve }))
+    const result = modal.open(labels, submit)
+    selectFile(modal)
+    const confirm = modal.element.querySelector<HTMLButtonElement>(
+      '.phase-config-import-confirm'
+    )!
+    confirm.click()
+
+    expect(modal.element.hidden).toBe(false)
+    expect(confirm.disabled).toBe(true)
+    expect(modal.element.querySelector('[role="progressbar"]')
+      ?.getAttribute('aria-valuenow')).toBe('0')
+    for (const selector of ['.phase-config-import-close', '.phase-config-import-cancel']) {
+      const button = modal.element.querySelector<HTMLButtonElement>(selector)!
+      expect(button.disabled).toBe(true)
+      button.click()
+    }
+    modal.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    modal.element.dispatchEvent(new Event('pointerdown'))
+    confirm.dispatchEvent(new Event('click'))
+    expect(modal.element.hidden).toBe(false)
+    expect(submit).toHaveBeenCalledTimes(1)
+
+    finish()
+    await expect(result).resolves.toEqual([
+      expect.objectContaining({ name: 'process.xlsx' })
+    ])
+    expect(modal.element.hidden).toBe(true)
   })
 })

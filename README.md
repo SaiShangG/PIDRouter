@@ -163,6 +163,11 @@ Deployment network settings are described in [Network Configuration](#network-co
 6. Configure device states and flow-path highlights, then save the phase data.
 7. Export HTML, PDF, SVG, or report data as needed.
 
+When importing Phase Excel configurations, the import dialog waits for the
+backend task to finish before refreshing the process and phase lists
+automatically. No project or page refresh is needed. A failed task or a
+two-minute wait timeout is shown in the dialog instead of reporting success.
+
 ## Troubleshooting
 
 ### The Page Cannot Be Reached

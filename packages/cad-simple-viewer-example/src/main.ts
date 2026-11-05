@@ -2494,15 +2494,12 @@ class CadViewerApp {
       const files = await this.phaseConfigImportModal.open(
         this.getPhaseConfigImportLabels(),
         async selectedFiles => {
-          const response = await this.processAssistantGeneralApi.run({
+          await this.processAssistantGeneralApi.runAndWait({
             files: selectedFiles,
             projectId,
             name: selectedFiles.map(file => file.name).join(', '),
             skillName: 'procedure-configuration'
           })
-          if (!response.success) {
-            throw new Error(response.message ?? 'Process configuration import failed')
-          }
           if (this.activeProjectId === projectId && this.activeProject) {
             await this.loadProjectWorkspace(this.activeProject, true)
           }
