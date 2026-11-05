@@ -4193,7 +4193,7 @@ class CadViewerApp {
           if (layer.kind !== 'device-warning') {
             upgradePreviewWideLines(root, layer.style, view.width, view.height)
           }
-            ; (layout.internalObject as LayoutObjectHost).add(root)
+          ; (layout.internalObject as LayoutObjectHost).add(root)
           roots.set(layer.id, root)
           changedHighlight = true
         }
