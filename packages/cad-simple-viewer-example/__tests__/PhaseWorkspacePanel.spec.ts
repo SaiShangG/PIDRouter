@@ -467,6 +467,120 @@ describe('PhaseWorkspacePanel', () => {
     }
   })
 
+  describe('revealing the Phase selected from the context bar', () => {
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
+    it.each([
+      ['above', 40, 440],
+      ['below', 410, 550],
+      ['partially above', 90, 490],
+      ['partially below', 380, 520],
+      ['visible', 220, 500],
+      ['at top edge', 100, 500],
+      ['at bottom edge', 360, 500]
+    ] as const)('minimally scrolls a row %s the viewport and retains the result on redraw', (_name, rowTop, expectedTop) => {
+      const { store, panel } = createHarness('en')
+      const process = store.createProcess('CIP')
+      const sequence = process.sequences[0]
+      const phase = store.createPhase({
+        processId: process.id, sequenceId: sequence.id, number: 1,
+        name: 'Selected Phase', source: { kind: 'unassigned' }
+      })
+      panel.render()
+      const content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      content.scrollTop = 500
+      content.scrollLeft = 16
+      const focused = document.createElement('select')
+      document.body.append(focused)
+      focused.focus()
+      jest.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
+      jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const top = this.classList.contains('phase-tree-item') ? rowTop : 100
+        const height = this.classList.contains('phase-tree-item') ? 40 : 300
+        return { top, bottom: top + height, left: 0, right: 400, x: 0, y: top, width: 400, height, toJSON: () => ({}) }
+      })
+
+      store.activate(process.id, sequence.id, phase.id)
+      panel.render({ revealActivePhase: true })
+
+      const updated = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      expect(updated.scrollTop).toBe(expectedTop)
+      expect(updated.scrollLeft).toBe(16)
+      expect(document.activeElement).toBe(focused)
+      expect(panel.element.querySelector('.phase-tree-node.is-active')?.getAttribute('data-phase-id')).toBe(phase.id)
+      panel.render()
+      expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(expectedTop)
+    })
+
+    it('opens an already initialized, collapsed Sequence to reveal its newly selected Phase', async () => {
+      const { store, panel } = createHarness()
+      const process = store.createProcess('CIP')
+      const first = process.sequences[0]
+      const second = store.createSequence(process.id, 2, 'Second')
+      const phase = store.createPhase({
+        processId: process.id, sequenceId: second.id, number: 1,
+        name: 'Selected Phase', source: { kind: 'unassigned' }
+      })
+      store.activate(process.id, first.id)
+      panel.render()
+      expect(panel.element.querySelectorAll<HTMLElement>('.phase-tree-list')[1].hidden).toBe(true)
+
+      store.activate(process.id, second.id, phase.id)
+      panel.render({ revealActivePhase: true })
+      expect(panel.element.querySelectorAll<HTMLElement>('.phase-tree-list')[1].hidden).toBe(false)
+      expect(panel.element.querySelector('.phase-tree-node.is-active')?.getAttribute('data-phase-id')).toBe(phase.id)
+      panel.element.querySelectorAll<HTMLButtonElement>('.phase-sequence-toggle')[1].click()
+      await Promise.resolve()
+      expect(panel.element.querySelectorAll<HTMLElement>('.phase-tree-list')[1].hidden).toBe(true)
+      panel.render({ revealActivePhase: true })
+      expect(panel.element.querySelectorAll<HTMLElement>('.phase-tree-list')[1].hidden).toBe(false)
+    })
+
+    it.each([true, false])('clears only a Vessel filter hiding the selected Phase (hidden: %s)', hidden => {
+      const { store, panel, tanks } = createHarness('en', [5], true)
+      const process = store.createProcess('CIP')
+      const sequence = process.sequences[0]
+      const phase = store.createPhase({
+        processId: process.id, sequenceId: sequence.id, number: 1,
+        name: 'Selected Phase', source: { kind: 'unassigned' }
+      })
+      store.assignPhaseTank(process.id, sequence.id, phase.id, 'file:5:E65')
+      panel.render()
+      const select = panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!
+      select.value = hidden ? 'file:5:1B3C' : 'file:5:E65'
+      select.dispatchEvent(new Event('change'))
+      jest.mocked(tanks.stopLocatingTank).mockClear()
+      expect(panel.element.querySelector('.phase-tree-node') === null).toBe(hidden)
+
+      store.activate(process.id, sequence.id, phase.id)
+      panel.render({ revealActivePhase: true })
+
+      expect(panel.element.querySelector('.phase-tree-node.is-active')?.getAttribute('data-phase-id')).toBe(phase.id)
+      expect(panel.element.querySelector<HTMLSelectElement>('.phase-tank-selector select')!.value)
+        .toBe(hidden ? '' : 'file:5:E65')
+      expect(tanks.stopLocatingTank).toHaveBeenCalledTimes(hidden ? 1 : 0)
+      expect(panel.element.querySelector('.phase-tank-selector button')?.getAttribute('aria-pressed'))
+        .toBe(String(!hidden))
+    })
+
+    it('does not move an empty workspace or a hidden viewport', () => {
+      const { store, panel } = createHarness()
+      expect(() => panel.render({ revealActivePhase: true })).not.toThrow()
+      const process = store.createProcess('CIP')
+      const sequence = process.sequences[0]
+      store.createPhase({
+        processId: process.id, sequenceId: sequence.id, number: 1,
+        name: 'Selected Phase', source: { kind: 'unassigned' }
+      })
+      panel.render()
+      panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 500
+      panel.render({ revealActivePhase: true })
+      expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(500)
+    })
+  })
+
   it('preserves the latest manual scroll position while Phase activation is pending', async () => {
     const { store, panel, actions } = createHarness('en')
     const process = store.createProcess('CIP')

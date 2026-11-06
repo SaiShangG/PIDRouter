@@ -2612,7 +2612,9 @@ class CadViewerApp {
         void this.activateWorkspacePhase(
           process.id,
           process.activeSequenceId,
-          phaseSelect.value
+          phaseSelect.value,
+          true,
+          true
         )
       }
     })
@@ -3744,14 +3746,15 @@ class CadViewerApp {
     processId: string,
     sequenceId: string,
     phaseId: string,
-    captureCurrentState = true
+    captureCurrentState = true,
+    revealInPhaseList = false
   ) {
     return this.workspaceLoading.run(
       translate(this.appLocale, 'loadingPhase'),
       async loading => {
         try {
           await this.loadAndActivateWorkspacePhase(
-            processId, sequenceId, phaseId, captureCurrentState, loading
+            processId, sequenceId, phaseId, captureCurrentState, loading, revealInPhaseList
           )
         } catch (error) {
           if (!loading.isCurrent()) return
@@ -3767,7 +3770,8 @@ class CadViewerApp {
     sequenceId: string,
     phaseId: string,
     captureCurrentState: boolean,
-    loading: WorkspaceLoadingTask
+    loading: WorkspaceLoadingTask,
+    revealInPhaseList: boolean
   ) {
     const activationToken = ++this.phaseActivationToken
     this.brushHighlightFeature?.suspend()
@@ -3818,7 +3822,7 @@ class CadViewerApp {
     })
     this.phaseStore.activate(processId, sequenceId, phaseId)
     this.phaseStore.persist()
-    this.phasePanel?.render()
+    this.phasePanel?.render({ revealActivePhase: revealInPhaseList })
     this.syncPhaseContextBar()
     if (hotSwitch) {
       this.pendingPhase = undefined

@@ -149,7 +149,7 @@ export class PhaseWorkspacePanel {
     this.render()
   }
 
-  render() {
+  render(options: { revealActivePhase?: boolean } = {}) {
     this.stopPhaseDrag?.()
     const previousContent = this.element.querySelector<HTMLElement>('.phase-workspace-content')
     const scrollTop = previousContent?.scrollTop ?? 0
@@ -186,6 +186,10 @@ export class PhaseWorkspacePanel {
     const activePhase = activeSequence?.phases.find(
       phase => phase.id === activeSequence.activePhaseId
     )
+    if (options.revealActivePhase && activeSequence && activePhase) {
+      this.expandedSequenceIds.add(activeSequence.id)
+      if (!this.matchesTank(activePhase)) this.resetTankSelection()
+    }
     const header = document.createElement('div')
     header.className = 'phase-workspace-header'
     header.append(this.createHeader(state, activeProcess.id))
@@ -217,6 +221,17 @@ export class PhaseWorkspacePanel {
     this.localize()
     content.scrollTop = scrollTop
     content.scrollLeft = scrollLeft
+    if (options.revealActivePhase) {
+      const item = content.querySelector('.phase-tree-node.is-active')
+        ?.closest<HTMLElement>('.phase-tree-item')
+      if (item && content.clientHeight > 0) {
+        const viewportTop = content.getBoundingClientRect().top + content.clientTop
+        const viewportBottom = viewportTop + content.clientHeight
+        const bounds = item.getBoundingClientRect()
+        if (bounds.top < viewportTop) content.scrollTop += bounds.top - viewportTop
+        else if (bounds.bottom > viewportBottom) content.scrollTop += bounds.bottom - viewportBottom
+      }
+    }
   }
 
   private localize() {

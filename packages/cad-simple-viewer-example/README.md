@@ -442,6 +442,12 @@ The process/phase sidebar keeps its current scroll position when selecting a
 Phase or refreshing the panel, including after asynchronous drawing loading.
 If the content becomes shorter, the browser clamps scrolling to the available
 range rather than resetting it to the top.
+Selecting a Phase from the top PHASE dropdown also expands its Sequence in the
+sidebar and scrolls only that sidebar enough to show the selected row. An already
+visible row does not move, and later drawing-load redraws retain this position.
+If a Vessel filter hides the selected Phase, it switches to All Vessels and stops
+Vessel locating so the selected Phase can be shown. Clicking rows directly and
+ordinary panel refreshes still preserve the user's scroll position.
 While dragging a Phase, hold the pointer within 48 pixels of the scrolling
 content's top or bottom edge to scroll continuously, even without moving the
 pointer. Scrolling accelerates toward the edge (up to 600 pixels/second).
