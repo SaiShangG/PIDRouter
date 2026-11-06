@@ -267,17 +267,17 @@ describe('manual highlight correction data', () => {
     expect(firstPhase(store).manualCorrections).toEqual(corrections())
   })
 
-  it('retains corrections on same-drawing association and clears them on replacement/removal', () => {
+  it.each(['file:5', 'file:6'])('clears corrections when associating plain drawing %s, including the same drawing', drawingId => {
     const { store, processId, sequenceId, phaseId } = createContext()
     store.updateManualCorrections(processId, sequenceId, phaseId, corrections())
     store.associateDrawing(processId, sequenceId, phaseId, {
-      id: 'file:5', kind: 'url', sourceName: 'PID'
+      id: drawingId, kind: 'url', sourceName: 'PID'
     }, 'Renamed')
-    expect(firstPhase(store).manualCorrections).toEqual(corrections())
-    store.associateDrawing(processId, sequenceId, phaseId, {
-      id: 'file:6', kind: 'url', sourceName: 'Other PID'
-    }, 'Other PID')
     expect(firstPhase(store).manualCorrections).toBeUndefined()
+  })
+
+  it('clears corrections when removing the drawing association', () => {
+    const { store, processId, sequenceId, phaseId } = createContext()
     store.updateManualCorrections(processId, sequenceId, phaseId, corrections())
     store.clearDrawingAssociation(processId, sequenceId, phaseId)
     expect(firstPhase(store).manualCorrections).toBeUndefined()

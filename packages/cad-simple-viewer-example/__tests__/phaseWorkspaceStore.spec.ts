@@ -364,6 +364,8 @@ describe('PhaseWorkspaceStore', () => {
       name: 'Old target',
       source: { kind: 'unassigned' }
     })
+    store.assignPhaseTank(process.id, sequence.id, source.id, 'source-vessel')
+    store.assignPhaseTank(process.id, sequence.id, target.id, 'target-vessel')
 
     const replacement = store.copyPhaseOver(
       process.id, sequence.id, source.id, sequence.id, target.id
@@ -374,6 +376,7 @@ describe('PhaseWorkspaceStore', () => {
       name: target.name,
       drawing: source.drawing,
       sourcePhaseId: source.id,
+      tankId: 'source-vessel',
       createdAt: target.createdAt
     })
     expect(store.snapshot().processes[0].sequences[0].phases[1].name).toBe(target.name)
@@ -385,6 +388,12 @@ describe('PhaseWorkspaceStore', () => {
       .toEqual(['1a'])
     expect(() => store.copyPhaseOver(process.id, sequence.id, source.id, sequence.id, source.id))
       .toThrow('A Phase cannot replace itself')
+    const storage = { setItem: jest.fn(), getItem: jest.fn() }
+    expect(store.persist(storage)).toBe(true)
+    storage.getItem.mockReturnValue(storage.setItem.mock.calls[0][1])
+    const restored = PhaseWorkspaceStore.load(storage)
+    expect(restored.snapshot().processes[0].sequences[0].phases[1])
+      .toEqual(store.snapshot().processes[0].sequences[0].phases[1])
   })
 
   it('keeps phase numbering and ordering scoped to each sequence', () => {

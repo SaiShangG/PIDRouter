@@ -10,7 +10,6 @@ import mainEn from '../../cad-simple-viewer/src/i18n/en/main'
 import commandZh from '../../cad-simple-viewer/src/i18n/zh/command'
 import jigZh from '../../cad-simple-viewer/src/i18n/zh/jig'
 import mainZh from '../../cad-simple-viewer/src/i18n/zh/main'
-
 import {
   APP_LOCALE_STORAGE_KEY,
   loadAppLocale,
@@ -94,7 +93,11 @@ describe('app locale', () => {
     expect(translateUiText('zh', 'Open File')).toBe('打开文件')
     expect(translateUiText('en', '打开文件')).toBe('Open File')
     expect(translateUiText('en', '复制 Phase')).toBe('Copy Phase')
-    expect(translateUiText('en', '目标序列')).toBe('Target sequence')
+    expect(translateUiText('en', '创建副本…')).toBe('Create copy…')
+    expect(translateUiText('en', '复制来源')).toBe('Copy source')
+    expect(translateUiText('en', '取消复制')).toBe('Cancel copy')
+    expect(translateUiText('en', '选择原始图纸会清除当前 Phase 的设备状态、自动流路和人工修正，即使重新选择同一图纸。'))
+      .toBe('Selecting a plain drawing clears device states, automatic flows and manual corrections for the current Phase, even when selecting the same drawing again.')
     expect(translateUiText('zh', 'Successfully loaded: Area-1.dwg')).toBe(
       '加载成功：Area-1.dwg'
     )

@@ -6,6 +6,7 @@ export function injectPhaseWorkspaceStyles() {
   style.id = STYLE_ID
   style.textContent = `
     .phase-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; color: var(--app-text, #152026); background: var(--app-surface-panel, #f5f8f8); }
+    .phase-workspace-header { flex: 0 0 auto; padding: 14px 14px 0; }
     .phase-workspace-content { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px; }
     .phase-workspace-block { display: grid; gap: 9px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle, #dbe3e5); }
     .phase-workspace-block:first-child { padding-top: 0; }
@@ -66,7 +67,14 @@ export function injectPhaseWorkspaceStyles() {
     .phase-tree-node-label .phase-tree-node-number { color: var(--app-text, #152026); font-size: 10px; font-variant-numeric: tabular-nums; }
     .phase-tree-node-label .phase-tree-node-number.is-drawing-assigned { color: var(--app-accent, #087b58); }
     .phase-tree-node-label .phase-tree-node-number.is-drawing-missing { color: var(--app-warning, #c77b12); }
-    .phase-tree-order-controls { display: grid; grid-template-columns: repeat(4, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
+    .phase-tree-order-controls { display: grid; grid-template-columns: repeat(5, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
+    .phase-copy-status { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--app-success-border, #24a77d); border-radius: var(--app-radius-control, 4px); background: var(--app-success-surface, #e1f5ed); font-size: 12px; }
+    .phase-copy-error { color: var(--app-danger, #b42318); overflow-wrap: anywhere; }
+    .phase-workspace .phase-tree-node.is-copy-source { border-style: dashed; border-color: var(--app-accent, #087b58); cursor: default; }
+    .phase-tree-node-label .phase-copy-source-label { grid-column: 2; color: var(--app-accent, #087b58); font-size: 10px; }
+    .phase-workspace .phase-tree-node.is-copy-target { cursor: copy; }
+    .phase-workspace .phase-tree-node.is-copy-target:hover:not(:disabled) { border-color: var(--app-accent, #087b58); background: var(--app-success-surface, #e1f5ed); }
+    .phase-workspace[aria-busy='true'] .phase-tree-node { cursor: wait; }
     .phase-tree-item:hover .phase-tree-order-controls, .phase-tree-item:focus-within .phase-tree-order-controls { opacity: 1; }
     .phase-workspace .phase-tree-order-button { color: var(--app-accent, #087b58); }
     .phase-workspace .phase-tree-order-button:disabled { cursor: not-allowed; opacity: .3; }

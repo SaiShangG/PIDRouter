@@ -84,6 +84,28 @@ Development and deployment network settings are configured only in `.env.example
 
 ## Usage
 
+### Quick Phase replacement
+
+Select a Phase in the active Sequence, click its **Copy Phase** icon, then click
+another Phase in the same Sequence. Its content is replaced immediately, without
+a dialog or confirmation. The source is marked **Copy source**; clicking it does
+not replace itself. Press **Esc** or click its copy icon again to cancel.
+Switching Process or Sequence also cancels the pending copy. No instruction
+banner or cancel button is shown while choosing a target; replacement progress
+and errors remain visible.
+
+Replacement preserves the target ID, number, name, position and creation time.
+Drawing association, Vessel ownership, device states, automatic flows, manual
+corrections and text notes follow the source, including its latest captured edits.
+The existing local/backend save path is reused. While replacing, the panel blocks
+duplicate submissions and conflicting operations. Success activates the target
+and exits copy mode; failure displays an error and permits retry. There is no undo
+for replacement.
+
+The separate **Create copy…** icon is hidden in the Phase list; its existing
+number/name form is retained internally. Quick replacement and delete
+confirmations are unchanged.
+
 ### Automatic and manual highlighting
 
 The viewer toolbar's **Automatic highlighting** toggle belongs to the loaded
@@ -298,13 +320,14 @@ and exclusions win if imported data contains both operations for one handle.
 Missing style references and unresolved handles are retained for later resolution.
 
 The store clones corrections during phase copying/inheritance, preserves them on
-flow-only updates and same-drawing reassociation, and clears them when a drawing
-is replaced or removed. Malformed correction data is reported by the overlay
+flow-only updates, and clears them when a plain drawing is associated (including
+the same drawing) or the drawing association is removed. Malformed correction data is reported by the overlay
 parser and rejected by the repository to prevent saving a lossy snapshot.
 Correction-only edits participate in the existing unsaved-highlight status.
 Both local and backend drawing-association commands use the same store rules:
-selecting another drawing clears corrections, selecting the same drawing retains
-them, and associating a marked Phase copies its flow/device state and corrections
+selecting a plain drawing clears device states, automatic flows and manual
+corrections even when selecting the same drawing again. Associating a marked Phase
+copies its flow/device state and corrections
 independently of the source. The association dialog explains these effects before
 confirmation. Loading blocks brush edits throughout association, saving and
 restoration so old drawing strokes cannot overwrite the reassociated data.
@@ -419,6 +442,14 @@ The process/phase sidebar keeps its current scroll position when selecting a
 Phase or refreshing the panel, including after asynchronous drawing loading.
 If the content becomes shorter, the browser clamps scrolling to the available
 range rather than resetting it to the top.
+While dragging a Phase, hold the pointer within 48 pixels of the scrolling
+content's top or bottom edge to scroll continuously, even without moving the
+pointer. Scrolling accelerates toward the edge (up to 600 pixels/second).
+Drop onto the desired Phase once it is visible to reorder within the Sequence.
+Moving away from the edge, dropping, or cancelling the drag stops auto-scrolling.
+The process heading, selector, and add/delete controls stay fixed at the top of
+the sidebar while the content below scrolls independently. The inline process
+creation form also stays in this fixed header when expanded.
 
 ## Supported formats
 

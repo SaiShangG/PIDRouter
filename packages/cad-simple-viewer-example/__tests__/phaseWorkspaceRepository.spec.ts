@@ -1,5 +1,5 @@
 import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
-import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
+import { createDefaultPresentationProfile, PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
   it.each([30, 0, undefined])('preserves backend Order %s when replacing Phase content', async orderIndex => {
@@ -11,7 +11,12 @@ describe('PhaseWorkspaceRepository', () => {
       ...phase,
       jsonData: JSON.stringify({
         Index: phase.index, OrderId: phase.orderIndex ?? phase.index, Name: phase.name,
-        Comment: null, autoFlowPaths: [], flowPaths: [], deviceStates: null, textNotes: []
+        Comment: null, autoFlowPaths: [], flowPaths: [], deviceStates: null, textNotes: [],
+        tankId: phase.id === 20 ? 'source-vessel' : 'target-vessel',
+        manualCorrections: {
+          additions: [{ handleKey: phase.id === 20 ? '171' : '205', highlightStyleRefId: 'water' }],
+          exclusions: []
+        }
       })
     }))
     const phases = {
@@ -25,6 +30,7 @@ describe('PhaseWorkspaceRepository', () => {
     }
     const repository = new PhaseWorkspaceRepository({
       baseUrl: '', projectId: 1,
+      now: () => '2026-11-06T00:00:00.000Z',
       files: { list: jest.fn().mockResolvedValue([]), upload: jest.fn() },
       procedures: { list: jest.fn().mockResolvedValue([{ id: 1, name: 'Process' }]), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       operations: { list: jest.fn().mockResolvedValue([{ id: 10, name: 'Sequence' }]), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
@@ -33,16 +39,25 @@ describe('PhaseWorkspaceRepository', () => {
     const before = await repository.load()
     const sequence = before.processes[0].sequences[0]
     const target = sequence.phases.find(phase => phase.id === '22')!
-    await repository.updatePhaseContent('10', { ...target, name: 'Source' })
+    const draft = new PhaseWorkspaceStore(before)
+    const replacement = draft.copyPhaseOver('1', '10', '20', '10', target.id)
+    await repository.updatePhaseContent('10', replacement)
 
     expect(phases.get).toHaveBeenCalledWith(22, undefined)
     expect(phases.update).toHaveBeenCalledTimes(1)
     const payload = phases.update.mock.calls[0][1]
-    expect(payload).toMatchObject({ id: 22, index: 7011, orderIndex: orderIndex ?? 7011, name: 'Source' })
+    expect(payload).toMatchObject({ id: 22, index: 7011, orderIndex: orderIndex ?? 7011, name: 'Target' })
     expect(JSON.parse(payload.jsonData).OrderId).toBe(orderIndex ?? 7011)
     const after = await repository.load()
     expect(after.processes[0].sequences[0].phases.map(phase => phase.id))
       .toEqual(sequence.phases.map(phase => phase.id))
+    const restoredTarget = after.processes[0].sequences[0].phases.find(phase => phase.id === target.id)!
+    expect(restoredTarget).toMatchObject({
+      id: target.id, number: target.number, name: target.name,
+      tankId: 'source-vessel', manualCorrections: replacement.manualCorrections
+    })
+    expect(after.processes[0].sequences[0].phases.find(phase => phase.id === '20'))
+      .toEqual(sequence.phases.find(phase => phase.id === '20'))
   })
 
   it('round-trips Tank ownership through backend Phase JSON', async () => {

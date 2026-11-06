@@ -83,10 +83,161 @@ const createHarness = (
   return { store, panel, actions, tanks }
 }
 
+const createCopyHarness = (locale: 'zh' | 'en' = 'zh') => {
+  const harness = createHarness(locale)
+  const { store, panel } = harness
+  const process = store.createProcess('CIP')
+  const sequence = process.sequences[0]
+  const phases = [1, 2].map(number => store.createPhase({
+    processId: process.id, sequenceId: sequence.id, number,
+    name: `Phase ${number}`, source: { kind: 'unassigned' }
+  }))
+  store.activate(process.id, sequence.id, phases[0].id)
+  panel.render()
+  const startCopy = () => panel.element.querySelector<HTMLButtonElement>(
+    `[aria-label="${locale === 'zh' ? '复制 Phase' : 'Copy Phase'}"]`
+  )!.click()
+  const clickTarget = () => panel.element.querySelector<HTMLButtonElement>('.is-copy-target')!.click()
+  return { ...harness, process, sequence, source: phases[0], target: phases[1], startCopy, clickTarget }
+}
+
 describe('PhaseWorkspacePanel', () => {
   afterEach(() => {
     document.body.replaceChildren()
     document.getElementById('phase-workspace-styles')?.remove()
+  })
+
+  it.each(['escape', 'copy'] as const)('cancels quick copy using %s', async method => {
+    const { panel, actions, startCopy } = createCopyHarness()
+    startCopy()
+    if (method === 'escape') {
+      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    } else startCopy()
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    expect(panel.element.querySelector('.is-copy-source')).toBeNull()
+    panel.element.querySelector<HTMLButtonElement>('.phase-tree-node')!.click()
+    await Promise.resolve()
+    expect(actions.activatePhase).toHaveBeenCalledTimes(1)
+    expect(actions.copyPhase).not.toHaveBeenCalled()
+  })
+
+  it('blocks duplicate submissions and conflicting panel operations across busy redraws', async () => {
+    const { panel, actions, startCopy, clickTarget } = createCopyHarness()
+    let resolveCopy!: () => void
+    jest.mocked(actions.copyPhase).mockImplementation(() => new Promise<void>(resolve => { resolveCopy = resolve }))
+    startCopy()
+    const staleTarget = panel.element.querySelector<HTMLButtonElement>('.is-copy-target')!
+    clickTarget()
+    staleTarget.click()
+    panel.render()
+    clickTarget()
+    panel.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(panel.element.getAttribute('aria-busy')).toBe('true')
+    expect(panel.element.querySelector('[role="status"]')?.textContent).toBe('正在替换 Phase…')
+    expect(Array.from(panel.element.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button, select'))
+      .every(control => control.disabled)).toBe(true)
+    expect(panel.element.querySelector('[draggable="true"]')).toBeNull()
+    expect(actions.copyPhase).toHaveBeenCalledTimes(1)
+    expect(actions.activatePhase).not.toHaveBeenCalled()
+    resolveCopy()
+    await Promise.resolve()
+    expect(panel.element.getAttribute('aria-busy')).toBe('false')
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+  })
+
+  it('reports replacement errors and keeps the source available for retry', async () => {
+    const { panel, actions, startCopy, clickTarget } = createCopyHarness()
+    jest.mocked(actions.copyPhase).mockRejectedValueOnce(new Error('Network unavailable'))
+    startCopy()
+    clickTarget()
+    await Promise.resolve()
+    expect(panel.element.querySelector('[role="alert"]')?.textContent).toContain('Network unavailable')
+    expect(panel.element.querySelector('.phase-copy-status button')).toBeNull()
+    expect(panel.element.querySelector('.is-copy-source')).not.toBeNull()
+    expect(panel.element.getAttribute('aria-busy')).toBe('false')
+    clickTarget()
+    await Promise.resolve()
+    expect(actions.copyPhase).toHaveBeenCalledTimes(2)
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+  })
+
+  it('cancels copying when another Sequence is activated, without replacing across sequences', async () => {
+    const { store, panel, actions, process, sequence, source, startCopy } = createCopyHarness()
+    const otherSequence = store.createSequence(process.id, 2, 'Other')
+    const otherPhase = store.createPhase({
+      processId: process.id, sequenceId: otherSequence.id, number: 1,
+      name: 'Other phase', source: { kind: 'unassigned' }
+    })
+    store.activate(process.id, sequence.id, source.id)
+    panel.render()
+    startCopy()
+    const otherNode = Array.from(panel.element.querySelectorAll<HTMLButtonElement>('.phase-tree-node'))
+      .find(button => button.dataset.phaseId === otherPhase.id)!
+    expect(otherNode.classList.contains('is-copy-target')).toBe(false)
+    otherNode.click()
+    await Promise.resolve()
+    expect(actions.copyPhase).not.toHaveBeenCalled()
+    expect(actions.activatePhase).toHaveBeenCalledWith(process.id, otherSequence.id, otherPhase.id)
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+
+    startCopy()
+    panel.element.querySelectorAll<HTMLButtonElement>('.phase-sequence-toggle')[1].click()
+    await Promise.resolve()
+    expect(actions.activateSequence).toHaveBeenCalledWith(process.id, otherSequence.id)
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+  })
+
+  it('cancels copying on process selection and when the source disappears', async () => {
+    const { store, panel, actions, process, sequence, source, startCopy } = createCopyHarness()
+    startCopy()
+    const select = panel.element.querySelector<HTMLSelectElement>('[aria-label="当前工艺"]')!
+    select.dispatchEvent(new Event('change'))
+    await Promise.resolve()
+    expect(actions.activateProcess).toHaveBeenCalled()
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    startCopy()
+    store.deletePhase(process.id, sequence.id, source.id)
+    panel.render()
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    expect(actions.copyPhase).not.toHaveBeenCalled()
+  })
+
+  it.each(['zh', 'en'] as const)('hides create-copy controls while keeping quick replacement available in %s', locale => {
+    injectPhaseWorkspaceStyles()
+    const { panel, startCopy } = createCopyHarness(locale)
+    for (const copying of [false, true]) {
+      if (copying) startCopy()
+      const duplicates = panel.element.querySelectorAll<HTMLButtonElement>(
+        `[aria-label="${locale === 'zh' ? '创建副本…' : 'Create copy…'}"]`
+      )
+      expect(duplicates).toHaveLength(2)
+      duplicates.forEach(button => {
+        expect(button.hidden).toBe(true)
+        expect(getComputedStyle(button).display).toBe('none')
+      })
+      const copy = panel.element.querySelector<HTMLButtonElement>(
+        `[aria-label="${locale === 'zh' ? '复制 Phase' : 'Copy Phase'}"]`
+      )!
+      expect(copy.hidden).toBe(false)
+      expect(copy.disabled).toBe(false)
+      expect(getComputedStyle(copy).display).not.toBe('none')
+    }
+  })
+
+  it('localizes quick copy and cancels it when opening the separate create-copy form programmatically', () => {
+    const { panel, startCopy } = createCopyHarness('en')
+    startCopy()
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    expect(panel.element.textContent).not.toContain('Click a target Phase in the same sequence')
+    expect(panel.element.textContent).not.toContain('Cancel copy')
+    expect(panel.element.querySelector('.is-copy-source')?.textContent).toContain('Copy source')
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="Create copy…"]')!.click()
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    expect(panel.element.querySelector('.is-copy-source')).toBeNull()
+    expect(panel.element.querySelector('[aria-label="Copy mode"]')).toBeNull()
+    expect(panel.element.querySelector('[aria-label="New Phase name"]')).not.toBeNull()
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')!.click()
+    expect(panel.element.contains(document.activeElement)).toBe(true)
   })
 
   it.each(['zh', 'en'] as const)('filters Phases by Vessel and cancels blinking without clearing the filter in %s', locale => {
@@ -106,7 +257,7 @@ describe('PhaseWorkspacePanel', () => {
       select.dispatchEvent(new Event('change'))
     }
     const visiblePhases = () => [...panel.element.querySelectorAll('.phase-tree-node')].map(node => node.textContent)
-    expect(panel.element.querySelector('.phase-process-selector')!.closest('section')!.nextElementSibling)
+    expect(panel.element.querySelector('.phase-workspace-content')!.firstElementChild)
       .toBe(panel.element.querySelector('.phase-tank-section'))
     expect(panel.element.querySelector('.phase-tank-selector select')?.getAttribute('aria-label'))
       .toBe(locale === 'zh' ? '当前 Vessel' : 'Current Vessel')
@@ -256,6 +407,33 @@ describe('PhaseWorkspacePanel', () => {
     ).not.toBeNull()
   })
 
+  it.each(['zh', 'en'] as const)('keeps process controls outside the scrolling content in %s', locale => {
+    injectPhaseWorkspaceStyles()
+    const { store, panel } = createHarness(locale)
+    store.createProcess('CIP')
+    panel.render()
+
+    const assertFixedHeader = () => {
+      const header = panel.element.querySelector<HTMLElement>('.phase-workspace-header')!
+      const content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      expect(header.parentElement).toBe(panel.element)
+      expect(header.nextElementSibling).toBe(content)
+      expect(header.querySelector('.phase-process-selector')).not.toBeNull()
+      expect(header.querySelector('.phase-process-delete')).not.toBeNull()
+      expect(content.querySelector('.phase-process-selector')).toBeNull()
+      expect(getComputedStyle(header).flexShrink).toBe('0')
+      expect(getComputedStyle(content).overflow).toBe('auto')
+      return header
+    }
+
+    assertFixedHeader().querySelector<HTMLButtonElement>('[aria-expanded]')!.click()
+    expect(assertFixedHeader().querySelector('.phase-process-creator')).not.toBeNull()
+    panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 240
+    panel.render()
+    assertFixedHeader()
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(240)
+  })
+
   it.each(['zh', 'en'] as const)('preserves scrolling when selecting bottom Phases and rendering again in %s', async locale => {
     const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')
@@ -327,7 +505,8 @@ describe('PhaseWorkspacePanel', () => {
     panel.render()
 
     expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(240)
-    expect(panel.element.children).toHaveLength(1)
+    expect(panel.element.children).toHaveLength(2)
+    expect(panel.element.firstElementChild?.className).toBe('phase-workspace-header')
   })
 
   it.each(['zh', 'en'] as const)('allows Phase renaming but keeps the drawing name read-only in %s', locale => {
@@ -857,7 +1036,7 @@ describe('PhaseWorkspacePanel', () => {
     store.activate(process.id, sourceSequence.id, sourcePhase.id)
     panel.render()
 
-    panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="创建副本…"]')!.click()
     expect(panel.element.querySelector<HTMLInputElement>('[aria-label="来源 Phase"]')!.value)
       .toContain('Phase 04 · 预冲洗')
     expect(panel.element.querySelector('[aria-label="目标序列"]')).toBeNull()
@@ -888,7 +1067,7 @@ describe('PhaseWorkspacePanel', () => {
     })
   })
 
-  it('confirms replacement of an existing Phase and keeps its identity in the request', async () => {
+  it('replaces the clicked Phase directly and exits copy mode after success', async () => {
     const { store, panel, actions } = createHarness()
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
@@ -904,19 +1083,19 @@ describe('PhaseWorkspacePanel', () => {
     panel.render()
 
     panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
-    const mode = panel.element.querySelector<HTMLSelectElement>('[aria-label="复制方式"]')!
-    mode.value = 'replace'
-    mode.dispatchEvent(new Event('change'))
-    expect(panel.element.querySelector<HTMLSelectElement>('[aria-label="目标 Phase"]')!.value)
-      .toBe(target.id)
-    panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    await Promise.resolve()
+    expect(panel.element.querySelector('[role="dialog"]:not([hidden])')).toBeNull()
+    expect(panel.element.querySelector('.is-copy-source')?.textContent).toContain('Source')
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    expect(panel.element.textContent).not.toContain('点击同一序列的目标 Phase 直接替换')
+    expect(panel.element.textContent).not.toContain('取消复制')
+    panel.render()
+    panel.element.querySelector<HTMLButtonElement>('.is-copy-source')!.click()
     expect(actions.copyPhase).not.toHaveBeenCalled()
-    const confirmation = document.querySelector<HTMLElement>('.confirmation-modal:not([hidden])')!
-    expect(confirmation.textContent).toContain('编号和 ID 保持不变')
-    confirmation.querySelector<HTMLButtonElement>('.confirmation-modal-confirm')!.click()
+    panel.element.querySelector<HTMLButtonElement>('.is-copy-target')!.click()
+    expect(actions.activatePhase).not.toHaveBeenCalled()
+    expect(document.querySelector('.confirmation-modal:not([hidden])')).toBeNull()
     await Promise.resolve()
+    expect(actions.copyPhase).toHaveBeenCalledTimes(1)
     expect(actions.copyPhase).toHaveBeenCalledWith({
       mode: 'replace',
       processId: process.id,
@@ -925,6 +1104,9 @@ describe('PhaseWorkspacePanel', () => {
       targetSequenceId: sequence.id,
       targetPhaseId: target.id
     })
+    expect(panel.element.querySelector('.phase-copy-status')).toBeNull()
+    panel.element.querySelector<HTMLButtonElement>('.phase-tree-node')!.click()
+    expect(actions.activatePhase).toHaveBeenCalledWith(process.id, sequence.id, source.id)
   })
 
   it('creates a Phase without a drawing and later assigns a Project PID', () => {
@@ -1001,9 +1183,11 @@ describe('PhaseWorkspacePanel', () => {
     )!
     const submit = modal.querySelector<HTMLButtonElement>('button[type="submit"]')!
     expect(projectDrawing.parentElement!.hidden).toBe(false)
+    expect(modal.textContent).toContain('选择原始图纸会清除当前 Phase 的设备状态、自动流路和人工修正，即使重新选择同一图纸。')
     expect(getComputedStyle(markedPhase.parentElement!).display).toBe('none')
     source.value = 'marked'
     source.dispatchEvent(new Event('change'))
+    expect(modal.textContent).toContain('将复制来源 Phase 的设备状态、自动流路和人工修正，并替换当前 Phase 的对应数据。')
     expect(getComputedStyle(projectDrawing.parentElement!).display).toBe('none')
     expect(markedPhase.parentElement!.hidden).toBe(false)
     source.value = 'project'
@@ -1136,6 +1320,167 @@ describe('PhaseWorkspacePanel', () => {
     expect([...source.options].map(option => option.value)).toEqual(['project'])
   })
 
+  describe('Phase drag auto-scroll', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+    })
+
+    afterEach(() => {
+      document.dispatchEvent(new Event('dragend'))
+      jest.useRealTimers()
+      jest.restoreAllMocks()
+    })
+
+    const createDragHarness = () => {
+      const harness = createHarness()
+      const { store, panel, actions } = harness
+      const process = store.createProcess('CIP')
+      const sequence = process.sequences[0]
+      const phases = Array.from({ length: 30 }, (_, index) => store.createPhase({
+        processId: process.id, sequenceId: sequence.id, number: index + 1,
+        name: `Phase ${index + 1}`, source: { kind: 'unassigned' }
+      }))
+      jest.mocked(actions.reorderPhase).mockImplementation((processId, sequenceId, phaseId, index) => {
+        store.reorderPhase(processId, sequenceId, phaseId, index)
+      })
+      panel.render()
+      const content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      const items = panel.element.querySelectorAll<HTMLElement>('.phase-tree-item')
+      jest.spyOn(content, 'getBoundingClientRect').mockReturnValue({
+        x: 100, y: 100, left: 100, top: 100, right: 400, bottom: 400,
+        width: 300, height: 300, toJSON: () => ({})
+      })
+      Object.defineProperties(content, {
+        clientHeight: { value: 300 },
+        scrollHeight: { value: 1800, configurable: true }
+      })
+      const data = new Map<string, string>()
+      const transfer = {
+        effectAllowed: 'none',
+        setData: (type: string, value: string) => data.set(type, value),
+        getData: (type: string) => data.get(type) ?? ''
+      }
+      const drag = (target: EventTarget, type: string, clientY = 400, clientX = 200, relatedTarget: EventTarget | null = null) => {
+        const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, clientY, relatedTarget })
+        Object.defineProperty(event, 'dataTransfer', { value: transfer })
+        target.dispatchEvent(event)
+        return event
+      }
+      return { ...harness, process, sequence, phases, content, items, drag, transfer }
+    }
+
+    it('keeps scrolling with a stationary pointer and drops onto a previously offscreen Phase', () => {
+      const { panel, store, actions, process, sequence, phases, content, items, drag, transfer } = createDragHarness()
+      drag(items[0], 'dragstart')
+      expect(transfer.effectAllowed).toBe('move')
+      expect(drag(content, 'dragover').defaultPrevented).toBe(true)
+      jest.advanceTimersByTime(500)
+      const halfway = content.scrollTop
+      expect(halfway).toBeGreaterThan(250)
+      jest.advanceTimersByTime(1500)
+      expect(content.scrollTop).toBeGreaterThan(1000)
+      const finalTop = content.scrollTop
+      drag(items[24], 'drop')
+      expect(actions.reorderPhase).toHaveBeenCalledWith(process.id, sequence.id, phases[0].id, 24)
+      expect(store.snapshot().processes[0].sequences[0].phases[24].id).toBe(phases[0].id)
+      expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(finalTop)
+      expect(panel.element.querySelector('.is-dragging, .is-drag-over')).toBeNull()
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it('scrolls upward, scales speed near the edge, and clamps at both limits', () => {
+      const { content, items, drag } = createDragHarness()
+      drag(items[0], 'dragstart')
+      content.scrollTop = 500
+      drag(content, 'dragover', 376)
+      jest.advanceTimersByTime(160)
+      const slowDistance = content.scrollTop - 500
+      expect(slowDistance).toBeGreaterThan(40)
+      expect(slowDistance).toBeLessThan(55)
+      drag(content, 'dragover', 400)
+      const start = content.scrollTop
+      jest.advanceTimersByTime(160)
+      expect(content.scrollTop - start).toBeGreaterThan(slowDistance * 1.8)
+      jest.advanceTimersByTime(3000)
+      expect(content.scrollTop).toBe(1500)
+      expect(jest.getTimerCount()).toBe(0)
+      drag(content, 'dragover', 100)
+      jest.advanceTimersByTime(160)
+      expect(content.scrollTop).toBeLessThan(1500)
+      jest.advanceTimersByTime(3000)
+      expect(content.scrollTop).toBe(0)
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it.each([
+      ['center', 250, 200],
+      ['header', 90, 200],
+      ['footer', 410, 200],
+      ['outside horizontally', 400, 410]
+    ] as const)('stops when the pointer moves to %s', (_name, y, x) => {
+      const { content, items, drag } = createDragHarness()
+      drag(items[0], 'dragstart')
+      drag(content, 'dragover')
+      jest.advanceTimersByTime(160)
+      const top = content.scrollTop
+      drag(document.body, 'dragover', y, x)
+      jest.advanceTimersByTime(500)
+      expect(content.scrollTop).toBe(top)
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it.each(['drop', 'dragend', 'blur', 'render', 'remove', 'leave'] as const)(
+      'stops and releases animation work on %s',
+      method => {
+        const { panel, content, items, drag } = createDragHarness()
+        drag(items[0], 'dragstart')
+        drag(content, 'dragover')
+        jest.advanceTimersByTime(160)
+        const top = content.scrollTop
+        if (method === 'render') panel.render()
+        else if (method === 'remove') panel.element.remove()
+        else if (method === 'blur') window.dispatchEvent(new Event('blur'))
+        else if (method === 'leave') drag(content, 'dragleave')
+        else drag(document.body, method)
+        jest.advanceTimersByTime(500)
+        expect(content.scrollTop).toBe(top)
+        expect(jest.getTimerCount()).toBe(0)
+        if (method !== 'leave') {
+          drag(content, 'dragover')
+          expect(jest.getTimerCount()).toBe(0)
+          expect(panel.element.querySelector('.is-dragging, .is-drag-over')).toBeNull()
+        }
+      }
+    )
+
+    it('continues across child elements and ignores unrelated or disabled drags', () => {
+      const { panel, content, items, drag } = createDragHarness()
+      drag(content, 'dragover')
+      expect(jest.getTimerCount()).toBe(0)
+      drag(items[0], 'dragstart')
+      drag(items[1], 'dragover')
+      drag(items[1], 'dragleave', 400, 200, items[2])
+      jest.advanceTimersByTime(160)
+      expect(content.scrollTop).toBeGreaterThan(0)
+      drag(items[0], 'dragend')
+      panel.element.querySelector<HTMLButtonElement>('[aria-label="复制 Phase"]')!.click()
+      const disabledItem = panel.element.querySelector<HTMLElement>('.phase-tree-item')!
+      expect(drag(disabledItem, 'dragstart').defaultPrevented).toBe(true)
+      drag(disabledItem, 'dragover')
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it('does not animate when content fits in the viewport', () => {
+      const { content, items, drag } = createDragHarness()
+      Object.defineProperty(content, 'scrollHeight', { value: 300 })
+      drag(items[0], 'dragstart')
+      drag(content, 'dragover')
+      jest.advanceTimersByTime(160)
+      expect(content.scrollTop).toBe(0)
+      expect(jest.getTimerCount()).toBe(0)
+    })
+  })
+
   it('exposes accessible controls for changing Phase order', () => {
     const { store, panel, actions } = createHarness()
     const process = store.createProcess('CIP')
@@ -1247,8 +1592,8 @@ describe('PhaseWorkspacePanel', () => {
     expect(deleteButton.getAttribute('aria-label')).toBe(locale === 'zh' ? '删除 Phase' : 'Delete Phase')
     expect(deleteButton.querySelector('svg')).not.toBeNull()
     const controls = deleteButton.closest('.phase-tree-order-controls')!
-    expect(controls.children).toHaveLength(4)
-    expect(getComputedStyle(controls).gridTemplateColumns).toBe('repeat(4, 28px)')
+    expect(controls.children).toHaveLength(5)
+    expect(getComputedStyle(controls).gridTemplateColumns).toBe('repeat(5, 28px)')
     expect(controls.lastElementChild).toBe(deleteButton)
     const processDelete = panel.element.querySelector<HTMLElement>('.phase-process-delete')!
     const sequenceDelete = panel.element.querySelector<HTMLElement>('.phase-sequence-controls .phase-delete-button')!

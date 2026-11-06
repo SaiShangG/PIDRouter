@@ -116,6 +116,10 @@ export class PhaseWorkspacePanel {
   private processCreatorExpanded = false
   private tankFilter = ''
   private tankBlinking = false
+  private phaseCopySource?: { processId: string; sequenceId: string; phaseId: string }
+  private phaseCopyBusy = false
+  private phaseCopyError = ''
+  private stopPhaseDrag?: () => void
 
   constructor(
     private readonly getState: () => PhaseWorkspaceState,
@@ -126,10 +130,27 @@ export class PhaseWorkspacePanel {
   ) {
     this.element.className = 'phase-workspace'
     this.phaseDeleteConfirmation = new ConfirmationModal(getLocale)
+    this.element.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && this.phaseCopySource && !this.phaseCopyBusy) {
+        event.preventDefault()
+        event.stopPropagation()
+        const sourceId = this.phaseCopySource.phaseId
+        this.cancelPhaseCopy()
+        this.render()
+        this.focusPhase(sourceId)
+      }
+    }, true)
+    this.element.addEventListener('click', event => {
+      if (this.phaseCopyBusy) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+    }, true)
     this.render()
   }
 
   render() {
+    this.stopPhaseDrag?.()
     const previousContent = this.element.querySelector<HTMLElement>('.phase-workspace-content')
     const scrollTop = previousContent?.scrollTop ?? 0
     const scrollLeft = previousContent?.scrollLeft ?? 0
@@ -140,6 +161,14 @@ export class PhaseWorkspacePanel {
     const activeProcess = state.processes.find(
       process => process.id === state.activeProcessId
     )
+    if (this.phaseCopySource && !this.phaseCopyBusy &&
+      (activeProcess?.id !== this.phaseCopySource.processId ||
+        activeProcess?.activeSequenceId !== this.phaseCopySource.sequenceId ||
+        !activeProcess?.sequences.find(sequence => sequence.id === this.phaseCopySource?.sequenceId)
+          ?.phases.some(phase => phase.id === this.phaseCopySource?.phaseId))) {
+      this.cancelPhaseCopy()
+    }
+    this.element.setAttribute('aria-busy', String(this.phaseCopyBusy))
     if (!activeProcess) {
       this.renderEmptyProcess()
       this.localize()
@@ -157,12 +186,14 @@ export class PhaseWorkspacePanel {
     const activePhase = activeSequence?.phases.find(
       phase => phase.id === activeSequence.activePhaseId
     )
+    const header = document.createElement('div')
+    header.className = 'phase-workspace-header'
+    header.append(this.createHeader(state, activeProcess.id))
+    this.element.append(header)
     const content = document.createElement('div')
     content.className = 'phase-workspace-content'
-    content.append(
-      this.createHeader(state, activeProcess.id)
-    )
     if (this.tanks) content.append(this.createTankSelector())
+    if (this.phaseCopyBusy || this.phaseCopyError) content.append(this.createPhaseCopyStatus())
     content.append(this.createSequenceNavigation(activeProcess))
     if (activeSequence) {
       if (activePhase && this.matchesTank(activePhase)) {
@@ -177,6 +208,12 @@ export class PhaseWorkspacePanel {
     } else {
       this.element.append(content)
     }
+    if (this.phaseCopyBusy) {
+      this.element.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button, input, select')
+        .forEach(control => { control.disabled = true })
+      this.element.querySelectorAll<HTMLElement>('[draggable]')
+        .forEach(item => { item.draggable = false })
+    }
     this.localize()
     content.scrollTop = scrollTop
     content.scrollLeft = scrollLeft
@@ -184,6 +221,135 @@ export class PhaseWorkspacePanel {
 
   private localize() {
     localizeDom(this.element, this.getLocale())
+  }
+
+  private startPhaseDrag(item: HTMLElement) {
+    this.stopPhaseDrag?.()
+    const content = item.closest<HTMLElement>('.phase-workspace-content')!
+    let frame: number | undefined
+    let previousTime: number | undefined
+    let pointer: { x: number; y: number } | undefined
+    const stopScrolling = () => {
+      if (frame !== undefined) window.cancelAnimationFrame(frame)
+      frame = undefined
+      previousTime = undefined
+      pointer = undefined
+    }
+    const scroll = (time: number) => {
+      frame = undefined
+      if (!content.isConnected || !item.isConnected) {
+        this.stopPhaseDrag?.()
+        return
+      }
+      const rect = content.getBoundingClientRect()
+      const edge = Math.min(48, rect.height / 2)
+      if (!pointer || edge <= 0 || pointer.x < rect.left || pointer.x > rect.right ||
+        pointer.y < rect.top || pointer.y > rect.bottom) {
+        stopScrolling()
+        return
+      }
+      const velocity = pointer.y < rect.top + edge
+        ? -(rect.top + edge - pointer.y) / edge
+        : pointer.y > rect.bottom - edge
+          ? (pointer.y - rect.bottom + edge) / edge
+          : 0
+      const elapsed = previousTime === undefined ? 1 / 60 : Math.min((time - previousTime) / 1000, 0.05)
+      const previousTop = content.scrollTop
+      content.scrollTop = Math.max(0, Math.min(
+        Math.max(0, content.scrollHeight - content.clientHeight),
+        previousTop + velocity * 600 * elapsed
+      ))
+      if (velocity === 0 || content.scrollTop === previousTop) {
+        stopScrolling()
+        return
+      }
+      previousTime = time
+      frame = window.requestAnimationFrame(scroll)
+    }
+    const onDragOver = (event: DragEvent) => {
+      pointer = { x: event.clientX, y: event.clientY }
+      if (content.contains(event.target as Node)) event.preventDefault()
+      if (frame === undefined) frame = window.requestAnimationFrame(scroll)
+    }
+    const onDragLeave = (event: DragEvent) => {
+      if (!(event.relatedTarget instanceof Node) || !content.contains(event.relatedTarget)) {
+        stopScrolling()
+      }
+    }
+    const stop = () => {
+      stopScrolling()
+      document.removeEventListener('dragover', onDragOver)
+      document.removeEventListener('dragleave', onDragLeave)
+      document.removeEventListener('drop', stop, true)
+      document.removeEventListener('dragend', stop, true)
+      window.removeEventListener('blur', stop)
+      this.element.querySelectorAll('.is-dragging, .is-drag-over')
+        .forEach(element => element.classList.remove('is-dragging', 'is-drag-over'))
+      this.stopPhaseDrag = undefined
+    }
+    this.stopPhaseDrag = stop
+    document.addEventListener('dragover', onDragOver)
+    document.addEventListener('dragleave', onDragLeave)
+    document.addEventListener('drop', stop, true)
+    document.addEventListener('dragend', stop, true)
+    window.addEventListener('blur', stop)
+  }
+
+  private cancelPhaseCopy() {
+    this.phaseCopySource = undefined
+    this.phaseCopyError = ''
+  }
+
+  private focusPhase(phaseId: string) {
+    Array.from(this.element.querySelectorAll<HTMLButtonElement>('.phase-tree-node'))
+      .find(button => button.dataset.phaseId === phaseId)?.focus()
+  }
+
+  private createPhaseCopyStatus() {
+    const status = document.createElement('div')
+    status.className = 'phase-copy-status'
+    status.tabIndex = -1
+    status.setAttribute('role', this.phaseCopyError ? 'alert' : 'status')
+    if (this.phaseCopyBusy) {
+      const progress = document.createElement('span')
+      progress.textContent = '正在替换 Phase…'
+      status.append(progress)
+    }
+    if (this.phaseCopyError) {
+      const error = document.createElement('span')
+      error.className = 'phase-copy-error'
+      error.textContent = `${this.t('Phase 替换失败，请重试。')} ${this.phaseCopyError}`
+      error.translate = false
+      status.append(error)
+    }
+    return status
+  }
+
+  private async replacePhaseFromCopy(processId: string, sequenceId: string, phaseId: string) {
+    const source = this.phaseCopySource
+    if (!source || this.phaseCopyBusy || source.phaseId === phaseId) return
+    if (source.processId !== processId || source.sequenceId !== sequenceId) return
+    this.phaseCopyBusy = true
+    this.phaseCopyError = ''
+    this.render()
+    this.element.querySelector<HTMLElement>('.phase-copy-status')?.focus()
+    try {
+      await this.actions.copyPhase({
+        mode: 'replace',
+        processId,
+        sourceSequenceId: source.sequenceId,
+        sourcePhaseId: source.phaseId,
+        targetSequenceId: sequenceId,
+        targetPhaseId: phaseId
+      })
+      this.cancelPhaseCopy()
+    } catch (error) {
+      this.phaseCopyError = String(error)
+    } finally {
+      this.phaseCopyBusy = false
+      this.render()
+      this.focusPhase(phaseId)
+    }
   }
 
   resetTankSelection() {
@@ -280,6 +446,7 @@ export class PhaseWorkspacePanel {
     })
     select.value = activeProcessId
     select.addEventListener('change', async () => {
+      this.cancelPhaseCopy()
       this.resetTankSelection()
       await this.actions.activateProcess(select.value)
       this.render()
@@ -446,6 +613,7 @@ export class PhaseWorkspacePanel {
     identity.append(number, name, count, status)
     toggle.append(identity)
     toggle.addEventListener('click', async () => {
+      if (!active) this.cancelPhaseCopy()
       if (expanded) this.expandedSequenceIds.delete(sequence.id)
       else this.expandedSequenceIds.add(sequence.id)
       if (!active) await this.actions.activateSequence(process.id, sequence.id)
@@ -490,7 +658,7 @@ export class PhaseWorkspacePanel {
       if (!this.matchesTank(phase)) return
       const item = document.createElement('div')
       item.className = 'phase-tree-item'
-      item.draggable = true
+      item.draggable = !this.phaseCopySource && !this.phaseCopyBusy
       item.setAttribute('role', 'treeitem')
       item.setAttribute(
         'aria-selected',
@@ -498,6 +666,12 @@ export class PhaseWorkspacePanel {
       )
       const button = this.createButton('', false)
       button.className = 'phase-tree-node'
+      button.dataset.phaseId = phase.id
+      const copySource = this.phaseCopySource
+      const isCopySource = copySource?.phaseId === phase.id && copySource.sequenceId === sequence.id
+      button.classList.toggle('is-copy-source', isCopySource)
+      button.classList.toggle('is-copy-target', Boolean(copySource &&
+        copySource.sequenceId === sequence.id && !isCopySource))
       button.classList.toggle(
         'is-active',
         active && phase.id === sequence.activePhaseId
@@ -536,16 +710,44 @@ export class PhaseWorkspacePanel {
         `Phase ${phaseNumber.textContent} · ${phase.name} · ${drawingStatusLabel}`
       )
       label.append(phaseNumber, phaseName)
+      if (isCopySource) {
+        const badge = document.createElement('span')
+        badge.className = 'phase-copy-source-label'
+        badge.textContent = '复制来源'
+        label.append(badge)
+      }
       button.append(grip, label)
       button.addEventListener('click', async () => {
+        if (this.phaseCopyBusy) return
+        if (this.phaseCopySource?.processId === process.id &&
+          this.phaseCopySource.sequenceId === sequence.id) {
+          await this.replacePhaseFromCopy(process.id, sequence.id, phase.id)
+          return
+        }
+        this.cancelPhaseCopy()
         await this.actions.activatePhase(process.id, sequence.id, phase.id)
         this.render()
       })
       const controls = document.createElement('div')
       controls.className = 'phase-tree-order-controls'
-      const copy = this.createIconButton('复制 Phase', Copy, trigger => {
+      const copy = this.createIconButton('复制 Phase', Copy, () => {
+        if (this.phaseCopyBusy) return
+        if (this.phaseCopySource?.phaseId === phase.id) this.cancelPhaseCopy()
+        else {
+          this.phaseCopySource = { processId: process.id, sequenceId: sequence.id, phaseId: phase.id }
+          this.phaseCopyError = ''
+        }
+        this.render()
+        this.focusPhase(phase.id)
+      }, !active)
+      copy.setAttribute('aria-pressed', String(isCopySource))
+      const duplicate = this.createIconButton('创建副本…', Plus, trigger => {
+        this.cancelPhaseCopy()
+        this.render()
         this.openPhaseCopyModal(process, sequence, phase, trigger)
       })
+      duplicate.setAttribute('aria-haspopup', 'dialog')
+      duplicate.hidden = true
       const moveUp = this.createButton('', false)
       moveUp.className = 'phase-tree-order-button phase-icon-button'
       moveUp.title = '上移'
@@ -590,16 +792,19 @@ export class PhaseWorkspacePanel {
       })
       remove.classList.add('phase-tree-delete', 'phase-delete-button')
       remove.setAttribute('aria-haspopup', 'dialog')
-      controls.append(copy, moveUp, moveDown, remove)
+      controls.append(copy, duplicate, moveUp, moveDown, remove)
       item.addEventListener('dragstart', event => {
+        if (this.phaseCopySource || this.phaseCopyBusy) {
+          event.preventDefault()
+          return
+        }
         event.dataTransfer?.setData('text/plain', phase.id)
         if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+        this.startPhaseDrag(item)
         item.classList.add('is-dragging')
       })
       item.addEventListener('dragend', () => {
-        this.element
-          .querySelectorAll('.phase-tree-item')
-          .forEach(element => element.classList.remove('is-dragging', 'is-drag-over'))
+        this.stopPhaseDrag?.()
       })
       item.addEventListener('dragover', event => {
         event.preventDefault()
@@ -610,6 +815,7 @@ export class PhaseWorkspacePanel {
       })
       item.addEventListener('drop', event => {
         event.preventDefault()
+        if (this.phaseCopySource || this.phaseCopyBusy) return
         const sourcePhaseId = event.dataTransfer?.getData('text/plain')
         if (sourcePhaseId && sourcePhaseId !== phase.id) {
           this.actions.reorderPhase(process.id, sequence.id, sourcePhaseId, index)
@@ -640,7 +846,7 @@ export class PhaseWorkspacePanel {
     const header = document.createElement('header')
     const title = document.createElement('h2')
     title.id = 'phaseOperationModalTitle'
-    title.textContent = '复制 Phase'
+    title.textContent = '创建副本…'
     const close = this.createButton('', false)
     close.className = 'phase-workspace-modal-close phase-icon-button'
     close.setAttribute('aria-label', '关闭对话框')
@@ -655,12 +861,6 @@ export class PhaseWorkspacePanel {
     source.readOnly = true
     source.value = `Phase ${String(sourcePhase.number).padStart(2, '0')} · ${sourcePhase.name}`
     source.setAttribute('aria-label', '来源 Phase')
-    const mode = document.createElement('select')
-    mode.setAttribute('aria-label', '复制方式')
-    mode.add(new Option('创建新 Phase', 'create'))
-    mode.add(new Option('替换现有 Phase', 'replace'))
-    const targetPhase = document.createElement('select')
-    targetPhase.setAttribute('aria-label', '目标 Phase')
     const number = document.createElement('input')
     number.type = 'number'
     number.min = '1'
@@ -672,27 +872,8 @@ export class PhaseWorkspacePanel {
     const copySuffix = this.getLocale() === 'zh' ? '副本' : 'Copy'
     name.value = `${sourcePhase.name} ${copySuffix}`
     number.value = String(Math.max(0, ...sourceSequence.phases.map(phase => phase.number)) + 1)
-    const modeField = this.createFormField('复制方式', mode)
-    const targetPhaseField = this.createFormField('目标 Phase', targetPhase)
     const numberField = this.createModalField('新 Phase 编号', number)
     const nameField = this.createModalField('新 Phase 名称', name)
-    const refreshTarget = () => {
-      targetPhase.replaceChildren()
-      sourceSequence.phases
-        .filter(phase => phase.id !== sourcePhase.id)
-        .forEach(phase => {
-          targetPhase.add(new Option(`Phase ${String(phase.number).padStart(2, '0')} · ${phase.name}`, phase.id))
-        })
-      const replacing = mode.value === 'replace'
-      targetPhaseField.hidden = !replacing
-      numberField.hidden = replacing
-      nameField.hidden = replacing
-      targetPhase.disabled = !replacing
-      number.disabled = replacing
-      name.disabled = replacing
-    }
-    mode.addEventListener('change', refreshTarget)
-    refreshTarget()
 
     const actions = document.createElement('footer')
     actions.className = 'phase-workspace-modal-actions'
@@ -702,8 +883,6 @@ export class PhaseWorkspacePanel {
     actions.append(cancel, submit)
     form.append(
       this.createModalField('来源 Phase', source),
-      modeField,
-      targetPhaseField,
       numberField,
       nameField,
       actions
@@ -712,7 +891,8 @@ export class PhaseWorkspacePanel {
     modal.append(dialog)
     const closeModal = () => {
       modal.remove()
-      trigger.focus()
+      if (trigger.isConnected) trigger.focus()
+      else this.focusPhase(sourcePhase.id)
     }
     close.addEventListener('click', closeModal)
     cancel.addEventListener('click', closeModal)
@@ -724,19 +904,14 @@ export class PhaseWorkspacePanel {
     })
     const validate = createFormValidator(form, [
       {
-        element: targetPhase,
-        isValid: () => mode.value !== 'replace' || Boolean(targetPhase.value)
-      },
-      {
         element: number,
         isValid: () => {
-          if (mode.value === 'replace') return true
           const phaseNumber = Number(number.value)
           return Number.isInteger(phaseNumber) && phaseNumber > 0 &&
             !sourceSequence.phases.some(phase => phase.number === phaseNumber)
         }
       },
-      { element: name, isValid: () => mode.value === 'replace' || Boolean(name.value.trim()) }
+      { element: name, isValid: () => Boolean(name.value.trim()) }
     ])
     form.addEventListener('submit', async event => {
       event.preventDefault()
@@ -751,20 +926,7 @@ export class PhaseWorkspacePanel {
           sourcePhaseId: sourcePhase.id,
           targetSequenceId: sourceSequence.id
         }
-        if (mode.value === 'replace') {
-          const selected = sourceSequence.phases.find(phase => phase.id === targetPhase.value)
-          if (!selected) return
-          const confirmed = await this.phaseDeleteConfirmation.confirm({
-            title: '替换 Phase？',
-            message: `${translateUiText(this.getLocale(), '目标 Phase')} ${String(selected.number).padStart(2, '0')} · ${selected.name}：${translateUiText(this.getLocale(), '仅内容将被来源 Phase 替换，名称、编号和 ID 保持不变。原有内容无法撤销。')}`,
-            confirmLabel: '确认替换 Phase',
-            tone: 'danger'
-          })
-          if (!confirmed) return
-          await this.actions.copyPhase({ ...common, mode: 'replace', targetPhaseId: selected.id })
-        } else {
-          await this.actions.copyPhase({ ...common, mode: 'create', number: phaseNumber, name: phaseName })
-        }
+        await this.actions.copyPhase({ ...common, mode: 'create', number: phaseNumber, name: phaseName })
         modal.remove()
         this.render()
       } finally {
@@ -773,7 +935,7 @@ export class PhaseWorkspacePanel {
     })
     this.element.append(modal)
     localizeDom(modal, this.getLocale())
-    mode.focus()
+    number.focus()
   }
 
   private openSequenceEditorModal(
@@ -1242,7 +1404,7 @@ export class PhaseWorkspacePanel {
       markedPhaseField.hidden = source.value !== 'marked'
       correctionHint.textContent = this.t(source.value === 'marked'
         ? '将复制来源 Phase 的设备状态、自动流路和人工修正，并替换当前 Phase 的对应数据。'
-        : '更换为不同图纸会清除当前 Phase 的人工修正；重新关联同一图纸则保留。')
+        : '选择原始图纸会清除当前 Phase 的设备状态、自动流路和人工修正，即使重新选择同一图纸。')
       if (source.value === 'marked') {
         const markedSource = markedSources[Number(markedPhase.value)]
         if (markedSource?.phase.drawing.kind === 'assigned') {
