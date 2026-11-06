@@ -8,7 +8,6 @@ import type {
   ProcedureDto,
   UploadFileDto
 } from '../api/processAssistantTypes'
-import { NETWORK_DEFAULTS } from '../networkConfig'
 import { composeFinalFlowPaths } from './composeFinalFlowPaths'
 import { normalizeManualHighlightCorrections } from './manualHighlightCorrections'
 import {
@@ -512,9 +511,8 @@ export class PhaseWorkspaceRepository {
     if (/^https?:\/\//i.test(path)) return path
     const baseUrl =
       this.options.baseUrl.trim() ||
-      globalThis.location?.href ||
-      `http://${NETWORK_DEFAULTS.frontendHost}:${NETWORK_DEFAULTS.frontendPort}/`
-    return new URL(path, `${baseUrl.replace(/\/$/, '')}/`).href
+      globalThis.location?.href
+    return baseUrl ? new URL(path, `${baseUrl.replace(/\/$/, '')}/`).href : path
   }
 
   private readPresentationProfile(): PresentationProfile {

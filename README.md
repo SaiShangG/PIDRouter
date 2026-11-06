@@ -109,7 +109,9 @@ The build step creates workspace package outputs required by the development ser
 
 ## Network Configuration
 
-All local addresses and ports can be set in `packages/cad-simple-viewer-example/.env.local`. Copy `packages/cad-simple-viewer-example/.env.example` as a starting point. The defaults below are defined once in `packages/cad-simple-viewer-example/src/networkConfig.ts` and shared by the Vite server and browser application.
+Configure all frontend/backend IP addresses and ports directly in `packages/cad-simple-viewer-example/.env.example`. Despite its name, this is the active, single configuration file for both development and production builds, not a template to copy. Vite reads it directly and disables automatic env-file loading. Other env files and shell environment variables do not override its network settings.
+
+所有前后端 IP 和端口统一在 `packages/cad-simple-viewer-example/.env.example` 中配置。该文件直接生效，不再只是模板，无需复制到其他 env 文件。开发与打包只读取这里的网络配置，其他 env 文件、系统环境变量及部署后的运行时配置均不能覆盖地址。
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -119,9 +121,21 @@ All local addresses and ports can be set in `packages/cad-simple-viewer-example/
 | `VITE_PROCESS_ASSISTANT_USE_PROXY` | `true` | Send development API requests through Vite; set `false` for direct browser requests |
 | `VITE_PROCESS_ASSISTANT_PROJECT_ID` | `1` | Backend Project ID that owns the Procedure; must be a positive integer |
 
-The development URL is `http://127.0.0.1:5173` with these defaults. Vite fails if the configured port is occupied instead of silently switching ports. Restart Vite after editing `.env.local`.
+The development URL is `http://127.0.0.1:5173` with these settings. Vite fails if the configured port is occupied instead of silently switching ports. Restart Vite after editing `.env.example` during development. Before deployment, change its backend URL to one reachable from users' browsers:
 
-For a deployed build, edit `dist/config.js` and set `window.PID_VIEWER_CONFIG.processAssistantApiUrl` to the deployed backend URL. A nonempty runtime value overrides the build-time backend URL in production; leaving it empty uses the build-time setting and then the shared default. The development proxy reads `.env.local` when Vite starts and does not use `config.js`. When frontend and backend origins differ, allow the frontend origin in the backend CORS configuration.
+```dotenv
+VITE_PROCESS_ASSISTANT_API_URL=https://api.example.com
+```
+
+Then rebuild and deploy the complete `dist/` directory:
+
+```powershell
+pnpm --filter @mlightcad/cad-simple-viewer-example... build
+```
+
+The backend URL must be a valid, nonempty HTTP/HTTPS URL; there is no fallback IP in application source. Production builds embed this setting in the frontend and no longer generate or load a runtime `config.js`. Changing addresses after deployment requires editing `.env.example` and rebuilding. Existing deployment configuration files are ignored by the new bundle. `127.0.0.1` and `localhost` refer to the browser user's machine, not the deployment server. When origins differ, allow the frontend origin in backend CORS; an HTTPS frontend needs an HTTPS backend to avoid mixed-content blocking.
+
+开发时修改此文件后重启 Vite；部署时修改后必须重新打包并部署完整 `dist/`。后台地址不能为空且必须为 HTTP/HTTPS URL，源码不再保留备用 IP。新包不再生成或读取 `config.js`，旧部署配置不会生效。跨域部署需配置后台 CORS，HTTPS 前端应使用 HTTPS 后台。
 
 ## Production Build
 

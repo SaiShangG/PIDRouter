@@ -80,7 +80,7 @@ The build copies parser workers and `viewer-runtime.iife.js` into `dist/` (see `
 
 ### Backend API
 
-Development and deployment network settings, including the runtime API override, are documented in the root [Network Configuration](../../README.md#network-configuration).
+Development and deployment network settings are configured only in `.env.example`, as documented in the root [Network Configuration](../../README.md#network-configuration). Other env files, shell variables, and runtime configuration cannot override the addresses.
 
 ## Usage
 

@@ -1,8 +1,9 @@
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
+import { parseEnv } from 'node:util'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { exampleRollupOutput } from '../vite-config/pluginRollupOutput'
 import {
@@ -28,9 +29,17 @@ function assertViewerRuntimeExists(): void {
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(() => {
   assertViewerRuntimeExists()
-  const env = loadEnv(mode, __dirname, '')
+  const env = parseEnv(readFileSync(resolve(__dirname, '.env.example'), 'utf8'))
+  if (!env.VITE_PROCESS_ASSISTANT_API_URL?.trim()) {
+    throw new Error(
+      'Set VITE_PROCESS_ASSISTANT_API_URL in .env.example.'
+    )
+  }
+  if (!env.PID_FRONTEND_HOST?.trim()) {
+    throw new Error('Set PID_FRONTEND_HOST in .env.example.')
+  }
   const loginEnabled = process.env.PID_LOGIN_ENABLED ?? 'true'
   if (loginEnabled !== 'true' && loginEnabled !== 'false') {
     throw new Error('PID_LOGIN_ENABLED must be true or false')
@@ -45,13 +54,17 @@ export default defineConfig(({ mode }) => {
     'VITE_PROCESS_ASSISTANT_PROJECT_ID',
     NETWORK_DEFAULTS.projectId
   )
-  const frontendHost =
-    env.PID_FRONTEND_HOST?.trim() || NETWORK_DEFAULTS.frontendHost
+  const frontendHost = env.PID_FRONTEND_HOST.trim()
 
   return {
     base: './',
+    envFile: false,
+    envPrefix: [],
     define: {
-      __PID_LOGIN_ENABLED__: JSON.stringify(loginEnabled === 'true')
+      __PID_LOGIN_ENABLED__: JSON.stringify(loginEnabled === 'true'),
+      'import.meta.env.VITE_PROCESS_ASSISTANT_API_URL': JSON.stringify(processAssistantTarget),
+      'import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY': JSON.stringify(env.VITE_PROCESS_ASSISTANT_USE_PROXY),
+      'import.meta.env.VITE_PROCESS_ASSISTANT_PROJECT_ID': JSON.stringify(env.VITE_PROCESS_ASSISTANT_PROJECT_ID)
     },
     server: {
       host: frontendHost,
@@ -71,6 +84,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true
         }
       }
+    },
+    preview: {
+      host: frontendHost
     },
     build: {
       modulePreload: false,

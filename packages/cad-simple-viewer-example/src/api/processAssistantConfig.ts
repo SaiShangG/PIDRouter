@@ -10,24 +10,9 @@ export interface ProcessAssistantConfig {
   projectId: number
 }
 
-declare global {
-  interface Window {
-    PID_VIEWER_CONFIG?: {
-      processAssistantApiUrl?: string
-    }
-  }
-}
-
-const runtimeApiUrl =
-  import.meta.env.DEV || typeof window === 'undefined'
-    ? ''
-    : window.PID_VIEWER_CONFIG?.processAssistantApiUrl?.trim() || ''
-
 export const PROCESS_ASSISTANT_TARGET_URL = readHttpUrl(
-  runtimeApiUrl || import.meta.env.VITE_PROCESS_ASSISTANT_API_URL,
-  runtimeApiUrl
-    ? 'PID_VIEWER_CONFIG.processAssistantApiUrl'
-    : 'VITE_PROCESS_ASSISTANT_API_URL'
+  import.meta.env.VITE_PROCESS_ASSISTANT_API_URL,
+  'VITE_PROCESS_ASSISTANT_API_URL'
 )
 
 export const PROCESS_ASSISTANT_API_URL =

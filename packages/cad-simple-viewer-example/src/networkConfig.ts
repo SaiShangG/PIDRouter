@@ -1,8 +1,6 @@
 /** Network defaults shared by the Vite server and the browser application. */
 export const NETWORK_DEFAULTS = {
-  frontendHost: '127.0.0.1',
   frontendPort: 5173,
-  processAssistantApiUrl: 'http://127.0.0.1:5153',
   useProxy: true,
   projectId: 1
 } as const
@@ -11,7 +9,7 @@ export function readHttpUrl(
   value: string | undefined,
   setting: string
 ): string {
-  const raw = value?.trim() || NETWORK_DEFAULTS.processAssistantApiUrl
+  const raw = value?.trim() || ''
   let url: URL
   try {
     url = new URL(raw)
