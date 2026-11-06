@@ -156,6 +156,13 @@ export function injectUiReferenceThemeStyles() {
 
     .phase-context-field select:disabled { color: #9aa7ab; }
 
+    #phaseContextPhase {
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 160px;
+      field-sizing: content;
+    }
+
     .phase-context-summary {
       padding: 4px 8px;
       border: 1px solid #a7cbc0;

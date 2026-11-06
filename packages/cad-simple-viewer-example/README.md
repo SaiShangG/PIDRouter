@@ -405,6 +405,16 @@ backend round trips, not a full authenticated drawing workflow.
 
 Toast messages at the top report success or errors. The window title updates when a document is activated.
 
+The PHASE dropdown lists every phase in the active sequence with its full name.
+Its width adapts to the label (at least 160px), with horizontal scrolling in
+compact layouts when needed. Browsers without CSS `field-sizing` support use
+the native select's intrinsic option width.
+
+The process/phase sidebar keeps its current scroll position when selecting a
+Phase or refreshing the panel, including after asynchronous drawing loading.
+If the content becomes shorter, the browser clamps scrolling to the available
+range rather than resetting it to the top.
+
 ## Supported formats
 
 | Format | Notes |

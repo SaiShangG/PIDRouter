@@ -130,6 +130,9 @@ export class PhaseWorkspacePanel {
   }
 
   render() {
+    const previousContent = this.element.querySelector<HTMLElement>('.phase-workspace-content')
+    const scrollTop = previousContent?.scrollTop ?? 0
+    const scrollLeft = previousContent?.scrollLeft ?? 0
     this.drawingAssociationModals.forEach(modal => modal.remove())
     this.drawingAssociationModals.clear()
     this.element.replaceChildren()
@@ -171,11 +174,12 @@ export class PhaseWorkspacePanel {
         content,
         this.createPhaseControls(activeProcess.id, activeSequence)
       )
-      this.localize()
-      return
+    } else {
+      this.element.append(content)
     }
-    this.element.append(content)
     this.localize()
+    content.scrollTop = scrollTop
+    content.scrollLeft = scrollLeft
   }
 
   private localize() {

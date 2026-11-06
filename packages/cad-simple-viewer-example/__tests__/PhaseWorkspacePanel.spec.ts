@@ -256,6 +256,80 @@ describe('PhaseWorkspacePanel', () => {
     ).not.toBeNull()
   })
 
+  it.each(['zh', 'en'] as const)('preserves scrolling when selecting bottom Phases and rendering again in %s', async locale => {
+    const { store, panel, actions } = createHarness(locale)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const phases = Array.from({ length: 20 }, (_, index) => store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: index + 1,
+      name: `Rinse ${index + 1}`, source: { kind: 'unassigned' }
+    }))
+    store.activate(process.id, sequence.id, phases[0].id)
+    panel.render()
+    jest.mocked(actions.activatePhase).mockImplementation(async (processId, sequenceId, phaseId) => {
+      store.activate(processId, sequenceId, phaseId)
+      panel.render()
+    })
+
+    for (const [index, scrollTop] of [[19, 720], [18, 460]]) {
+      const viewport = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      viewport.scrollTop = scrollTop
+      viewport.scrollLeft = 16
+      panel.element.querySelectorAll<HTMLButtonElement>('.phase-tree-node')[index].click()
+      await Promise.resolve()
+
+      const updatedViewport = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+      expect(updatedViewport.scrollTop).toBe(scrollTop)
+      expect(updatedViewport.scrollLeft).toBe(16)
+      expect(panel.element.querySelector('.phase-tree-node.is-active')?.textContent)
+        .toContain(phases[index].name)
+      expect(actions.activatePhase).toHaveBeenLastCalledWith(process.id, sequence.id, phases[index].id)
+      panel.render()
+      expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(scrollTop)
+    }
+  })
+
+  it('preserves the latest manual scroll position while Phase activation is pending', async () => {
+    const { store, panel, actions } = createHarness('en')
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const phase = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Rinse', source: { kind: 'unassigned' }
+    })
+    panel.render()
+    let completeActivation: (() => void) | undefined
+    jest.mocked(actions.activatePhase).mockImplementation((processId, sequenceId, phaseId) => new Promise(resolve => {
+      completeActivation = () => {
+        store.activate(processId, sequenceId, phaseId)
+        panel.render()
+        resolve()
+      }
+    }))
+    const viewport = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+    viewport.scrollTop = 720
+    panel.element.querySelector<HTMLButtonElement>('.phase-tree-node')!.click()
+    viewport.scrollTop = 450
+    completeActivation!()
+    await Promise.resolve()
+
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(450)
+    expect(actions.activatePhase).toHaveBeenCalledWith(process.id, sequence.id, phase.id)
+  })
+
+  it('preserves scrolling when no sequence is active', () => {
+    const { store, panel } = createHarness('en')
+    const process = store.createProcess('CIP')
+    store.activate(process.id)
+    panel.render()
+    panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 240
+
+    panel.render()
+
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(240)
+    expect(panel.element.children).toHaveLength(1)
+  })
+
   it.each(['zh', 'en'] as const)('allows Phase renaming but keeps the drawing name read-only in %s', locale => {
     const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')
