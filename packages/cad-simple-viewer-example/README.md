@@ -410,6 +410,11 @@ Its width adapts to the label (at least 160px), with horizontal scrolling in
 compact layouts when needed. Browsers without CSS `field-sizing` support use
 the native select's intrinsic option width.
 
+In the Phase list, green numbers indicate an assigned drawing, black numbers
+indicate no drawing, and amber numbers warn that the assigned drawing asset is
+missing. Hover tips and accessible labels describe the status without a separate
+text column.
+
 The process/phase sidebar keeps its current scroll position when selecting a
 Phase or refreshing the panel, including after asynchronous drawing loading.
 If the content becomes shorter, the browser clamps scrolling to the available

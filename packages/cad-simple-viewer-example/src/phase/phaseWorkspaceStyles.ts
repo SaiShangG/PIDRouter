@@ -61,10 +61,11 @@ export function injectPhaseWorkspaceStyles() {
     .phase-workspace .phase-tree-node:active { cursor: grabbing; }
     .phase-workspace .phase-tree-node.is-active { border-color: var(--app-success-border, #24a77d); color: var(--app-success-text, #075d43); background: var(--app-success-surface, #e1f5ed); box-shadow: inset 3px 0 var(--app-accent, #087b58); }
     .phase-tree-grip { width: 14px; height: 14px; color: #91a1a6; }
-    .phase-tree-node-label { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; }
+    .phase-tree-node-label { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 6px; min-width: 0; }
     .phase-tree-node-label span { display: block; overflow: hidden; color: inherit; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-    .phase-tree-node-label .phase-tree-node-number { color: #718288; font-size: 10px; font-variant-numeric: tabular-nums; }
-    .phase-tree-node-label .phase-tree-drawing-status { color: #60747b; font-size: 9px; font-weight: 600; }
+    .phase-tree-node-label .phase-tree-node-number { color: var(--app-text, #152026); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .phase-tree-node-label .phase-tree-node-number.is-drawing-assigned { color: var(--app-accent, #087b58); }
+    .phase-tree-node-label .phase-tree-node-number.is-drawing-missing { color: var(--app-warning, #c77b12); }
     .phase-tree-order-controls { display: grid; grid-template-columns: repeat(4, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
     .phase-tree-item:hover .phase-tree-order-controls, .phase-tree-item:focus-within .phase-tree-order-controls { opacity: 1; }
     .phase-workspace .phase-tree-order-button { color: var(--app-accent, #087b58); }

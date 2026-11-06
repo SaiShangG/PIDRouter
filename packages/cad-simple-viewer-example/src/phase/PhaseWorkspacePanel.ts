@@ -502,10 +502,6 @@ export class PhaseWorkspacePanel {
         'is-active',
         active && phase.id === sequence.activePhaseId
       )
-      button.title =
-        phase.drawing.kind === 'assigned'
-          ? phase.drawing.displayName
-          : '未关联图纸'
       const grip = createPhaseIcon(GripVertical, 'phase-tree-grip')
       grip.setAttribute('title', '拖动调整顺序')
       const label = document.createElement('span')
@@ -516,15 +512,30 @@ export class PhaseWorkspacePanel {
       const phaseName = document.createElement('span')
       phaseName.translate = false
       phaseName.textContent = phase.name
-      const drawingStatus = document.createElement('span')
-      drawingStatus.className = 'phase-tree-drawing-status'
-      drawingStatus.textContent =
+      const drawingStatus =
         phase.drawing.kind === 'unassigned'
-          ? '未关联图纸'
+          ? 'unassigned'
           : this.getState().drawingAssets[phase.drawing.assetId]
-            ? '图纸已关联'
-            : '图纸缺失'
-      label.append(phaseNumber, phaseName, drawingStatus)
+            ? 'assigned'
+            : 'missing'
+      const drawingStatusLabel = this.t(
+        drawingStatus === 'assigned'
+          ? '图纸已关联'
+          : drawingStatus === 'missing'
+            ? '图纸缺失'
+            : '未关联图纸'
+      )
+      phaseNumber.classList.toggle('is-drawing-assigned', drawingStatus === 'assigned')
+      phaseNumber.classList.toggle('is-drawing-missing', drawingStatus === 'missing')
+      phaseNumber.title = drawingStatusLabel
+      button.title = phase.drawing.kind === 'assigned'
+        ? `${drawingStatusLabel} · ${phase.drawing.displayName}`
+        : drawingStatusLabel
+      button.setAttribute(
+        'aria-label',
+        `Phase ${phaseNumber.textContent} · ${phase.name} · ${drawingStatusLabel}`
+      )
+      label.append(phaseNumber, phaseName)
       button.append(grip, label)
       button.addEventListener('click', async () => {
         await this.actions.activatePhase(process.id, sequence.id, phase.id)

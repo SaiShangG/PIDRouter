@@ -608,6 +608,64 @@ describe('PhaseWorkspacePanel', () => {
     ).toBe(true)
   })
 
+  it.each(['zh', 'en'] as const)('shows drawing association on Phase numbers without a status text column in %s', locale => {
+    injectPhaseWorkspaceStyles()
+    const { store, panel } = createHarness(locale)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const assigned = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 8010,
+      name: '保存', source: {
+        kind: 'new',
+        drawing: { id: 'drawing-assigned', kind: 'blank', sourceName: 'Assigned.dwg' },
+        displayName: 'Assigned.dwg'
+      }
+    })
+    const unassigned = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 8011,
+      name: 'No drawing', source: { kind: 'unassigned' }
+    })
+    const missing = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 8012,
+      name: 'Missing drawing', source: {
+        kind: 'new',
+        drawing: { id: 'drawing-missing', kind: 'blank', sourceName: 'Missing.dwg' },
+        displayName: 'Missing.dwg'
+      }
+    })
+    const state = store.snapshot()
+    delete state.drawingAssets['drawing-missing']
+    jest.spyOn(store, 'snapshot').mockReturnValue(state)
+    const expected = [
+      { phase: assigned, assigned: true, missing: false, status: locale === 'zh' ? '图纸已关联' : 'Drawing assigned' },
+      { phase: unassigned, assigned: false, missing: false, status: locale === 'zh' ? '未关联图纸' : 'No drawing assigned' },
+      { phase: missing, assigned: false, missing: true, status: locale === 'zh' ? '图纸缺失' : 'Drawing missing' }
+    ]
+
+    for (const active of expected) {
+      state.processes[0].sequences[0].activePhaseId = active.phase.id
+      panel.render()
+      const nodes = [...panel.element.querySelectorAll<HTMLButtonElement>('.phase-tree-node')]
+      expected.forEach(({ phase, assigned, missing, status }, index) => {
+        const node = nodes[index]
+        const label = node.querySelector<HTMLElement>('.phase-tree-node-label')!
+        const number = label.querySelector<HTMLElement>('.phase-tree-node-number')!
+        expect(label.children).toHaveLength(2)
+        expect(getComputedStyle(label).gridTemplateColumns).toBe('24px minmax(0, 1fr)')
+        expect(node.textContent).toBe(`${phase.number}${phase.name}`)
+        expect(number.classList.contains('is-drawing-assigned')).toBe(assigned)
+        expect(number.classList.contains('is-drawing-missing')).toBe(missing)
+        expect(number.title).toBe(status)
+        expect(node.title).toBe(phase.drawing.kind === 'assigned'
+          ? `${status} · ${phase.drawing.displayName}`
+          : status)
+        expect(node.getAttribute('aria-label')).toBe(`Phase ${phase.number} · ${phase.name} · ${status}`)
+        expect(node.classList.contains('is-active')).toBe(phase.id === active.phase.id)
+      })
+      expect(panel.element.querySelector('.phase-tree-drawing-status')).toBeNull()
+    }
+  })
+
   it.each(['zh', 'en'] as const)('omits the overview status row in %s', locale => {
     const { store, panel } = createHarness(locale)
     const process = store.createProcess('CIP')
