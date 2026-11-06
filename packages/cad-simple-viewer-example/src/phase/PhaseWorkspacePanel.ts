@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpToLine,
   ChevronDown,
   Copy,
   GripVertical,
@@ -192,10 +193,22 @@ export class PhaseWorkspacePanel {
     }
     const header = document.createElement('div')
     header.className = 'phase-workspace-header'
-    header.append(this.createHeader(state, activeProcess.id))
-    this.element.append(header)
     const content = document.createElement('div')
     content.className = 'phase-workspace-content'
+    content.tabIndex = -1
+    const backToTop = this.createIconButton('回到顶部', ArrowUpToLine, () => {
+      content.scrollTop = 0
+      if (document.activeElement === backToTop) content.focus({ preventScroll: true })
+      updateBackToTop()
+    })
+    backToTop.className = 'phase-back-to-top'
+    backToTop.append(document.createTextNode('回到顶部'))
+    const updateBackToTop = () => {
+      backToTop.hidden = content.scrollTop <= 0
+    }
+    content.addEventListener('scroll', updateBackToTop, { passive: true })
+    header.append(this.createHeader(state, activeProcess.id, backToTop))
+    this.element.append(header)
     if (this.tanks) content.append(this.createTankSelector())
     if (this.phaseCopyBusy || this.phaseCopyError) content.append(this.createPhaseCopyStatus())
     content.append(this.createSequenceNavigation(activeProcess))
@@ -232,6 +245,7 @@ export class PhaseWorkspacePanel {
         else if (bounds.bottom > viewportBottom) content.scrollTop += bounds.bottom - viewportBottom
       }
     }
+    updateBackToTop()
   }
 
   private localize() {
@@ -448,8 +462,16 @@ export class PhaseWorkspacePanel {
     this.element.append(content)
   }
 
-  private createHeader(state: PhaseWorkspaceState, activeProcessId: string) {
+  private createHeader(
+    state: PhaseWorkspaceState,
+    activeProcessId: string,
+    backToTop: HTMLButtonElement
+  ) {
     const block = this.createBlock('工艺')
+    const heading = document.createElement('div')
+    heading.className = 'phase-process-heading'
+    heading.append(block.firstElementChild!, backToTop)
+    block.append(heading)
     const row = document.createElement('div')
     row.className = 'phase-process-selector'
     const select = document.createElement('select')

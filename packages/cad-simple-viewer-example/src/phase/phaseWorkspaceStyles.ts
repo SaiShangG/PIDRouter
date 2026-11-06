@@ -7,6 +7,9 @@ export function injectPhaseWorkspaceStyles() {
   style.textContent = `
     .phase-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; color: var(--app-text, #152026); background: var(--app-surface-panel, #f5f8f8); }
     .phase-workspace-header { flex: 0 0 auto; padding: 14px 14px 0; }
+    .phase-process-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+    .phase-workspace .phase-back-to-top { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 7px; color: var(--app-accent, #087b58); font-size: 12px; white-space: nowrap; }
+    .phase-workspace .phase-back-to-top[hidden] { display: none; }
     .phase-workspace-content { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px; }
     .phase-workspace-block { display: grid; gap: 9px; padding: 12px 0; border-bottom: 1px solid var(--app-border-subtle, #dbe3e5); }
     .phase-workspace-block:first-child { padding-top: 0; }

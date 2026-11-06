@@ -11,6 +11,7 @@ A vanilla TypeScript demo that shows how to embed [`@mlightcad/cad-simple-viewer
 - **Browser-only** — Parsing and rendering run in the browser (Web Workers + WebAssembly for DWG)
 - **Responsive layout** — Sidebar + viewer pane; stacks vertically on narrow screens
 - **Process phases** — Create processes and phases, clone the previous or any historical phase, and navigate phase snapshots without replacing the existing viewer tools
+- **Back to top** — When the process/phase list is scrolled down, use the button in the fixed process header to return to the list top without changing the active phase.
 - **Local persistence** — Process metadata is stored in `localStorage`; imported DXF/DWG content is stored in IndexedDB so active phases can be restored after a refresh
 
 ## Prerequisites

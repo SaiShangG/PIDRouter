@@ -434,6 +434,55 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(240)
   })
 
+  it.each(['zh', 'en'] as const)('returns only the list to the top using the localized fixed button in %s', locale => {
+    injectPhaseWorkspaceStyles()
+    const { store, panel, actions } = createHarness(locale)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Phase 1', source: { kind: 'unassigned' }
+    })
+    panel.render()
+    const state = store.snapshot()
+    const label = locale === 'zh' ? '回到顶部' : 'Back to top'
+    const getButton = () => panel.element.querySelector<HTMLButtonElement>('.phase-back-to-top')!
+    let content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+    expect(getButton().hidden).toBe(true)
+    expect(getComputedStyle(getButton()).display).toBe('none')
+    expect(getButton().closest('.phase-workspace-header')).not.toBeNull()
+    expect(getButton().textContent).toBe(label)
+    expect(getButton().getAttribute('aria-label')).toBe(label)
+    expect(getButton().title).toBe(label)
+
+    content.scrollTop = 1
+    content.dispatchEvent(new Event('scroll'))
+    expect(getButton().hidden).toBe(false)
+    expect(getComputedStyle(getButton()).display).toBe('inline-flex')
+    content.scrollTop = 0
+    content.dispatchEvent(new Event('scroll'))
+    expect(getButton().hidden).toBe(true)
+
+    content.scrollTop = 720
+    content.scrollLeft = 16
+    panel.render()
+    content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+    expect(content.scrollTop).toBe(720)
+    expect(getButton().hidden).toBe(false)
+    getButton().focus()
+    getButton().click()
+    expect(content.scrollTop).toBe(0)
+    expect(content.scrollLeft).toBe(16)
+    expect(getButton().hidden).toBe(true)
+    expect(document.activeElement).toBe(content)
+    expect(store.snapshot()).toEqual(state)
+    expect(actions.activatePhase).not.toHaveBeenCalled()
+    expect(actions.activateProcess).not.toHaveBeenCalled()
+    panel.render()
+    expect(getButton().hidden).toBe(true)
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
+  })
+
   it.each(['zh', 'en'] as const)('preserves scrolling when selecting bottom Phases and rendering again in %s', async locale => {
     const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')

@@ -40,6 +40,7 @@ const pairs: TranslationPair[] = [
   ['显示工具栏', 'Show toolbar'], ['默认折叠', 'Start collapsed'],
   ['工具栏位置', 'Toolbar position'], ['边缘间距（像素）', 'Edge inset (px)'],
   ['顶部', 'Top'], ['底部', 'Bottom'], ['左侧', 'Left'], ['右侧', 'Right'],
+  ['回到顶部', 'Back to top'],
   ['恢复默认', 'Restore defaults'], ['浏览', 'Navigation'],
   ['高亮与标注', 'Highlights and annotations'], ['显示设置', 'Display settings'],
   ['其他功能', 'Other features'], ['功能配置保存失败，请重试。', 'Unable to save feature settings. Please try again.'],
