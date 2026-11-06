@@ -121,6 +121,7 @@ export class PhaseWorkspacePanel {
   private phaseCopyBusy = false
   private phaseCopyError = ''
   private stopPhaseDrag?: () => void
+  private renderedProcessId?: string
 
   constructor(
     private readonly getState: () => PhaseWorkspaceState,
@@ -153,7 +154,7 @@ export class PhaseWorkspacePanel {
   render(options: { revealActivePhase?: boolean } = {}) {
     this.stopPhaseDrag?.()
     const previousContent = this.element.querySelector<HTMLElement>('.phase-workspace-content')
-    const scrollTop = previousContent?.scrollTop ?? 0
+    let scrollTop = previousContent?.scrollTop ?? 0
     const scrollLeft = previousContent?.scrollLeft ?? 0
     this.drawingAssociationModals.forEach(modal => modal.remove())
     this.drawingAssociationModals.clear()
@@ -162,6 +163,9 @@ export class PhaseWorkspacePanel {
     const activeProcess = state.processes.find(
       process => process.id === state.activeProcessId
     )
+    const processChanged = this.renderedProcessId !== activeProcess?.id
+    this.renderedProcessId = activeProcess?.id
+    if (processChanged) scrollTop = 0
     if (this.phaseCopySource && !this.phaseCopyBusy &&
       (activeProcess?.id !== this.phaseCopySource.processId ||
         activeProcess?.activeSequenceId !== this.phaseCopySource.sequenceId ||
@@ -234,7 +238,7 @@ export class PhaseWorkspacePanel {
     this.localize()
     content.scrollTop = scrollTop
     content.scrollLeft = scrollLeft
-    if (options.revealActivePhase) {
+    if (options.revealActivePhase && !processChanged) {
       const item = content.querySelector('.phase-tree-node.is-active')
         ?.closest<HTMLElement>('.phase-tree-item')
       if (item && content.clientHeight > 0) {

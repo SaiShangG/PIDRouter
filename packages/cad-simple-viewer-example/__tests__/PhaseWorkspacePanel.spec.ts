@@ -483,6 +483,74 @@ describe('PhaseWorkspacePanel', () => {
     expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
   })
 
+  it.each(['zh', 'en'] as const)('resets scrolling on process changes through any entry point in %s', async locale => {
+    const { store, panel, actions } = createHarness(locale)
+    const processes = ['CIP', 'SIP'].map(name => {
+      const process = store.createProcess(name)
+      const sequence = process.sequences[0]
+      const phases = Array.from({ length: 20 }, (_, index) => store.createPhase({
+        processId: process.id, sequenceId: sequence.id, number: index + 1,
+        name: `${name} ${index + 1}`, source: { kind: 'unassigned' }
+      }))
+      store.activate(process.id, sequence.id, phases[19].id)
+      return { process, sequence, phase: phases[19] }
+    })
+    jest.mocked(actions.activateProcess).mockImplementation(async processId => {
+      const target = processes.find(item => item.process.id === processId)!
+      store.activate(processId, target.sequence.id, target.phase.id)
+      panel.render()
+      await Promise.resolve()
+      panel.render()
+    })
+    panel.render()
+    for (const entry of ['selector', 'state'] as const) {
+      for (const target of processes) {
+        const content = panel.element.querySelector<HTMLElement>('.phase-workspace-content')!
+        content.scrollTop = 720
+        content.dispatchEvent(new Event('scroll'))
+        expect(panel.element.querySelector<HTMLButtonElement>('.phase-back-to-top')!.hidden).toBe(false)
+        if (entry === 'selector') {
+          const select = panel.element.querySelector<HTMLSelectElement>('.phase-process-selector select')!
+          select.value = target.process.id
+          select.dispatchEvent(new Event('change'))
+          await Promise.resolve()
+          await Promise.resolve()
+        } else {
+          store.activate(target.process.id, target.sequence.id, target.phase.id)
+          panel.render({ revealActivePhase: true })
+        }
+        expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
+        expect(panel.element.querySelector<HTMLButtonElement>('.phase-back-to-top')!.hidden).toBe(true)
+        expect(panel.element.querySelector<HTMLElement>('.phase-tree-node.is-active')!.dataset.phaseId)
+          .toBe(target.phase.id)
+        panel.render()
+        expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
+
+        panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 120
+        panel.render()
+        expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(120)
+      }
+    }
+    expect(actions.activatePhase).not.toHaveBeenCalled()
+  })
+
+  it('resets scrolling when switching to an empty process or one without an active sequence', () => {
+    const { store, panel } = createHarness()
+    const first = store.createProcess('CIP')
+    const empty = store.createProcess('Empty')
+    store.activate(first.id, first.sequences[0].id)
+    panel.render()
+    panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 720
+    store.activate(empty.id, empty.sequences[0].id)
+    panel.render()
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
+    panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop = 240
+    store.activate(first.id)
+    panel.render()
+    expect(panel.element.querySelector<HTMLElement>('.phase-workspace-content')!.scrollTop).toBe(0)
+    expect(panel.element.querySelector<HTMLButtonElement>('.phase-back-to-top')!.hidden).toBe(true)
+  })
+
   it.each(['zh', 'en'] as const)('preserves scrolling when selecting bottom Phases and rendering again in %s', async locale => {
     const { store, panel, actions } = createHarness(locale)
     const process = store.createProcess('CIP')
