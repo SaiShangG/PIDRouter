@@ -34,6 +34,47 @@ describe('ToolbarPreferencesModal', () => {
     expect(modal.element.hidden).toBe(true)
   })
 
+  it.each(['zh', 'en'] as const)('configures valve brush scope under highlights in %s', locale => {
+    const save = jest.fn()
+    const modal = new ToolbarPreferencesModal(() => locale, item => item.id, save)
+    const preferences = defaultToolbarPreferences()
+    modal.open(preferences, [{ id: 'brush-valve-toggle' }])
+    const scope = modal.element.querySelector<HTMLSelectElement>('select[name="valveBrushScope"]')!
+    expect(scope.closest('details')?.querySelector('h4')?.textContent)
+      .toBe(locale === 'zh' ? '高亮与标注' : 'Highlights and annotations')
+    expect(Array.from(scope.options, option => option.textContent)).toEqual(locale === 'zh'
+      ? ['仅阀门', '非阀门实体', '所有实体']
+      : ['Valves only', 'Non-valve entities', 'All entities'])
+    expect(scope.value).toBe('valves')
+    scope.value = 'all'
+    scope.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(preferences.valveBrushScope).toBe('valves')
+    expect(save).not.toHaveBeenCalled()
+    modal.close()
+    modal.open(preferences, [{ id: 'brush-valve-toggle' }])
+    const reopened = modal.element.querySelector<HTMLSelectElement>('select[name="valveBrushScope"]')!
+    expect(reopened.value).toBe('valves')
+    reopened.value = 'non-valves'
+    reopened.dispatchEvent(new Event('change', { bubbles: true }))
+    modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-save')!.click()
+    expect(save).toHaveBeenCalledWith({ ...preferences, valveBrushScope: 'non-valves' })
+  })
+
+  it('retains the valve brush scope when hidden and resets it with defaults', () => {
+    const save = jest.fn()
+    const modal = new ToolbarPreferencesModal(() => 'en', item => item.id, save)
+    modal.open({ ...defaultToolbarPreferences(), valveBrushScope: 'non-valves', hiddenIds: ['brush-valve-toggle'] }, [{ id: 'brush-valve-toggle' }])
+    const fieldset = modal.element.querySelector<HTMLFieldSetElement>('.toolbar-preferences-children')!
+    expect(fieldset.disabled).toBe(true)
+    expect(fieldset.querySelector<HTMLSelectElement>('select')!.value).toBe('non-valves')
+    modal.element.querySelector<HTMLInputElement>('input[name="brush-valve-toggle"]')!.click()
+    expect(fieldset.disabled).toBe(false)
+    modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-reset')!.click()
+    expect(modal.element.querySelector<HTMLSelectElement>('select[name="valveBrushScope"]')!.value).toBe('valves')
+    modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-save')!.click()
+    expect(save).toHaveBeenCalledWith(defaultToolbarPreferences())
+  })
+
   it('cancels with Escape and restores focus without persisting', () => {
     const trigger = document.createElement('button')
     document.body.append(trigger)

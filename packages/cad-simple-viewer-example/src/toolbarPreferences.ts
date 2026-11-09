@@ -1,4 +1,5 @@
 import type { AcExToolbarPlacement } from '@mlightcad/cad-simple-ui-plugin'
+import type { ValveBrushScope } from './brush/BrushHighlightFeature'
 
 export interface ToolbarPreferences {
   hiddenIds: string[]
@@ -8,13 +9,15 @@ export interface ToolbarPreferences {
   edgeOffset: number
   valveDebugEnabled: boolean
   brushDebugEnabled: boolean
+  valveBrushScope: ValveBrushScope
 }
 
 export const defaultToolbarPreferences = (): ToolbarPreferences => ({
   hiddenIds: ['layer', 'agent', 'measure', 'export', 'rev-vis', 'theme', 'locale'],
   visible: true, collapsed: false, placement: 'right', edgeOffset: 8,
   valveDebugEnabled: false,
-  brushDebugEnabled: false
+  brushDebugEnabled: false,
+  valveBrushScope: 'valves'
 })
 
 export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'getItem'>): ToolbarPreferences {
@@ -32,6 +35,8 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
         ? value.valveDebugEnabled : defaults.valveDebugEnabled,
       brushDebugEnabled: typeof value.brushDebugEnabled === 'boolean'
         ? value.brushDebugEnabled : defaults.brushDebugEnabled,
+      valveBrushScope: value.valveBrushScope === 'valves' || value.valveBrushScope === 'non-valves' || value.valveBrushScope === 'all'
+        ? value.valveBrushScope : defaults.valveBrushScope,
       placement: ['top', 'bottom', 'left', 'right'].includes(value.placement) ? value.placement : defaults.placement,
       edgeOffset: typeof value.edgeOffset === 'number' && Number.isFinite(value.edgeOffset)
         ? Math.min(80, Math.max(0, value.edgeOffset)) : defaults.edgeOffset

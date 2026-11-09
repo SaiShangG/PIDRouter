@@ -7,6 +7,7 @@ import type { AcDbObjectId } from '@mlightcad/data-model'
 
 export type BrushOperation = 'paint' | 'erase'
 export type BrushPaintMode = 'standard' | 'valve-toggle'
+export type ValveBrushScope = 'valves' | 'non-valves' | 'all'
 
 export interface BrushHighlightFeatureOptions {
   getView(): AcEdBaseView | undefined
@@ -16,6 +17,8 @@ export interface BrushHighlightFeatureOptions {
   onActiveChanged?(): void
   onStrokeStarted?(operation: BrushOperation): void
   onStrokeEnded?(): void
+  isValveBrushEnabled?(): boolean
+  getValveBrushScope?(): ValveBrushScope
   shouldToggleEntity?(objectId: AcDbObjectId): boolean
   isEntityHighlighted?(objectId: AcDbObjectId): boolean
   onEntitiesChanged(operation: BrushOperation, objectIds: readonly AcDbObjectId[]): void
@@ -68,6 +71,7 @@ export class BrushHighlightFeature {
   }
 
   private start(operation: BrushOperation, paintMode: BrushPaintMode) {
+    if (paintMode === 'valve-toggle' && this.options.isValveBrushEnabled?.() === false) return false
     const view = this.options.getView()
     if (!view) return false
     this.attach()
@@ -301,6 +305,7 @@ export class BrushHighlightFeature {
   }
 
   private applyAt(canvasPoint: { x: number; y: number }) {
+    if (this.paintMode === 'valve-toggle' && this.options.isValveBrushEnabled?.() === false) return
     const view = this.attachedView
     if (!view) return
     const worldPoint = view.screenToWorld(canvasPoint)
@@ -309,7 +314,11 @@ export class BrushHighlightFeature {
     ]
     if (ids.length === 0) return
 
-    const idsToReport = ids.filter(id => !this.strokeHitIds.has(id))
+    const scope = this.paintMode === 'valve-toggle'
+      ? this.options.getValveBrushScope?.() ?? 'all'
+      : 'all'
+    const idsToReport = ids.filter(id => !this.strokeHitIds.has(id) &&
+      (scope === 'all' || Boolean(this.options.shouldToggleEntity?.(id)) === (scope === 'valves')))
     idsToReport.forEach(id => this.strokeHitIds.add(id))
     const groups = new Map<BrushOperation, AcDbObjectId[]>()
     idsToReport.forEach(id => {

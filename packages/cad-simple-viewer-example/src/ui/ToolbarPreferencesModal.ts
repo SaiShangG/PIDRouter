@@ -62,6 +62,8 @@ export class ToolbarPreferencesModal {
         .toolbar-preferences-children:disabled { opacity: .5; }
         .toolbar-preferences-shell select, .toolbar-preferences-shell input[type=number] { box-sizing: border-box; max-width: 50%; min-height: 32px; border: 1px solid var(--app-border, #ccd7da); border-radius: 4px; color: inherit; background: var(--app-surface-elevated, #fff); padding: 4px 8px; }
         .toolbar-preferences-shell input[type=number] { width: 90px; }
+        .toolbar-preferences-scope { flex-wrap: wrap; padding: 6px 0; }
+        .toolbar-preferences-shell .toolbar-preferences-scope select { flex: 1 1 160px; min-width: 0; max-width: 100%; }
         .toolbar-preferences-shell button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--app-border, #ccd7da); color: inherit; background: var(--app-surface-elevated, #fff); cursor: pointer; }
         .toolbar-preferences-shell button:hover { background: var(--app-success-surface, #edf8f4); }
         .toolbar-preferences-shell :focus-visible { outline: 2px solid var(--app-accent, #087b58); outline-offset: 2px; }
@@ -191,7 +193,7 @@ export class ToolbarPreferencesModal {
   private groupName(id: string): string {
     if (['select', 'pan', 'zoom-extent', 'zoom-window'].includes(id)) return '浏览'
     if (id === 'layer') return '图层'
-    if (['highlight-auto', 'brush-highlight', 'brush-erase', 'annotation', 'rev-vis'].includes(id)) return '高亮与标注'
+    if (['highlight-auto', 'brush-highlight', 'brush-valve-toggle', 'brush-erase', 'annotation', 'rev-vis'].includes(id)) return '高亮与标注'
     if (id === 'measure') return '测量'
     if (['switch-bg', 'monochrome', 'toolbar-placement', 'theme', 'locale'].includes(id)) return '显示设置'
     return '其他功能'
@@ -216,9 +218,25 @@ export class ToolbarPreferencesModal {
     else if (icon) iconElement.append(icon.cloneNode(true))
     row.insertBefore(iconElement, row.querySelector('span'))
     container.append(row)
-    if (item.children?.length) {
+    if (item.id === 'brush-valve-toggle') {
+      const scope = document.createElement('select')
+      scope.name = 'valveBrushScope'
+      for (const [value, label] of [
+        ['valves', '仅阀门'], ['non-valves', '非阀门实体'], ['all', '所有实体']
+      ] as const) {
+        scope.add(new Option(this.text(label), value))
+      }
+      scope.value = this.draft.valveBrushScope
+      scope.addEventListener('change', () => {
+        this.draft.valveBrushScope = scope.value as ToolbarPreferences['valveBrushScope']
+      })
+      const scopeRow = this.row('画笔作用范围', scope)
+      scopeRow.classList.add('toolbar-preferences-scope')
+      children.append(scopeRow)
+    }
+    if (item.children?.length || item.id === 'brush-valve-toggle') {
       children.setAttribute('aria-label', this.itemLabel(item))
-      item.children.forEach(child => this.appendItem(children, child))
+      item.children?.forEach(child => this.appendItem(children, child))
       container.append(children)
     }
   }

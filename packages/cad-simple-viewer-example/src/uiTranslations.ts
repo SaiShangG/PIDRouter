@@ -32,6 +32,8 @@ const pairs: TranslationPair[] = [
   ['图纸 Viewer 功能配置', 'Drawing Viewer feature settings'],
   ['开发', 'Development'], ['阀门调试', 'Valve debug'],
   ['画笔调试', 'Brush debug'], ['清空列表', 'Clear list'],
+  ['画笔作用范围', 'Brush scope'], ['仅阀门', 'Valves only'],
+  ['非阀门实体', 'Non-valve entities'], ['所有实体', 'All entities'],
   ['无持久化句柄', 'No persistent handle'],
   ['画笔命中', 'Brush hit'], ['橡皮命中', 'Eraser hit'],
   ['无法定位：实体不存在或无法生成预览', 'Cannot locate: entity missing or preview unavailable'],

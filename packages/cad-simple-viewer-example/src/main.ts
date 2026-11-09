@@ -1436,6 +1436,7 @@ class CadViewerApp {
       },
       {
         id: 'brush-valve-toggle', label: 'toolbar.valveBrush', requiresDocument: true,
+        disabled: () => this.highlightMode !== 'manual',
         icon: () => {
           const icon = document.createElement('span')
           icon.append(createPhaseIcon(ToggleRight))
@@ -1493,6 +1494,10 @@ class CadViewerApp {
       },
       preferences => {
         saveToolbarPreferences(this.toolbarPreferenceUserId, preferences, localStorage)
+        if (preferences.valveBrushScope !== this.toolbarPreferences.valveBrushScope &&
+          this.brushHighlightFeature?.currentPaintMode === 'valve-toggle') {
+          this.brushHighlightFeature.deactivate()
+        }
         const hidesTools = !preferences.visible || preferences.hiddenIds.some(id => !this.toolbarPreferences.hiddenIds.includes(id))
         if (hidesTools && this.isInitialized) {
           this.brushHighlightFeature?.deactivate()
@@ -2076,6 +2081,8 @@ class CadViewerApp {
         view.canvas.style.cursor = this.createBrushCursor(operation)
       },
       onActiveChanged: () => this.getSimpleUiPlugin()?.refreshToolbar(),
+      isValveBrushEnabled: () => this.highlightMode === 'manual',
+      getValveBrushScope: () => this.toolbarPreferences.valveBrushScope,
       onStrokeStarted: operation => {
         this.manualCorrections.beginStroke()
         this.brushStrokeStyleRefId = operation === 'paint'
@@ -2106,6 +2113,7 @@ class CadViewerApp {
   }
 
   private openBrushStyleDialog(paintMode: BrushPaintMode = 'standard') {
+    if (paintMode === 'valve-toggle' && this.highlightMode !== 'manual') return
     if (this.brushHighlightFeature?.isEnabled) {
       if (this.brushHighlightFeature.currentOperation === 'paint' &&
         this.brushHighlightFeature.currentPaintMode === paintMode) {

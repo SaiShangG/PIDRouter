@@ -163,6 +163,27 @@ backend overlays must apply exclusions and additions before rendering
 their highlights have been overridden or erased. No backend mode field is
 required.
 
+### Valve brush scope
+
+In **Feature settings > Drawing Viewer feature settings > Highlights and
+annotations**, the valve brush has a **Brush scope** setting: **Valves only**
+(default), **Non-valve entities**, or **All entities**. The scope is saved per user
+in local toolbar preferences; older preferences without a scope default to valves only.
+
+All three scopes require manual highlighting mode. The valve brush is disabled
+in automatic mode. Within the selected scope, valves toggle highlights once per
+stroke and non-valve entities are painted normally. Neither device states nor
+automatic routes change. Saving a different scope exits the current valve brush;
+existing highlights are retained. The ordinary brush and eraser are unchanged.
+
+在 **功能配置 > 图纸 Viewer 功能配置 > 高亮与标注** 中，可设置阀门画笔的
+**画笔作用范围**：**仅阀门**（默认）、**非阀门实体**、**所有实体**。设置按用户
+保存在本地工具栏配置中，未包含范围字段的旧配置默认使用仅阀门。
+
+三种范围均仅在手动高亮模式下启用，自动模式下禁用此画笔。范围内的阀门每笔切换
+一次高亮，非阀门实体按普通涂画处理；不改变设备状态或触发自动找路。保存新范围
+会退出当前阀门画笔，已有高亮保留。普通画笔和橡皮擦不受影响。
+
 ### Brush debugging
 
 Enable **Feature settings > Development > Brush debug** to show the shared

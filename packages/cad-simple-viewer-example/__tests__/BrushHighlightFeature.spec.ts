@@ -164,6 +164,59 @@ describe('BrushHighlightFeature', () => {
     feature.dispose()
   })
 
+  it.each(['valves', 'non-valves', 'all'] as const)('filters valve brush hits using the %s scope', scope => {
+    const { canvas, view } = createView()
+    view.pick = jest.fn(() => ['A', 'B', 'C'].map(id => ({
+      id, minX: 0, minY: 0, maxX: 1, maxY: 1
+    })))
+    const highlighted = new Set<string>()
+    const onEntitiesChanged = jest.fn((operation: BrushOperation, ids: readonly string[]) => {
+      ids.forEach(id => operation === 'paint' ? highlighted.add(id) : highlighted.delete(id))
+    })
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      getValveBrushScope: () => scope,
+      isValveBrushEnabled: () => true,
+      shouldToggleEntity: id => id === 'A',
+      isEntityHighlighted: id => highlighted.has(id),
+      onEntitiesChanged
+    })
+    feature.activate('paint', 'valve-toggle')
+    stroke(canvas, 0)
+    expect([...highlighted]).toEqual(scope === 'valves' ? ['A'] : scope === 'non-valves' ? ['B', 'C'] : ['A', 'B', 'C'])
+    stroke(canvas, 0)
+    expect([...highlighted]).toEqual(scope === 'valves' ? [] : ['B', 'C'])
+    feature.activate('erase')
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).toHaveBeenLastCalledWith('erase', ['A', 'B', 'C'])
+    feature.activate('paint')
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).toHaveBeenLastCalledWith('paint', ['A', 'B', 'C'])
+    feature.dispose()
+  })
+
+  it.each(['valves', 'non-valves', 'all'] as const)('blocks the %s valve brush outside manual mode', scope => {
+    const { canvas, view } = createView()
+    let enabled = false
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view, getValveBrushScope: () => scope,
+      isValveBrushEnabled: () => enabled, onEntitiesChanged
+    })
+    expect(feature.activate('paint', 'valve-toggle')).toBe(false)
+    enabled = true
+    expect(feature.activate('paint', 'valve-toggle')).toBe(true)
+    feature.suspend()
+    enabled = false
+    expect(feature.resume()).toBe(false)
+    enabled = true
+    feature.resume()
+    enabled = false
+    stroke(canvas, 0)
+    expect(onEntitiesChanged).not.toHaveBeenCalled()
+    feature.dispose()
+  })
+
   it('separates mixed toggle hits and ignores duplicate picks within one stroke', () => {
     const { canvas, view } = createView()
     view.pick = jest.fn(() => ['A', 'B', 'C', 'A'].map(id => ({

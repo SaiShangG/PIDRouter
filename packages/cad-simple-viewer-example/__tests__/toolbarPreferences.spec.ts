@@ -60,6 +60,19 @@ describe('toolbar preferences', () => {
     expect(preferences.brushDebugEnabled).toBe(false)
   })
 
+  it.each(['valves', 'non-valves', 'all'] as const)('persists the %s valve brush scope per user', valveBrushScope => {
+    const preferences = { ...defaultToolbarPreferences(), valveBrushScope }
+    saveToolbarPreferences('alice', preferences, storage)
+    expect(loadToolbarPreferences('alice', storage).valveBrushScope).toBe(valveBrushScope)
+    expect(loadToolbarPreferences('bob', storage).valveBrushScope).toBe('valves')
+  })
+
+  it.each([undefined, null, 'invalid', 1])('defaults invalid or legacy scope %s to valves only', valveBrushScope => {
+    expect(loadToolbarPreferences('alice', {
+      getItem: () => JSON.stringify({ valveBrushScope })
+    }).valveBrushScope).toBe('valves')
+  })
+
   it('reports save failures instead of pretending the setting was saved', () => {
     expect(() => saveToolbarPreferences('alice', defaultToolbarPreferences(), {
       setItem: () => { throw new Error('full') }
