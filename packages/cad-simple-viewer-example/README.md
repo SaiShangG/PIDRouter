@@ -95,6 +95,9 @@ the report waiting; `Completed` must include a nonempty download `url`.
 `Failed` displays an export error, and `Cancelled` displays cancellation.
 For older backends that omit `status`, a nonempty `url` still indicates completion.
 
+The PDF and Matrix export status spinner stays animated even when the operating
+system or browser requests reduced motion, so ongoing generation remains visible.
+
 Closing and reopening the report workspace does not cancel or resubmit an
 in-flight export. **Cancel generation** stops the frontend wait and download;
 it does not cancel the backend task. Network/API errors still stop the wait and

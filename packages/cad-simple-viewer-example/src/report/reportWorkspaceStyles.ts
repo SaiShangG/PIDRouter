@@ -163,7 +163,6 @@ export function injectReportWorkspaceStyles() {
     .pdf-preview-status { position: absolute; inset: 50% auto auto 50%; display: grid; gap: 10px; min-width: 260px; margin: 0; padding: 22px; transform: translate(-50%, -50%); border: 1px solid #aebdc1; background: #fff; text-align: center; }
     .pdf-preview-status span { color: #65777d; font-size: 11px; }
     @keyframes report-export-spin { to { transform: rotate(360deg); } }
-    @media (prefers-reduced-motion: reduce) { .report-export-spinner { animation: none; } }
     @media (max-width: 980px) {
       .report-workspace-modal { padding: 8px; }
       .report-workspace-shell > header { grid-template-columns: minmax(160px, 1fr) auto 34px; gap: 10px; }
