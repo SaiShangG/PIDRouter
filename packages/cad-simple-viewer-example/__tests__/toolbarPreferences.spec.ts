@@ -67,9 +67,16 @@ describe('toolbar preferences', () => {
     expect(loadToolbarPreferences('bob', storage).valveBrushScope).toBe('valves')
   })
 
+  it.each(['all', 'non-valves', 'valves'] as const)('initializes unversioned scope %s to valves only without resetting other settings', valveBrushScope => {
+    const preferences = { ...defaultToolbarPreferences(), valveBrushScope, hiddenIds: ['pan'], edgeOffset: 20 }
+    expect(loadToolbarPreferences('alice', {
+      getItem: () => JSON.stringify(preferences)
+    })).toEqual({ ...preferences, valveBrushScope: 'valves' })
+  })
+
   it.each([undefined, null, 'invalid', 1])('defaults invalid or legacy scope %s to valves only', valveBrushScope => {
     expect(loadToolbarPreferences('alice', {
-      getItem: () => JSON.stringify({ valveBrushScope })
+      getItem: () => JSON.stringify({ valveBrushScope, valveBrushScopeVersion: 1 })
     }).valveBrushScope).toBe('valves')
   })
 

@@ -1,6 +1,8 @@
 import type { AcExToolbarPlacement } from '@mlightcad/cad-simple-ui-plugin'
 import type { ValveBrushScope } from './brush/BrushHighlightFeature'
 
+const VALVE_BRUSH_SCOPE_VERSION = 1
+
 export interface ToolbarPreferences {
   hiddenIds: string[]
   visible: boolean
@@ -35,7 +37,8 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
         ? value.valveDebugEnabled : defaults.valveDebugEnabled,
       brushDebugEnabled: typeof value.brushDebugEnabled === 'boolean'
         ? value.brushDebugEnabled : defaults.brushDebugEnabled,
-      valveBrushScope: value.valveBrushScope === 'valves' || value.valveBrushScope === 'non-valves' || value.valveBrushScope === 'all'
+      valveBrushScope: value.valveBrushScopeVersion === VALVE_BRUSH_SCOPE_VERSION &&
+        (value.valveBrushScope === 'valves' || value.valveBrushScope === 'non-valves' || value.valveBrushScope === 'all')
         ? value.valveBrushScope : defaults.valveBrushScope,
       placement: ['top', 'bottom', 'left', 'right'].includes(value.placement) ? value.placement : defaults.placement,
       edgeOffset: typeof value.edgeOffset === 'number' && Number.isFinite(value.edgeOffset)
@@ -47,7 +50,10 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
 }
 
 export function saveToolbarPreferences(userId: string, value: ToolbarPreferences, storage: Pick<Storage, 'setItem'>): void {
-  storage.setItem(toolbarPreferencesKey(userId), JSON.stringify(value))
+  storage.setItem(toolbarPreferencesKey(userId), JSON.stringify({
+    ...value,
+    valveBrushScopeVersion: VALVE_BRUSH_SCOPE_VERSION
+  }))
 }
 
 function toolbarPreferencesKey(userId: string): string {

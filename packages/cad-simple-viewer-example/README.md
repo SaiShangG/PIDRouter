@@ -168,7 +168,8 @@ required.
 In **Feature settings > Drawing Viewer feature settings > Highlights and
 annotations**, the valve brush has a **Brush scope** setting: **Valves only**
 (default), **Non-valve entities**, or **All entities**. The scope is saved per user
-in local toolbar preferences; older preferences without a scope default to valves only.
+in local toolbar preferences. Unversioned scope preferences are initialized to
+valves only; subsequent explicit selections are retained with a version marker.
 
 All three scopes require manual highlighting mode. The valve brush is disabled
 in automatic mode. Within the selected scope, valves toggle highlights once per
@@ -178,7 +179,8 @@ existing highlights are retained. The ordinary brush and eraser are unchanged.
 
 在 **功能配置 > 图纸 Viewer 功能配置 > 高亮与标注** 中，可设置阀门画笔的
 **画笔作用范围**：**仅阀门**（默认）、**非阀门实体**、**所有实体**。设置按用户
-保存在本地工具栏配置中，未包含范围字段的旧配置默认使用仅阀门。
+保存在本地工具栏配置中，未带范围版本标记的旧配置统一初始化为仅阀门；此后用户
+保存的范围选择会带版本标记并正常保留，其他工具栏设置不受影响。
 
 三种范围均仅在手动高亮模式下启用，自动模式下禁用此画笔。范围内的阀门每笔切换
 一次高亮，非阀门实体按普通涂画处理；不改变设备状态或触发自动找路。保存新范围
