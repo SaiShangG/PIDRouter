@@ -856,7 +856,7 @@ class CadViewerApp {
     if (!response.success || !response.result) {
       throw new Error(response.message ?? 'Flow path PDF export failed')
     }
-    const result = await this.waitForFlowPathResult(response.result, signal)
+    const result = await this.processAssistantFlowPathApi.waitForResult(response.result, signal)
     const file = await this.processAssistantFlowPathApi.download(
       result.url,
       signal
@@ -866,27 +866,6 @@ class CadViewerApp {
       fileName: urlFileName ? decodeURIComponent(urlFileName) : result.name || fileName,
       bytes: new Uint8Array(await file.blob.arrayBuffer())
     }
-  }
-
-  private async waitForFlowPathResult(id: string, signal: AbortSignal) {
-    const deadline = Date.now() + 120_000
-    while (!signal.aborted && Date.now() < deadline) {
-      const result = await this.processAssistantFlowPathApi.result(id, signal)
-      if (result?.url) return result
-      await new Promise<void>((resolve, reject) => {
-        const handleAbort = () => {
-          window.clearTimeout(timeout)
-          reject(new DOMException('Export canceled', 'AbortError'))
-        }
-        const timeout = window.setTimeout(() => {
-          signal.removeEventListener('abort', handleAbort)
-          resolve()
-        }, 4000)
-        signal.addEventListener('abort', handleAbort, { once: true })
-      })
-    }
-    if (signal.aborted) throw new DOMException('Export canceled', 'AbortError')
-    throw new Error('Timed out waiting for the flow path export result')
   }
 
   private async exportMatrix(

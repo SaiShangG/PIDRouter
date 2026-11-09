@@ -34,6 +34,13 @@ export interface FlowPathResultDto {
   name: string
 }
 
+export interface FlowPathTaskResultDto {
+  fileSystemPath?: string | null
+  url?: string | null
+  name?: string | null
+  status?: 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled'
+}
+
 export class ProcessAssistantMatrixApi {
   constructor(private readonly client: ProcessAssistantClient) { }
 
@@ -69,12 +76,53 @@ export class ProcessAssistantFlowPathApi {
     )
   }
 
-  result(id: string, signal?: AbortSignal): Promise<FlowPathResultDto | undefined> {
-    return this.client.request<FlowPathResultDto | undefined>(
+  result(id: string, signal?: AbortSignal): Promise<FlowPathTaskResultDto | undefined> {
+    return this.client.request<FlowPathTaskResultDto | undefined>(
       'GET',
       `/api/v1/Skill/flow-path/result?id=${encodeURIComponent(id)}`,
       { signal }
     )
+  }
+
+  async waitForResult(id: string, signal?: AbortSignal) {
+    while (true) {
+      signal?.throwIfAborted()
+      const result = await this.result(id, signal)
+      signal?.throwIfAborted()
+      if (result) {
+        switch (result.status) {
+          case 'Pending':
+          case 'Running':
+            break
+          case 'Completed':
+            if (!result.url?.trim()) {
+              throw new Error('Flow path PDF export completed without a download URL')
+            }
+            return { ...result, url: result.url }
+          case 'Failed':
+            throw new Error('Flow path PDF export task failed')
+          case 'Cancelled':
+            throw new DOMException('Flow path PDF export task was canceled', 'AbortError')
+          case undefined:
+            // Older backends indicate completion only through the file URL.
+            if (result.url?.trim()) return { ...result, url: result.url }
+            break
+          default:
+            throw new Error(`Flow path PDF export task returned an invalid status: ${String(result.status)}`)
+        }
+      }
+      await new Promise<void>((resolve, reject) => {
+        const handleAbort = () => {
+          clearTimeout(timeout)
+          reject(new DOMException('Export canceled', 'AbortError'))
+        }
+        const timeout = setTimeout(() => {
+          signal?.removeEventListener('abort', handleAbort)
+          resolve()
+        }, 4000)
+        signal?.addEventListener('abort', handleAbort, { once: true })
+      })
+    }
   }
 
   download(url: string, signal?: AbortSignal) {

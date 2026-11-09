@@ -901,6 +901,41 @@ describe('ReportWorkspaceModal', () => {
     expect(document.body.textContent).toContain('Report generation canceled')
   })
 
+  it('shows backend task cancellation instead of a report failure', async () => {
+    const exportReport = jest.fn(async () => {
+      throw new DOMException('Flow path PDF export task was canceled', 'AbortError')
+    })
+    createHarness('en', workspace, exportReport)
+
+    openExportSettings('en')
+    buttonByText('Merge into one PDF')?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(document.querySelector('.report-export-status')).toBeNull()
+    expect(document.body.classList.contains('report-pdf-exporting')).toBe(false)
+    expect(document.body.textContent).toContain('Report generation canceled')
+    expect(document.body.textContent).not.toContain('Report generation failed')
+  })
+
+  it('shows the backend task failure message and releases export controls', async () => {
+    const exportReport = jest.fn(async () => {
+      throw new Error('Flow path PDF export task failed')
+    })
+    createHarness('en', workspace, exportReport)
+
+    openExportSettings('en')
+    buttonByText('Merge into one PDF')?.click()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(document.querySelector('.report-export-status')).toBeNull()
+    expect(document.body.classList.contains('report-pdf-exporting')).toBe(false)
+    expect(document.body.textContent).toContain('Report generation failed')
+    expect(document.body.textContent).toContain('Flow path PDF export task failed')
+    expect(buttonByText('Merge into one PDF')?.disabled).toBe(false)
+  })
+
   it('lists runtime failures and retries failed pages', async () => {
     const retry = jest.fn(async () => ({
       status: 'completed' as const,

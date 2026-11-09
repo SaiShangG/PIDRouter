@@ -1624,7 +1624,10 @@ export class ReportWorkspaceModal {
             : `报告生成失败：${result.failures.length} 页`
       this.failedExport = result.status === 'failed' ? result : undefined
     } catch (error) {
-      this.exportMessage = `${this.getLocale() === 'zh' ? '报告生成失败' : 'Report generation failed'}：${this.errorMessage(error)}`
+      this.exportMessage = controller.signal.aborted ||
+        (error instanceof DOMException && error.name === 'AbortError')
+        ? '报告生成已取消'
+        : `${this.getLocale() === 'zh' ? '报告生成失败' : 'Report generation failed'}：${this.errorMessage(error)}`
     } finally {
       document.body.classList.remove('report-pdf-exporting')
       this.exportController = undefined

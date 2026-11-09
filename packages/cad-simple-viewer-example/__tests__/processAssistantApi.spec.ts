@@ -272,6 +272,169 @@ describe('general skill completion', () => {
   })
 })
 
+describe('flow path PDF completion', () => {
+  const json = (value: unknown) => new Response(JSON.stringify(value), {
+    headers: { 'Content-Type': 'application/json' }
+  })
+  const completed = {
+    fileSystemPath: 'D:\\TTT\\uploads\\tmpmakyui20261109_144308.zip',
+    url: '/uploads/tmpmakyui20261109_144308.zip',
+    name: 'SIP-report.pdf',
+    status: 'Completed'
+  }
+
+  beforeEach(() => jest.useFakeTimers())
+  afterEach(() => jest.useRealTimers())
+
+  it('keeps polling Pending and Running beyond two minutes, then downloads the completed archive', async () => {
+    let status = 'Pending'
+    const fetchMock = jest.fn().mockImplementation((url: string) =>
+      Promise.resolve(url.includes('/flow-path/result')
+        ? json(status === 'Completed' ? completed : { status, url: null })
+        : new Response('zip-content'))
+    ) as jest.MockedFunction<typeof fetch>
+    const api = new ProcessAssistantFlowPathApi(createClient(fetchMock))
+    const controller = new AbortController()
+    const ready = jest.fn()
+    const resultPromise = api.waitForResult('pdf/task id', controller.signal).then(ready)
+
+    await jest.advanceTimersByTimeAsync(124_000)
+    expect(fetchMock).toHaveBeenCalledTimes(32)
+    expect(ready).not.toHaveBeenCalled()
+    expect(jest.getTimerCount()).toBe(1)
+
+    status = 'Running'
+    await jest.advanceTimersByTimeAsync(8000)
+    expect(fetchMock).toHaveBeenCalledTimes(34)
+    expect(ready).not.toHaveBeenCalled()
+
+    status = 'Completed'
+    await jest.advanceTimersByTimeAsync(4000)
+    await resultPromise
+    expect(ready).toHaveBeenCalledWith(completed)
+    expect(jest.getTimerCount()).toBe(0)
+    for (const [url, options] of fetchMock.mock.calls) {
+      expect(url).toBe('http://api.example.test/api/v1/Skill/flow-path/result?id=pdf%2Ftask%20id')
+      expect(options).toMatchObject({
+        method: 'GET', cache: 'no-store', signal: controller.signal
+      })
+    }
+
+    const file = await api.download(completed.url, controller.signal)
+    await expect(file.blob.text()).resolves.toBe('zip-content')
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://api.example.test/uploads/tmpmakyui20261109_144308.zip',
+      expect.objectContaining({ method: 'GET', signal: controller.signal })
+    )
+  })
+
+  it.each(['Pending', 'Running'])('does not treat a URL as completion when status is %s', async status => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(json({ ...completed, status }))
+      .mockResolvedValueOnce(json(completed)) as jest.MockedFunction<typeof fetch>
+    const ready = jest.fn()
+    const resultPromise = new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task').then(ready)
+
+    await jest.advanceTimersByTimeAsync(0)
+    expect(ready).not.toHaveBeenCalled()
+    await jest.advanceTimersByTimeAsync(4000)
+    await resultPromise
+    expect(ready).toHaveBeenCalledWith(completed)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('preserves URL-based completion for backends without a status', async () => {
+    const legacy = { url: completed.url, name: completed.name }
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(legacy)) as jest.MockedFunction<typeof fetch>
+    const result = new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task')
+
+    await jest.advanceTimersByTimeAsync(4000)
+    await expect(result).resolves.toEqual(legacy)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it.each([
+    [{ ...completed, status: 'Failed' }, 'Flow path PDF export task failed'],
+    [{ status: 'Completed' }, 'Flow path PDF export completed without a download URL'],
+    [{ status: 'Completed', url: '  ' }, 'Flow path PDF export completed without a download URL'],
+    [{ ...completed, status: 'Unknown' }, 'Flow path PDF export task returned an invalid status: Unknown']
+  ])('rejects terminal failures and invalid results (%j)', async (response, message) => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(json(response)) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task')).rejects.toThrow(message)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('stops on backend cancellation even when a URL is present', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(json({
+      ...completed, status: 'Cancelled'
+    })) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task')).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('propagates status request errors without continuing to poll', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      new Response('Unavailable', { status: 503 })
+    ) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task')).rejects.toMatchObject({ status: 503 })
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('clears the polling timer when the frontend cancels', async () => {
+    const fetchMock = jest.fn().mockImplementation(() =>
+      Promise.resolve(json({ status: 'Running' }))
+    ) as jest.MockedFunction<typeof fetch>
+    const controller = new AbortController()
+    const result = expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task', controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+
+    await jest.advanceTimersByTimeAsync(0)
+    expect(jest.getTimerCount()).toBe(1)
+    controller.abort()
+    await result
+    expect(jest.getTimerCount()).toBe(0)
+    await jest.advanceTimersByTimeAsync(4000)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not poll an already aborted wait', async () => {
+    const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task', controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not schedule another poll if cancellation happens during a status request', async () => {
+    const controller = new AbortController()
+    const fetchMock = jest.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.resolve(json({ status: 'Running' }))
+    }) as jest.MockedFunction<typeof fetch>
+
+    await expect(new ProcessAssistantFlowPathApi(createClient(fetchMock))
+      .waitForResult('task', controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+})
+
 describe('ProcessAssistant endpoint services', () => {
   it('uploads general skill files as multipart form data', async () => {
     const fetchMock = jest.fn().mockResolvedValue(
@@ -486,7 +649,7 @@ describe('ProcessAssistant endpoint services', () => {
       url: '/Uploads/generated.pdf',
       name: 'CIP-flow-path.pdf'
     })
-    if (!result) throw new Error('Expected flow path result metadata')
+    if (!result?.url) throw new Error('Expected flow path result download URL')
     const file = await flowPaths.download(result.url)
     await expect(file.blob.text()).resolves.toBe('pdf-content')
 
