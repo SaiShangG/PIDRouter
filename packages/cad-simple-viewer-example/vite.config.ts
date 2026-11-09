@@ -11,7 +11,8 @@ import {
   readHttpUrl,
   readPort,
   readPositiveInteger,
-  readProxySetting
+  readProxySetting,
+  resolveHttpUrl
 } from './src/networkConfig'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -24,7 +25,7 @@ function assertViewerRuntimeExists(): void {
   if (!existsSync(runtimePath)) {
     throw new Error(
       'viewer-runtime.iife.js was not found. Build @mlightcad/cad-html-plugin first ' +
-      '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
+        '(pnpm --filter @mlightcad/cad-html-plugin build, or nx run-many -t build).'
     )
   }
 }
@@ -33,9 +34,7 @@ export default defineConfig(() => {
   assertViewerRuntimeExists()
   const env = parseEnv(readFileSync(resolve(__dirname, '.env.example'), 'utf8'))
   if (!env.VITE_PROCESS_ASSISTANT_API_URL?.trim()) {
-    throw new Error(
-      'Set VITE_PROCESS_ASSISTANT_API_URL in .env.example.'
-    )
+    throw new Error('Set VITE_PROCESS_ASSISTANT_API_URL in .env.example.')
   }
   if (!env.PID_FRONTEND_HOST?.trim()) {
     throw new Error('Set PID_FRONTEND_HOST in .env.example.')
@@ -44,9 +43,14 @@ export default defineConfig(() => {
   if (loginEnabled !== 'true' && loginEnabled !== 'false') {
     throw new Error('PID_LOGIN_ENABLED must be true or false')
   }
-  const processAssistantTarget = readHttpUrl(
+  const processAssistantUrl = readHttpUrl(
     env.VITE_PROCESS_ASSISTANT_API_URL,
     'VITE_PROCESS_ASSISTANT_API_URL'
+  )
+  const processAssistantTarget = resolveHttpUrl(
+    processAssistantUrl,
+    'VITE_PROCESS_ASSISTANT_API_URL',
+    '127.0.0.1'
   )
   readProxySetting(env.VITE_PROCESS_ASSISTANT_USE_PROXY)
   readPositiveInteger(
@@ -62,9 +66,14 @@ export default defineConfig(() => {
     envPrefix: [],
     define: {
       __PID_LOGIN_ENABLED__: JSON.stringify(loginEnabled === 'true'),
-      'import.meta.env.VITE_PROCESS_ASSISTANT_API_URL': JSON.stringify(processAssistantTarget),
-      'import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY': JSON.stringify(env.VITE_PROCESS_ASSISTANT_USE_PROXY),
-      'import.meta.env.VITE_PROCESS_ASSISTANT_PROJECT_ID': JSON.stringify(env.VITE_PROCESS_ASSISTANT_PROJECT_ID)
+      'import.meta.env.VITE_PROCESS_ASSISTANT_API_URL':
+        JSON.stringify(processAssistantUrl),
+      'import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY': JSON.stringify(
+        env.VITE_PROCESS_ASSISTANT_USE_PROXY
+      ),
+      'import.meta.env.VITE_PROCESS_ASSISTANT_PROJECT_ID': JSON.stringify(
+        env.VITE_PROCESS_ASSISTANT_PROJECT_ID
+      )
     },
     server: {
       host: frontendHost,

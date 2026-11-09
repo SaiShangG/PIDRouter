@@ -31,6 +31,26 @@ export function readHttpUrl(
   return url.href.replace(/\/$/, '')
 }
 
+/** Resolve the reserved "auto" hostname using the browser host or proxy loopback. */
+export function resolveHttpUrl(
+  value: string | undefined,
+  setting: string,
+  hostname: string
+): string {
+  const configuredUrl = readHttpUrl(value, setting)
+  const url = new URL(configuredUrl)
+  if (url.hostname !== 'auto') return configuredUrl
+  if (!hostname.trim()) {
+    throw new Error(
+      `${setting} cannot resolve auto without a frontend hostname`
+    )
+  }
+  return readHttpUrl(
+    `${url.protocol}//${hostname}${url.port ? `:${url.port}` : ''}${url.pathname}`,
+    setting
+  )
+}
+
 export function readPort(
   value: string | undefined,
   setting: string,

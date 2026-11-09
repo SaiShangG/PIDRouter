@@ -1,8 +1,8 @@
 import {
   NETWORK_DEFAULTS,
-  readHttpUrl,
   readPositiveInteger,
-  readProxySetting
+  readProxySetting,
+  resolveHttpUrl
 } from '../networkConfig'
 
 export interface ProcessAssistantConfig {
@@ -10,14 +10,15 @@ export interface ProcessAssistantConfig {
   projectId: number
 }
 
-export const PROCESS_ASSISTANT_TARGET_URL = readHttpUrl(
+export const PROCESS_ASSISTANT_TARGET_URL = resolveHttpUrl(
   import.meta.env.VITE_PROCESS_ASSISTANT_API_URL,
-  'VITE_PROCESS_ASSISTANT_API_URL'
+  'VITE_PROCESS_ASSISTANT_API_URL',
+  window.location.hostname
 )
 
 export const PROCESS_ASSISTANT_API_URL =
   import.meta.env.DEV &&
-    readProxySetting(import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY)
+  readProxySetting(import.meta.env.VITE_PROCESS_ASSISTANT_USE_PROXY)
     ? ''
     : PROCESS_ASSISTANT_TARGET_URL
 

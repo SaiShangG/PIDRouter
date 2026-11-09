@@ -82,7 +82,7 @@ The build copies parser workers and `viewer-runtime.iife.js` into `dist/` (see `
 
 ### Backend API
 
-Development and deployment network settings are configured only in `.env.example`, as documented in the root [Network Configuration](../../README.md#network-configuration). Other env files, shell variables, and runtime configuration cannot override the addresses.
+Development and deployment network settings are configured only in `.env.example`, as documented in the root [Network Configuration](../../README.md#network-configuration). Other env files, shell variables, and runtime configuration cannot override these settings. The default `http://auto:5153` follows the browser's frontend hostname when connecting directly to a backend on the same computer; the development proxy uses `127.0.0.1:5153`. The frontend listens on all IPv4 interfaces for LAN access. After switching networks, open the frontend at its new IP without editing configuration or rebuilding. Direct LAN backend access also requires backend listening/firewall/CORS configuration; use an explicit backend URL if it runs on another computer.
 
 ## Usage
 
