@@ -153,6 +153,7 @@ describe('PhaseWorkspaceRepository', () => {
       autoFlowPaths: [],
       flowPaths: [],
       deviceStates: null,
+      mergedDeviceStates: [],
       textNotes: []
     })
   })
@@ -544,6 +545,13 @@ describe('PhaseWorkspaceRepository', () => {
         stateKey: 'OPEN',
         highlightStyleRefId: 'state-open',
         deviceType: 'VALVE'
+      }],
+      mergedDeviceStates: [{
+        handleKey: '26',
+        stateKey: 'OPEN',
+        highlightStyleRefId: 'state-open',
+        deviceType: 'VALVE',
+        source: 'auto'
       }],
       textNotes: []
     })

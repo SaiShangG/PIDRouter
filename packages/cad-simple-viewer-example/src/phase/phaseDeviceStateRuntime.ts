@@ -2,6 +2,9 @@ import type {
   DeviceState,
   DeviceStateStyleDefinition,
   DeviceStyleDefinition,
+  ManualHighlightCorrections,
+  MergedDeviceState,
+  PhasePidOverlayDeviceState,
   PresentationProfile
 } from './types'
 
@@ -36,6 +39,39 @@ export const resolveDeviceStateDefinition = (
     if (state) return { state, deviceType: device.name }
   }
   return undefined
+}
+
+export const mergeHighlightedValveStates = (
+  deviceStates: readonly PhasePidOverlayDeviceState[],
+  manualCorrections: ManualHighlightCorrections | undefined,
+  profile: PresentationProfile
+): MergedDeviceState[] => {
+  const merged = new Map<string, MergedDeviceState>()
+  const isValve = (deviceType: string) => /valve/i.test(deviceType)
+  deviceStates.forEach(deviceState => {
+    const deviceType = deviceState.deviceType ?? ''
+    if (!isValve(deviceType)) return
+    const configuredDevice = profile.devices.find(device =>
+      device.name.trim().toLowerCase() === deviceType.trim().toLowerCase())
+    const definition = resolveDeviceStateDefinition(profile, deviceState)
+    const isOpen = configuredDevice
+      ? definition?.state.flowBehavior === 'conducting'
+      : deviceState.stateKey.trim().toUpperCase() === 'OPEN'
+    if (!isOpen) return
+    merged.set(deviceState.handleKey, { ...deviceState, deviceType, source: 'auto' })
+  })
+  manualCorrections?.additions.forEach(addition => {
+    const deviceState = addition.deviceState
+    if (!deviceState || !isValve(deviceState.deviceType)) return
+    merged.set(addition.handleKey, {
+      handleKey: addition.handleKey,
+      ...deviceState,
+      highlightStyleRefId: addition.highlightStyleRefId,
+      source: 'manual'
+    })
+  })
+  manualCorrections?.exclusions.forEach(handleKey => merged.delete(handleKey))
+  return [...merged.values()]
 }
 
 export class DeviceStateWarningNotifications {

@@ -93,7 +93,8 @@ describe('manual correction runtime', () => {
       operations: { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
       phases: { list: jest.fn(), create: jest.fn(), update, get, delete: jest.fn() }
     })
-    state.paint(['A', 'C'], 'water')
+    state.paint(['A'], 'water', { stateKey: 'OPEN', deviceType: 'Valve' })
+    state.paint(['C'], 'water', { stateKey: 'OPEN', deviceType: 'Pump' })
     state.erase([{ handleKey: 'B', hasAutomaticFlow: true }])
     phase.manualCorrections = state.snapshot()
     await repository.updatePhase('10', phase, 1)
@@ -110,13 +111,20 @@ describe('manual correction runtime', () => {
       })
       const loaded = await repository.loadPhase('20', {}, 0)
       expect(loaded).not.toHaveProperty('highlightMode')
+      expect(loaded.manualCorrections?.additions).toEqual([
+        { handleKey: 'A', highlightStyleRefId: 'water', deviceState: { stateKey: 'OPEN', deviceType: 'Valve' } },
+        { handleKey: 'C', highlightStyleRefId: 'water', deviceState: { stateKey: 'OPEN', deviceType: 'Pump' } }
+      ])
       expect(loaded.flowState.deviceStates).toEqual({ A: device })
+      expect(repository.createPhaseData(loaded).mergedDeviceStates)
+        .toEqual(JSON.parse(payload.jsonData).mergedDeviceStates)
       expect(composeFinalFlowPaths(loaded, profile)).toEqual(composeFinalFlowPaths(phase, profile))
     }
     state.erase([{ handleKey: 'A', hasAutomaticFlow: false, hasDeviceHighlight: true }])
     phase.manualCorrections = state.snapshot()
     await repository.updatePhase('10', phase, 1)
     const erased = update.mock.calls[1][1]
+    expect(JSON.parse(erased.jsonData).mergedDeviceStates).toEqual([])
     get.mockResolvedValue({ ...erased, id: 20 })
     const restored = await repository.loadPhase('20', {}, 0)
     expect(restored.manualCorrections?.exclusions).toEqual(['B', 'A'])

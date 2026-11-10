@@ -39,9 +39,19 @@ export const normalizeManualHighlightCorrections = (
     if (typeof candidate.highlightStyleRefId !== 'string' || !candidate.highlightStyleRefId.trim()) {
       return invalid(`${path}.highlightStyleRefId`)
     }
+    let deviceState: ManualHighlightAddition['deviceState']
+    if (candidate.deviceState !== undefined) {
+      const state = candidate.deviceState
+      if (!isRecord(state) || typeof state.stateKey !== 'string' || !state.stateKey.trim() ||
+        typeof state.deviceType !== 'string' || !state.deviceType.trim()) {
+        return invalid(`${path}.deviceState`)
+      }
+      deviceState = { stateKey: state.stateKey.trim(), deviceType: state.deviceType.trim() }
+    }
     additions.set(handleKey, {
       handleKey,
-      highlightStyleRefId: candidate.highlightStyleRefId.trim()
+      highlightStyleRefId: candidate.highlightStyleRefId.trim(),
+      ...(deviceState ? { deviceState } : {})
     })
   })
   const exclusions = new Set<string>()
@@ -66,6 +76,7 @@ export interface ManualHighlightEraseHit {
   handleKey: string
   hasAutomaticFlow: boolean
   hasDeviceHighlight?: boolean
+  hasDeviceState?: boolean
 }
 
 export class ManualHighlightCorrectionState {
@@ -171,11 +182,13 @@ export class ManualHighlightCorrectionState {
 
   paint(
     handleKeys: readonly string[],
-    highlightStyleRefId: string
+    highlightStyleRefId: string,
+    deviceState?: ManualHighlightAddition['deviceState']
   ): boolean {
     const normalized = normalizeManualHighlightCorrections({
       additions: handleKeys.map(handleKey => ({
-        handleKey, highlightStyleRefId
+        handleKey, highlightStyleRefId,
+        ...(deviceState ? { deviceState } : {})
       })),
       exclusions: []
     })
@@ -196,7 +209,7 @@ export class ManualHighlightCorrectionState {
       if (handleKey === undefined) return invalid('erase.handleKey')
       return {
         handleKey,
-        hasAutomaticHighlight: hit.hasAutomaticFlow || hit.hasDeviceHighlight === true
+        hasAutomaticHighlight: hit.hasAutomaticFlow || hit.hasDeviceHighlight === true || hit.hasDeviceState === true
       }
     })
     let changed = false

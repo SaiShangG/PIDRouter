@@ -1,5 +1,6 @@
 import {
   DeviceStateWarningNotifications,
+  mergeHighlightedValveStates,
   resolveDeviceStateDefinition,
   resolveValveBrushStyleRefId
 } from '../src/phase/phaseDeviceStateRuntime'
@@ -69,6 +70,39 @@ describe('device state warning notifications', () => {
 })
 
 describe('phase device state runtime', () => {
+  it.each([
+    ['conducting', true, true],
+    ['blocking', true, false],
+    ['neutral', true, false],
+    ['conducting', false, false]
+  ] as const)('merges configured %s enabled=%s valves as open=%s', (flowBehavior, enabled, expected) => {
+    const profile = createDefaultPresentationProfile()
+    profile.devices = [{
+      id: 'valve', name: 'Valve', order: 0,
+      states: [{
+        id: 'configured-state', key: 'CUSTOM', displayName: 'Custom', enabled,
+        color: 0x00ff00, lineWidthPx: 3, opacity: 1, order: 0,
+        flowBehavior, autoHighlightFlow: false
+      }]
+    }]
+    const automatic = [{
+      handleKey: '10', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'configured-state'
+    }]
+    const before = JSON.stringify({ profile, automatic })
+    expect(mergeHighlightedValveStates(automatic, undefined, profile)).toHaveLength(expected ? 1 : 0)
+    expect(mergeHighlightedValveStates([
+      { ...automatic[0], highlightStyleRefId: 'missing' }
+    ], undefined, profile)).toEqual([])
+    expect(mergeHighlightedValveStates(automatic, {
+      additions: [{
+        handleKey: '10', highlightStyleRefId: 'manual-open',
+        deviceState: { stateKey: 'OPEN', deviceType: 'Valve' }
+      }],
+      exclusions: ['10']
+    }, profile)).toEqual([])
+    expect(JSON.stringify({ profile, automatic })).toBe(before)
+  })
+
   it('uses the valve device preset rather than a Utility and preserves the device configuration', () => {
     const closed: DeviceStateStyleDefinition = {
       id: 'valve-closed', key: 'closed', displayName: 'Closed', enabled: true,

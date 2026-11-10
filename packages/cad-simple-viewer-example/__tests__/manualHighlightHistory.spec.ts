@@ -14,6 +14,29 @@ const paintStroke = (
 }
 
 describe('manual correction history', () => {
+  it('keeps manual device states with highlights through snapshots, erase and history', () => {
+    const state = new ManualHighlightCorrectionState()
+    const deviceState = { stateKey: 'OPEN', deviceType: 'Valve' }
+    state.beginStroke()
+    state.paint(['A'], 'open', deviceState)
+    state.paint(['B'], water)
+    state.endStroke()
+    deviceState.stateKey = 'CLOSED'
+    const painted = state.snapshot()
+    expect(painted.additions[0].deviceState).toEqual({ stateKey: 'OPEN', deviceType: 'Valve' })
+    expect(painted.additions[1]).not.toHaveProperty('deviceState')
+    painted.additions[0].deviceState!.stateKey = 'CLOSED'
+    expect(state.snapshot().additions[0].deviceState?.stateKey).toBe('OPEN')
+    state.beginStroke()
+    state.erase([{ handleKey: 'A', hasAutomaticFlow: false }])
+    state.endStroke()
+    expect(state.getAddition('A')).toBeUndefined()
+    state.undo()
+    expect(state.getAddition('A')?.deviceState).toEqual({ stateKey: 'OPEN', deviceType: 'Valve' })
+    state.redo()
+    expect(state.getAddition('A')).toBeUndefined()
+  })
+
   it('groups all samples in a stroke into one undo and redo operation', () => {
     const state = new ManualHighlightCorrectionState()
     state.beginStroke()

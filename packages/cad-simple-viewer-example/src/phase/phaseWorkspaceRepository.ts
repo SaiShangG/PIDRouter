@@ -10,6 +10,7 @@ import type {
 } from '../api/processAssistantTypes'
 import { composeFinalFlowPaths } from './composeFinalFlowPaths'
 import { normalizeManualHighlightCorrections } from './manualHighlightCorrections'
+import { mergeHighlightedValveStates } from './phaseDeviceStateRuntime'
 import {
   parsePhasePidOverlay,
   type PhasePidOverlay
@@ -86,6 +87,7 @@ import {
   type DrawingAssetRef,
   type FlowPathStatus,
   type FlowStateSnapshot,
+  type MergedDeviceState,
   PHASE_WORKSPACE_SCHEMA_VERSION,
   type PhaseDrawingAssociation,
   type PhaseSnapshot,
@@ -127,6 +129,7 @@ export type PersistedPhaseData = Omit<PhasePidOverlay, 'deviceStates' | 'flowPat
   Comment: string | null
   drawing?: PhasePidOverlay['drawing']
   deviceStates: PhasePidOverlay['deviceStates'] | null
+  mergedDeviceStates: MergedDeviceState[]
   flowPaths: PhasePidOverlay['flowPaths'] | null
   textNotes: PersistedTextAnnotation[]
 }
@@ -598,6 +601,7 @@ export class PhaseWorkspaceRepository {
       flowPaths: [],
       autoFlowPaths: [],
       deviceStates: null,
+      mergedDeviceStates: [],
       textNotes: []
     }
   }
@@ -667,6 +671,7 @@ export class PhaseWorkspaceRepository {
       autoFlowPaths,
       ...(phase.flowState.activeFlowPathId ? { activeFlowPathId: phase.flowState.activeFlowPathId } : {}),
       deviceStates: deviceStates.length > 0 ? deviceStates : null,
+      mergedDeviceStates: mergeHighlightedValveStates(deviceStates, manualCorrections, profile),
       ...(manualCorrections ? { manualCorrections } : {}),
       textNotes: phase.textNotes?.flatMap(note => {
         const linkedObjectHandleKey = note.linkedObjectHandleKey === undefined

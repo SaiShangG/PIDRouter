@@ -67,6 +67,7 @@ export interface UtilityStyleDefinition {
 export interface ManualHighlightAddition {
   handleKey: string
   highlightStyleRefId: string
+  deviceState?: Pick<DeviceState, 'stateKey' | 'deviceType'>
 }
 
 export interface ManualHighlightCorrections {
@@ -114,6 +115,14 @@ export interface DeviceState {
   stateKey: string
   deviceType: string
   highlightStyleRefId: string
+}
+
+export interface MergedDeviceState {
+  handleKey: string
+  stateKey: string
+  deviceType: string
+  highlightStyleRefId: string
+  source: 'auto' | 'manual'
 }
 
 export interface FlowStateSnapshot {

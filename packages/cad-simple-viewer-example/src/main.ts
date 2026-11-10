@@ -2291,6 +2291,11 @@ class CadViewerApp {
         log.warn('[ManualHighlight] Object has no persistent handle:', objectId)
         return []
       }
+      const manualDevice = operation === 'paint' && this.highlightMode === 'manual'
+        ? handleKeysFromObjectId(objectId)
+          .map(key => this.getConfiguredDeviceMatch(key, profile)?.device)
+          .find(device => device !== undefined)
+        : undefined
       let entityStyleRefId = styleRefId
       if (operation === 'paint') {
         const valveKey = handleKeysFromObjectId(objectId).find(key => flowGraphIndex.valveKeys.has(key))
@@ -2314,6 +2319,10 @@ class CadViewerApp {
       return [{
         handleKey,
         highlightStyleRefId: entityStyleRefId,
+        deviceState: manualDevice
+          ? { stateKey: 'OPEN', deviceType: manualDevice.name }
+          : undefined,
+        hasDeviceState: savedDeviceState !== undefined,
         hasDeviceHighlight: deviceStyle?.source === 'device' &&
           deviceStyle.visible && deviceStyle.opacity > 0,
         hasAutomaticFlow: this.getAutomaticFlowPathsForObject(objectId).some(flowPath => {
@@ -2328,7 +2337,7 @@ class CadViewerApp {
     let changed = false
     if (operation === 'paint') {
       hits.forEach(hit => {
-        if (this.manualCorrections.paint([hit.handleKey], hit.highlightStyleRefId!)) changed = true
+        if (this.manualCorrections.paint([hit.handleKey], hit.highlightStyleRefId!, hit.deviceState)) changed = true
       })
     } else {
       changed = this.manualCorrections.erase(hits)

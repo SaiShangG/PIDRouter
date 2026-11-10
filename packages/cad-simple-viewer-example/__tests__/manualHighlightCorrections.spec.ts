@@ -1,4 +1,5 @@
 import {
+  ManualHighlightCorrectionState,
   ManualHighlightCorrectionsValidationError,
   normalizeManualHighlightCorrections
 } from '../src/phase/manualHighlightCorrections'
@@ -16,7 +17,8 @@ const corrections = (): ManualHighlightCorrections => ({
     { handleKey: 'AB12', highlightStyleRefId: 'missing-utility' },
     {
       handleKey: 'CD34',
-      highlightStyleRefId: 'device-preset'
+      highlightStyleRefId: 'device-preset',
+      deviceState: { stateKey: 'OPEN', deviceType: 'Valve' }
     }
   ],
   exclusions: ['EF56', '20000000000001']
@@ -69,6 +71,70 @@ const overlay = (manualCorrections: unknown) => ({
 })
 
 describe('manual highlight correction data', () => {
+  it('excludes erased automatic valves through history and restores repainted manual valves', () => {
+    const phase = firstPhase(createContext().store)
+    phase.flowState.deviceStates = {
+      A: { key: 'A', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'auto-open' }
+    }
+    const state = new ManualHighlightCorrectionState()
+    const repository = createRepository().repository
+    const merged = () => {
+      phase.manualCorrections = state.snapshot()
+      return repository.createPhaseData(phase).mergedDeviceStates
+    }
+    expect(merged()[0].source).toBe('auto')
+    state.beginStroke()
+    state.erase([{ handleKey: 'A', hasAutomaticFlow: false, hasDeviceState: true }])
+    state.endStroke()
+    expect(merged()).toEqual([])
+    state.undo()
+    expect(merged()[0].source).toBe('auto')
+    state.redo()
+    expect(merged()).toEqual([])
+    state.beginStroke()
+    state.paint(['A'], 'manual-open', { stateKey: 'OPEN', deviceType: 'Valve' })
+    state.endStroke()
+    expect(merged()).toEqual([{
+      handleKey: '10', stateKey: 'OPEN', deviceType: 'Valve',
+      highlightStyleRefId: 'manual-open', source: 'manual'
+    }])
+    expect(state.snapshot().exclusions).toEqual([])
+    expect(phase.flowState.deviceStates.A.stateKey).toBe('OPEN')
+  })
+
+  it('merges opened valves with manual priority and excludes erased valves without mutating sources', () => {
+    const phase = firstPhase(createContext().store)
+    phase.flowState.deviceStates = Object.fromEntries([
+      ['A', 'OPEN', 'Valve'], ['B', 'OPEN', 'Valve'], ['C', 'CLOSED', 'Valve'],
+      ['D', 'OPEN', 'Pump'], ['E', 'OPEN', 'Valve']
+    ].map(([key, stateKey, deviceType]) => [key, {
+      key, stateKey, deviceType, highlightStyleRefId: `auto-${stateKey}`
+    }]))
+    phase.manualCorrections = {
+      additions: [
+        { handleKey: 'A', highlightStyleRefId: 'manual-open', deviceState: { stateKey: 'OPEN', deviceType: 'Valve' } },
+        { handleKey: 'C', highlightStyleRefId: 'manual-open', deviceState: { stateKey: 'OPEN', deviceType: 'Valve' } },
+        { handleKey: 'F', highlightStyleRefId: 'manual-open', deviceState: { stateKey: 'OPEN', deviceType: 'Valve' } },
+        { handleKey: '10', highlightStyleRefId: 'water' },
+        { handleKey: '11', highlightStyleRefId: 'pump', deviceState: { stateKey: 'OPEN', deviceType: 'Pump' } }
+      ],
+      exclusions: ['E']
+    }
+    const before = JSON.stringify(phase)
+    const repository = createRepository().repository
+    const payload = repository.createPhaseData(phase)
+    expect(payload.mergedDeviceStates).toEqual([
+      { handleKey: '10', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'manual-open', source: 'manual' },
+      { handleKey: '11', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'auto-OPEN', source: 'auto' },
+      { handleKey: '12', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'manual-open', source: 'manual' },
+      { handleKey: '15', stateKey: 'OPEN', deviceType: 'Valve', highlightStyleRefId: 'manual-open', source: 'manual' }
+    ])
+    expect(JSON.stringify(phase)).toBe(before)
+    phase.manualCorrections = { additions: [], exclusions: ['A', 'B', 'E'] }
+    expect(repository.createPhaseData(phase).mergedDeviceStates).toEqual([])
+    expect(repository.createPhaseData(firstPhase(createContext().store)).mergedDeviceStates).toEqual([])
+  })
+
   it('serializes the automatic route plus manual additions and exclusion as ID-only records', () => {
     const { store } = createContext()
     const phase = firstPhase(store)
@@ -141,6 +207,9 @@ describe('manual highlight correction data', () => {
     { additions: [null], exclusions: [] },
     { additions: [{ handleKey: 'AB', highlightStyleRefId: { kind: 'device-state' } }], exclusions: [] },
     { additions: [{ handleKey: 'AB', highlightStyleRefId: '' }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', highlightStyleRefId: 'open', deviceState: null }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', highlightStyleRefId: 'open', deviceState: { stateKey: 'OPEN' } }], exclusions: [] },
+    { additions: [{ handleKey: 'AB', highlightStyleRefId: 'open', deviceState: { stateKey: '', deviceType: 'Valve' } }], exclusions: [] },
     { additions: [{ handleKey: 'AB', styleSource: { kind: 'utility', utilityId: 'water' } }], exclusions: [] },
     {
       additions: [{
