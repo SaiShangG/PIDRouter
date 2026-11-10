@@ -23,14 +23,22 @@ describe('ToolbarPreferencesModal', () => {
     expect(modal.element.textContent).toContain(locale === 'zh' ? '开发' : 'Development')
     expect(modal.element.textContent).toContain(locale === 'zh' ? '阀门调试' : 'Valve debug')
     expect(modal.element.textContent).toContain(locale === 'zh' ? '画笔调试' : 'Brush debug')
+    const phaseMove = modal.element.querySelector<HTMLInputElement>('input[name="phaseMoveEnabled"]')!
+    expect(phaseMove.closest('details')?.querySelector('h3')?.textContent)
+      .toBe(locale === 'zh' ? 'Phase 功能配置' : 'Phase feature settings')
+    expect(phaseMove.closest('label')?.textContent)
+      .toBe(locale === 'zh' ? '启用上移/下移' : 'Enable move up/down')
+    expect(phaseMove.checked).toBe(false)
     expect(modal.element.querySelector('input[name^="export"]')).toBeNull()
     modal.element.querySelector<HTMLInputElement>('input[name="rev-cloud"]')!.click()
     modal.element.querySelector<HTMLInputElement>('input[name="valveDebugEnabled"]')!.click()
     modal.element.querySelector<HTMLInputElement>('input[name="brushDebugEnabled"]')!.click()
+    phaseMove.click()
     expect(save).not.toHaveBeenCalled()
     expect(preferences.hiddenIds).toEqual([])
+    expect(preferences.phaseMoveEnabled).toBe(false)
     modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-save')!.click()
-    expect(save).toHaveBeenCalledWith({ ...preferences, hiddenIds: ['rev-cloud'], valveDebugEnabled: true, brushDebugEnabled: true })
+    expect(save).toHaveBeenCalledWith({ ...preferences, hiddenIds: ['rev-cloud'], valveDebugEnabled: true, brushDebugEnabled: true, phaseMoveEnabled: true })
     expect(modal.element.hidden).toBe(true)
   })
 
@@ -85,6 +93,7 @@ describe('ToolbarPreferencesModal', () => {
     modal.element.querySelector<HTMLInputElement>('input[name="visible"]')!.click()
     modal.element.querySelector<HTMLInputElement>('input[name="valveDebugEnabled"]')!.click()
     modal.element.querySelector<HTMLInputElement>('input[name="brushDebugEnabled"]')!.click()
+    modal.element.querySelector<HTMLInputElement>('input[name="phaseMoveEnabled"]')!.click()
     modal.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(save).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(trigger)
@@ -92,9 +101,10 @@ describe('ToolbarPreferencesModal', () => {
     expect(modal.element.querySelector<HTMLInputElement>('input[name="visible"]')!.checked).toBe(true)
     expect(modal.element.querySelector<HTMLInputElement>('input[name="valveDebugEnabled"]')!.checked).toBe(false)
     expect(modal.element.querySelector<HTMLInputElement>('input[name="brushDebugEnabled"]')!.checked).toBe(false)
+    expect(modal.element.querySelector<HTMLInputElement>('input[name="phaseMoveEnabled"]')!.checked).toBe(false)
   })
 
-  it('nests all non-development settings in collapsible Viewer groups and keeps edits when collapsed', () => {
+  it('separates Viewer, Phase and development settings and keeps edits when collapsed', () => {
     const save = jest.fn()
     const modal = new ToolbarPreferencesModal(() => 'en', item => item.id, save)
     modal.open(defaultToolbarPreferences(), [
@@ -104,9 +114,12 @@ describe('ToolbarPreferencesModal', () => {
     const sections = modal.element.querySelectorAll<HTMLDetailsElement>(
       '.toolbar-preferences-body > details'
     )
-    expect(sections).toHaveLength(2)
-    const [viewer, development] = sections
+    expect(sections).toHaveLength(3)
+    const [viewer, phase, development] = sections
     expect(viewer.open).toBe(true)
+    expect(phase.open).toBe(false)
+    expect(phase.querySelectorAll('input')).toHaveLength(1)
+    expect(phase.querySelector('input[name="phaseMoveEnabled"]')).not.toBeNull()
     expect(development.open).toBe(false)
     expect(viewer.querySelector('input[name="valveDebugEnabled"]')).toBeNull()
     expect(development.querySelectorAll('input')).toHaveLength(2)
@@ -143,13 +156,14 @@ describe('ToolbarPreferencesModal', () => {
   it('restores defaults in the draft and retains child choices when a parent is hidden', () => {
     const save = jest.fn()
     const modal = new ToolbarPreferencesModal(() => 'en', item => item.id, save)
-    modal.open({ ...defaultToolbarPreferences(), hiddenIds: ['rev-cloud'], visible: false, valveDebugEnabled: true }, [{ id: 'annotation', children: [{ id: 'rev-cloud' }] }])
+    modal.open({ ...defaultToolbarPreferences(), hiddenIds: ['rev-cloud'], visible: false, valveDebugEnabled: true, phaseMoveEnabled: true }, [{ id: 'annotation', children: [{ id: 'rev-cloud' }] }])
     const parent = modal.element.querySelector<HTMLInputElement>('input[name="annotation"]')!
     parent.click()
     expect(modal.element.querySelector<HTMLFieldSetElement>('.toolbar-preferences-children')!.disabled).toBe(true)
     parent.click()
     expect(modal.element.querySelector<HTMLInputElement>('input[name="rev-cloud"]')!.checked).toBe(false)
     modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-reset')!.click()
+    expect(modal.element.querySelector<HTMLInputElement>('input[name="phaseMoveEnabled"]')!.checked).toBe(false)
     expect(save).not.toHaveBeenCalled()
     modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-save')!.click()
     expect(save).toHaveBeenCalledWith(defaultToolbarPreferences())

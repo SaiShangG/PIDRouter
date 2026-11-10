@@ -150,6 +150,10 @@ export class ToolbarPreferencesModal {
       }
       this.appendItem(group, item)
     }
+    const phase = this.group('Phase 功能配置', true)
+    phase.append(this.checkbox('启用上移/下移', this.draft.phaseMoveEnabled, value => {
+      this.draft.phaseMoveEnabled = value
+    }, 'phaseMoveEnabled'))
     const development = this.group('开发', true)
     development.append(this.checkbox('阀门调试', this.draft.valveDebugEnabled, value => {
       this.draft.valveDebugEnabled = value
@@ -157,7 +161,7 @@ export class ToolbarPreferencesModal {
     development.append(this.checkbox('画笔调试', this.draft.brushDebugEnabled, value => {
       this.draft.brushDebugEnabled = value
     }, 'brushDebugEnabled'))
-    body.append(viewer, development)
+    body.append(viewer, phase, development)
     const error = document.createElement('p')
     error.className = 'toolbar-preferences-error'
     error.setAttribute('role', 'alert')

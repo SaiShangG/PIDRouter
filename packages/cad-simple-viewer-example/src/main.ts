@@ -1530,7 +1530,9 @@ class CadViewerApp {
           this.brushHighlightFeature?.deactivate()
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
         }
+        const phaseMoveChanged = preferences.phaseMoveEnabled !== this.toolbarPreferences.phaseMoveEnabled
         this.toolbarPreferences = preferences
+        if (phaseMoveChanged) this.phasePanel?.render()
         this.applyUserToolbarPreferences()
       }
     )
@@ -1977,7 +1979,8 @@ class CadViewerApp {
         stopLocatingTank: () => this.tankLocator.stop(),
         assignPhaseTank: (processId, sequenceId, phaseId, tankId) =>
           this.assignWorkspacePhaseTank(processId, sequenceId, phaseId, tankId)
-      }
+      },
+      () => this.toolbarPreferences.phaseMoveEnabled
     )
     const mount = document.getElementById('phaseWorkspaceMount')
     if (!mount) throw new Error('Phase workspace mount was not found')

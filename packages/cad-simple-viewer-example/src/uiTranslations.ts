@@ -31,6 +31,8 @@ const pairs: TranslationPair[] = [
   ['阶段本地保存失败，请保存到后台', 'Local Phase saving failed. Please save to the server.'],
   ['功能配置', 'Feature settings'], ['Viewer 工具栏', 'Viewer toolbar'],
   ['图纸 Viewer 功能配置', 'Drawing Viewer feature settings'],
+  ['Phase 功能配置', 'Phase feature settings'],
+  ['启用上移/下移', 'Enable move up/down'],
   ['开发', 'Development'], ['阀门调试', 'Valve debug'],
   ['画笔调试', 'Brush debug'], ['清空列表', 'Clear list'],
   ['画笔作用范围', 'Brush scope'], ['仅阀门', 'Valves only'],

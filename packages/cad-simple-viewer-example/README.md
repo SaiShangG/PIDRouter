@@ -230,6 +230,19 @@ backend overlays must apply exclusions and additions before rendering
 their highlights have been overridden or erased. No backend mode field is
 required.
 
+### Phase move controls
+
+In **Feature settings > Phase feature settings**, **Enable move up/down** is off
+by default, including for existing users without this preference. Saving the
+setting immediately shows or hides the Phase move buttons and persists the
+choice per user in local preferences. Restoring defaults turns it off again.
+Phase drag-and-drop ordering and sequence move controls are unchanged.
+
+在 **功能配置 > Phase 功能配置** 中，可配置 **启用上移/下移**，默认关闭，
+已有用户未配置时也默认关闭。保存后立即显示或隐藏 Phase 上移/下移按钮，
+并按用户保存在本地；恢复默认会关闭此功能。Phase 拖拽排序及序列上移/下移
+不受影响。
+
 ### Valve brush scope
 
 In **Feature settings > Drawing Viewer feature settings > Highlights and

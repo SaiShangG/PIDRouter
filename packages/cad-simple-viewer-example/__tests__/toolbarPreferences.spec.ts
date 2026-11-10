@@ -12,6 +12,7 @@ describe('toolbar preferences', () => {
     expect(loadToolbarPreferences('new-user', storage)).toEqual(defaultToolbarPreferences())
     expect(defaultToolbarPreferences().valveDebugEnabled).toBe(false)
     expect(defaultToolbarPreferences().brushDebugEnabled).toBe(false)
+    expect(defaultToolbarPreferences().phaseMoveEnabled).toBe(false)
   })
 
   it('enables only the requested toolbar groups by default', () => {
@@ -58,6 +59,21 @@ describe('toolbar preferences', () => {
     })
     expect(preferences.valveDebugEnabled).toBe(true)
     expect(preferences.brushDebugEnabled).toBe(false)
+  })
+
+  it.each([undefined, null, 'true', 1])('disables Phase move controls for missing or invalid values: %s', phaseMoveEnabled => {
+    const preferences = loadToolbarPreferences('alice', {
+      getItem: () => JSON.stringify({ phaseMoveEnabled, collapsed: true })
+    })
+    expect(preferences.phaseMoveEnabled).toBe(false)
+    expect(preferences.collapsed).toBe(true)
+  })
+
+  it.each([true, false])('persists Phase move controls as %s per user', phaseMoveEnabled => {
+    const preferences = { ...defaultToolbarPreferences(), phaseMoveEnabled }
+    saveToolbarPreferences('alice', preferences, storage)
+    expect(loadToolbarPreferences('alice', storage)).toEqual(preferences)
+    expect(loadToolbarPreferences('bob', storage).phaseMoveEnabled).toBe(false)
   })
 
   it.each(['valves', 'non-valves', 'all'] as const)('persists the %s valve brush scope per user', valveBrushScope => {

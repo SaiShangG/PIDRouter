@@ -1,4 +1,5 @@
 import type { AcExToolbarPlacement } from '@mlightcad/cad-simple-ui-plugin'
+
 import type { ValveBrushScope } from './brush/BrushHighlightFeature'
 
 const VALVE_BRUSH_SCOPE_VERSION = 1
@@ -11,6 +12,7 @@ export interface ToolbarPreferences {
   edgeOffset: number
   valveDebugEnabled: boolean
   brushDebugEnabled: boolean
+  phaseMoveEnabled: boolean
   valveBrushScope: ValveBrushScope
 }
 
@@ -19,6 +21,7 @@ export const defaultToolbarPreferences = (): ToolbarPreferences => ({
   visible: true, collapsed: false, placement: 'right', edgeOffset: 8,
   valveDebugEnabled: false,
   brushDebugEnabled: false,
+  phaseMoveEnabled: false,
   valveBrushScope: 'valves'
 })
 
@@ -37,6 +40,8 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
         ? value.valveDebugEnabled : defaults.valveDebugEnabled,
       brushDebugEnabled: typeof value.brushDebugEnabled === 'boolean'
         ? value.brushDebugEnabled : defaults.brushDebugEnabled,
+      phaseMoveEnabled: typeof value.phaseMoveEnabled === 'boolean'
+        ? value.phaseMoveEnabled : defaults.phaseMoveEnabled,
       valveBrushScope: value.valveBrushScopeVersion === VALVE_BRUSH_SCOPE_VERSION &&
         (value.valveBrushScope === 'valves' || value.valveBrushScope === 'non-valves' || value.valveBrushScope === 'all')
         ? value.valveBrushScope : defaults.valveBrushScope,

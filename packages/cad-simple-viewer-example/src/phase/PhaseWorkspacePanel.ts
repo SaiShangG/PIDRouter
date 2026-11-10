@@ -128,7 +128,8 @@ export class PhaseWorkspacePanel {
     private readonly actions: PhaseWorkspacePanelActions,
     private readonly getLocale: () => AppLocale = () => 'zh',
     private readonly getProjectFileIds: () => readonly number[] = () => [],
-    private readonly tanks?: TankWorkspaceBindings
+    private readonly tanks?: TankWorkspaceBindings,
+    private readonly isPhaseMoveEnabled: () => boolean = () => false
   ) {
     this.element.className = 'phase-workspace'
     this.phaseDeleteConfirmation = new ConfirmationModal(getLocale)
@@ -789,32 +790,36 @@ export class PhaseWorkspacePanel {
       })
       duplicate.setAttribute('aria-haspopup', 'dialog')
       duplicate.hidden = true
-      const moveUp = this.createButton('', false)
-      moveUp.className = 'phase-tree-order-button phase-icon-button'
-      moveUp.title = '上移'
-      moveUp.setAttribute(
-        'aria-label',
-        `上移 Phase ${String(phase.number).padStart(2, '0')}`
-      )
-      moveUp.append(createPhaseIcon(ArrowUp))
-      moveUp.disabled = index === 0
-      moveUp.addEventListener('click', () => {
-        this.actions.reorderPhase(process.id, sequence.id, phase.id, index - 1)
-        this.render()
-      })
-      const moveDown = this.createButton('', false)
-      moveDown.className = 'phase-tree-order-button phase-icon-button'
-      moveDown.title = '下移'
-      moveDown.setAttribute(
-        'aria-label',
-        `下移 Phase ${String(phase.number).padStart(2, '0')}`
-      )
-      moveDown.append(createPhaseIcon(ArrowDown))
-      moveDown.disabled = index === sequence.phases.length - 1
-      moveDown.addEventListener('click', () => {
-        this.actions.reorderPhase(process.id, sequence.id, phase.id, index + 1)
-        this.render()
-      })
+      controls.append(copy, duplicate)
+      if (this.isPhaseMoveEnabled()) {
+        const moveUp = this.createButton('', false)
+        moveUp.className = 'phase-tree-order-button phase-icon-button'
+        moveUp.title = '上移'
+        moveUp.setAttribute(
+          'aria-label',
+          `上移 Phase ${String(phase.number).padStart(2, '0')}`
+        )
+        moveUp.append(createPhaseIcon(ArrowUp))
+        moveUp.disabled = index === 0
+        moveUp.addEventListener('click', () => {
+          this.actions.reorderPhase(process.id, sequence.id, phase.id, index - 1)
+          this.render()
+        })
+        const moveDown = this.createButton('', false)
+        moveDown.className = 'phase-tree-order-button phase-icon-button'
+        moveDown.title = '下移'
+        moveDown.setAttribute(
+          'aria-label',
+          `下移 Phase ${String(phase.number).padStart(2, '0')}`
+        )
+        moveDown.append(createPhaseIcon(ArrowDown))
+        moveDown.disabled = index === sequence.phases.length - 1
+        moveDown.addEventListener('click', () => {
+          this.actions.reorderPhase(process.id, sequence.id, phase.id, index + 1)
+          this.render()
+        })
+        controls.append(moveUp, moveDown)
+      }
       const remove = this.createIconButton('删除 Phase', Trash2, async trigger => {
         const confirmed = await this.phaseDeleteConfirmation.confirm({
           title: '删除 Phase？',
@@ -833,7 +838,7 @@ export class PhaseWorkspacePanel {
       })
       remove.classList.add('phase-tree-delete', 'phase-delete-button')
       remove.setAttribute('aria-haspopup', 'dialog')
-      controls.append(copy, duplicate, moveUp, moveDown, remove)
+      controls.append(remove)
       item.addEventListener('dragstart', event => {
         if (this.phaseCopySource || this.phaseCopyBusy) {
           event.preventDefault()

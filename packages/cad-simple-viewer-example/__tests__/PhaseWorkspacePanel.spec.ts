@@ -11,7 +11,8 @@ import { injectPhaseWorkspaceStyles } from '../src/phase/phaseWorkspaceStyles'
 const createHarness = (
   locale: 'en' | 'zh' = 'zh',
   projectFileIds: readonly number[] = [5],
-  withTanks = false
+  withTanks = false,
+  isPhaseMoveEnabled: () => boolean = () => false
 ) => {
   let id = 0
   const store = new PhaseWorkspaceStore(
@@ -77,7 +78,8 @@ const createHarness = (
     actions,
     () => locale,
     () => projectFileIds,
-    withTanks ? tanks : undefined
+    withTanks ? tanks : undefined,
+    isPhaseMoveEnabled
   )
   document.body.append(panel.element)
   return { store, panel, actions, tanks }
@@ -1712,8 +1714,20 @@ describe('PhaseWorkspacePanel', () => {
     })
   })
 
-  it('exposes accessible controls for changing Phase order', () => {
-    const { store, panel, actions } = createHarness()
+  it('hides Phase move controls by default without changing other Phase actions or sequence ordering', () => {
+    const { panel, actions } = createCopyHarness()
+    expect(panel.element.querySelector('.phase-tree-order-button')).toBeNull()
+    expect(panel.element.querySelectorAll('.phase-tree-item[draggable="true"]')).toHaveLength(2)
+    expect(panel.element.querySelectorAll('[aria-label="复制 Phase"]')).toHaveLength(2)
+    expect(panel.element.querySelectorAll('[aria-label="删除 Phase"]')).toHaveLength(2)
+    expect(panel.element.querySelector('[aria-label="上移序列"]')).not.toBeNull()
+    expect(panel.element.querySelector('[aria-label="下移序列"]')).not.toBeNull()
+    expect(actions.reorderPhase).not.toHaveBeenCalled()
+  })
+
+  it('exposes accessible controls only when enabled and applies preference changes on render', () => {
+    let phaseMoveEnabled = true
+    const { store, panel, actions } = createHarness('zh', [5], false, () => phaseMoveEnabled)
     const process = store.createProcess('CIP')
     const sequence = process.sequences[0]
     for (const number of [1, 2]) {
@@ -1735,6 +1749,8 @@ describe('PhaseWorkspacePanel', () => {
     }
     panel.render()
 
+    expect(panel.element.querySelector<HTMLButtonElement>('[aria-label="上移 Phase 01"]')!.disabled).toBe(true)
+    expect(panel.element.querySelector<HTMLButtonElement>('[aria-label="下移 Phase 02"]')!.disabled).toBe(true)
     panel.element
       .querySelector<HTMLButtonElement>('[aria-label="下移 Phase 01"]')!
       .click()
@@ -1745,10 +1761,18 @@ describe('PhaseWorkspacePanel', () => {
       'id-3',
       1
     )
+    panel.element.querySelector<HTMLButtonElement>('[aria-label="上移 Phase 02"]')!.click()
+    expect(actions.reorderPhase).toHaveBeenLastCalledWith(process.id, sequence.id, 'id-4', 0)
     panel.element.querySelectorAll('.phase-icon-button').forEach(button => {
       expect(button.querySelector('svg.phase-ui-icon')).not.toBeNull()
       expect(button.getAttribute('aria-label')).toBeTruthy()
     })
+    phaseMoveEnabled = false
+    panel.render()
+    expect(panel.element.querySelector('.phase-tree-order-button')).toBeNull()
+    phaseMoveEnabled = true
+    panel.render()
+    expect(panel.element.querySelectorAll('.phase-tree-order-button')).toHaveLength(4)
   })
 
   it('updates every displayed reference after changing a Phase name', () => {
@@ -1823,8 +1847,9 @@ describe('PhaseWorkspacePanel', () => {
     expect(deleteButton.getAttribute('aria-label')).toBe(locale === 'zh' ? '删除 Phase' : 'Delete Phase')
     expect(deleteButton.querySelector('svg')).not.toBeNull()
     const controls = deleteButton.closest('.phase-tree-order-controls')!
-    expect(controls.children).toHaveLength(5)
-    expect(getComputedStyle(controls).gridTemplateColumns).toBe('repeat(5, 28px)')
+    expect(controls.children).toHaveLength(3)
+    expect(getComputedStyle(controls).gridAutoFlow).toBe('column')
+    expect(getComputedStyle(controls).gridAutoColumns).toBe('28px')
     expect(controls.lastElementChild).toBe(deleteButton)
     const processDelete = panel.element.querySelector<HTMLElement>('.phase-process-delete')!
     const sequenceDelete = panel.element.querySelector<HTMLElement>('.phase-sequence-controls .phase-delete-button')!

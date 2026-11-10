@@ -70,7 +70,7 @@ export function injectPhaseWorkspaceStyles() {
     .phase-tree-node-label .phase-tree-node-number { color: var(--app-text, #152026); font-size: 10px; font-variant-numeric: tabular-nums; }
     .phase-tree-node-label .phase-tree-node-number.is-drawing-assigned { color: var(--app-accent, #087b58); }
     .phase-tree-node-label .phase-tree-node-number.is-drawing-missing { color: var(--app-warning, #c77b12); }
-    .phase-tree-order-controls { display: grid; grid-template-columns: repeat(5, 28px); align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
+    .phase-tree-order-controls { display: grid; grid-auto-flow: column; grid-auto-columns: 28px; align-items: center; gap: 3px; opacity: .38; transition: opacity .15s ease; }
     .phase-copy-status { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--app-success-border, #24a77d); border-radius: var(--app-radius-control, 4px); background: var(--app-success-surface, #e1f5ed); font-size: 12px; }
     .phase-copy-error { color: var(--app-danger, #b42318); overflow-wrap: anywhere; }
     .phase-workspace .phase-tree-node.is-copy-source { border-style: dashed; border-color: var(--app-accent, #087b58); cursor: default; }
