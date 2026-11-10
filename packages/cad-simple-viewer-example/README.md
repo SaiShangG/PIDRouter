@@ -177,6 +177,13 @@ stroke and non-valve entities are painted normally. Neither device states nor
 automatic routes change. Saving a different scope exits the current valve brush;
 existing highlights are retained. The ordinary brush and eraser are unchanged.
 
+When either brush paints a valve, its manual highlight references the matched
+device's enabled state preset, never a Utility preset. The current device state
+preset takes precedence; otherwise the brush uses an open preset, a conducting
+preset, or the first enabled preset by order. Missing device styles skip the
+valve with a warning. Non-valve entities retain the selected brush style. Painting
+does not change device states; subsequent device-style edits apply by reference.
+
 在 **功能配置 > 图纸 Viewer 功能配置 > 高亮与标注** 中，可设置阀门画笔的
 **画笔作用范围**：**仅阀门**（默认）、**非阀门实体**、**所有实体**。设置按用户
 保存在本地工具栏配置中，未带范围版本标记的旧配置统一初始化为仅阀门；此后用户
@@ -185,6 +192,11 @@ existing highlights are retained. The ordinary brush and eraser are unchanged.
 三种范围均仅在手动高亮模式下启用，自动模式下禁用此画笔。范围内的阀门每笔切换
 一次高亮，非阀门实体按普通涂画处理；不改变设备状态或触发自动找路。保存新范围
 会退出当前阀门画笔，已有高亮保留。普通画笔和橡皮擦不受影响。
+
+普通画笔或阀门画笔涂到阀门时，人工高亮引用匹配设备的启用状态样式，不使用
+Utility 样式。优先采用当前设备状态的样式，否则依次选择打开样式、导通样式、
+按配置顺序排列的首个启用样式；缺少设备样式时跳过该阀门并提示。非阀门实体仍
+使用画笔选定样式。涂画不改变设备状态，后续设备样式修改通过引用应用到高亮。
 
 ### Brush debugging
 

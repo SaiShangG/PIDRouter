@@ -1,8 +1,21 @@
 import type {
   DeviceState,
   DeviceStateStyleDefinition,
+  DeviceStyleDefinition,
   PresentationProfile
 } from './types'
+
+export const resolveValveBrushStyleRefId = (
+  device: DeviceStyleDefinition | undefined,
+  currentState?: Pick<DeviceState, 'highlightStyleRefId'>
+): string | undefined => {
+  const states = device?.states.filter(state => state.enabled)
+    .sort((left, right) => left.order - right.order) ?? []
+  return (states.find(state => state.id === currentState?.highlightStyleRefId) ??
+    states.find(state => state.key.toLowerCase() === 'open') ??
+    states.find(state => state.flowBehavior === 'conducting') ??
+    states[0])?.id
+}
 
 export interface ResolvedDeviceStateDefinition {
   state: DeviceStateStyleDefinition

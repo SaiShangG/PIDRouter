@@ -121,7 +121,8 @@ import {
 import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import {
   DeviceStateWarningNotifications,
-  resolveDeviceStateDefinition
+  resolveDeviceStateDefinition,
+  resolveValveBrushStyleRefId
 } from './phase/phaseDeviceStateRuntime'
 import {
   collectHighlightHandleKeys,
@@ -2135,7 +2136,9 @@ class CadViewerApp {
       onApply: selection => {
         this.brushStyleSelection = selection
         localStorage.setItem(BRUSH_STYLE_STORAGE_KEY, JSON.stringify(selection))
-        if (this.resolveBrushStyleRefId()) this.brushHighlightFeature?.activate('paint', paintMode)
+        if (paintMode === 'valve-toggle' || this.resolveBrushStyleRefId()) {
+          this.brushHighlightFeature?.activate('paint', paintMode)
+        }
       },
       onClose: () => undefined
     })
@@ -2250,7 +2253,7 @@ class CadViewerApp {
     const styleRefId = operation === 'paint'
       ? this.brushStrokeStyleRefId ?? this.resolveBrushStyleRefId()
       : undefined
-    if (operation === 'paint' && !styleRefId) return
+    let missingValveStyle = false
     const hits = objectIds.flatMap(objectId => {
       if (this.highlightMode === 'auto' &&
         this.isBrushProtectedObject(objectId, profile)) return []
@@ -2258,6 +2261,20 @@ class CadViewerApp {
       if (!handleKey) {
         log.warn('[ManualHighlight] Object has no persistent handle:', objectId)
         return []
+      }
+      let entityStyleRefId = styleRefId
+      if (operation === 'paint') {
+        const valveKey = handleKeysFromObjectId(objectId).find(key => flowGraphIndex.valveKeys.has(key))
+        if (valveKey) {
+          const ownerId = this.resolveObjectIdByHandleKey(valveKey)
+          const currentState = ownerId ? this.valveDeviceStates.get(ownerId) : undefined
+          entityStyleRefId = resolveValveBrushStyleRefId(
+            this.getConfiguredDeviceMatch(valveKey, profile)?.device,
+            currentState
+          )
+          if (!entityStyleRefId) missingValveStyle = true
+        }
+        if (!entityStyleRefId) return []
       }
       const savedDeviceState = this.valveDeviceStates.get(objectId)
       const deviceStyle = operation === 'erase' && this.highlightMode === 'manual' && savedDeviceState
@@ -2267,6 +2284,7 @@ class CadViewerApp {
         : undefined
       return [{
         handleKey,
+        highlightStyleRefId: entityStyleRefId,
         hasDeviceHighlight: deviceStyle?.source === 'device' &&
           deviceStyle.visible && deviceStyle.opacity > 0,
         hasAutomaticFlow: this.getAutomaticFlowPathsForObject(objectId).some(flowPath => {
@@ -2275,12 +2293,17 @@ class CadViewerApp {
         })
       }]
     })
-    const changed = operation === 'paint'
-      ? this.manualCorrections.paint(
-        hits.map(hit => hit.handleKey),
-        styleRefId!
-      )
-      : this.manualCorrections.erase(hits)
+    if (missingValveStyle) {
+      this.showMessage(translateUiText(this.appLocale, '阀门未配置可用的设备高亮样式，已跳过'), 'warning')
+    }
+    let changed = false
+    if (operation === 'paint') {
+      hits.forEach(hit => {
+        if (this.manualCorrections.paint([hit.handleKey], hit.highlightStyleRefId!)) changed = true
+      })
+    } else {
+      changed = this.manualCorrections.erase(hits)
+    }
     if (!changed) return
     this.manualHighlightRender.schedule(objectIds)
   }

@@ -1,9 +1,11 @@
 import {
   DeviceStateWarningNotifications,
-  resolveDeviceStateDefinition
+  resolveDeviceStateDefinition,
+  resolveValveBrushStyleRefId
 } from '../src/phase/phaseDeviceStateRuntime'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
 import type { DeviceState, DeviceStateStyleDefinition } from '../src/phase/types'
+import { resolveEntityPresentation } from '../src/presentation/presentationStyleResolver'
 
 describe('device state warning notifications', () => {
   const fixture = () => {
@@ -67,6 +69,45 @@ describe('device state warning notifications', () => {
 })
 
 describe('phase device state runtime', () => {
+  it('uses the valve device preset rather than a Utility and preserves the device configuration', () => {
+    const closed: DeviceStateStyleDefinition = {
+      id: 'valve-closed', key: 'closed', displayName: 'Closed', enabled: true,
+      color: 0xff0000, lineWidthPx: 3, opacity: 1, order: 0,
+      flowBehavior: 'blocking', autoHighlightFlow: false
+    }
+    const open: DeviceStateStyleDefinition = {
+      ...closed, id: 'valve-open', key: 'Open', flowBehavior: 'conducting', order: 1
+    }
+    const device = { id: 'valve', name: 'Valve', order: 0, states: [closed, open] }
+    const before = JSON.stringify(device)
+    expect(resolveValveBrushStyleRefId(device)).toBe(open.id)
+    expect(resolveValveBrushStyleRefId(device, { highlightStyleRefId: closed.id })).toBe(closed.id)
+    expect(resolveValveBrushStyleRefId(device, { highlightStyleRefId: 'utility-water' })).toBe(open.id)
+    expect(JSON.stringify(device)).toBe(before)
+    const profile = createDefaultPresentationProfile()
+    profile.devices = [device]
+    profile.utilities = [{
+      id: 'utility-water', name: 'Water', enabled: true, order: 0,
+      style: { color: 0x0000ff, lineWidthPx: 1, opacity: 0.5, visible: true }
+    }]
+    const flowPath = {
+      id: 'manual:A', name: 'Manual correction', handleKeys: ['A'],
+      highlightStyleRefId: resolveValveBrushStyleRefId(device)!
+    }
+    expect(resolveEntityPresentation(profile, { flowPath })).toMatchObject({
+      color: open.color, lineWidthPx: open.lineWidthPx, opacity: open.opacity
+    })
+    open.color = 0x00ff00
+    expect(resolveEntityPresentation(profile, { flowPath }).color).toBe(0x00ff00)
+    expect(resolveEntityPresentation(profile, {
+      flowPath: { ...flowPath, highlightStyleRefId: 'utility-water' }
+    }).color).toBe(0x0000ff)
+    expect(resolveValveBrushStyleRefId({ ...device, states: [{ ...open, enabled: false }, closed] })).toBe(closed.id)
+    expect(resolveValveBrushStyleRefId({ ...device, states: [{ ...open, key: 'Running' }, closed] })).toBe(open.id)
+    expect(resolveValveBrushStyleRefId({ ...device, states: [{ ...open, enabled: false }] })).toBeUndefined()
+    expect(resolveValveBrushStyleRefId(undefined)).toBeUndefined()
+  })
+
   it('resolves a state by its globally unique style reference', () => {
     const profile = createDefaultPresentationProfile()
     profile.devices.push({

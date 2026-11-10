@@ -26,6 +26,7 @@ const pairs: TranslationPair[] = [
   ['将移除全部人工补充和排除，保留设备状态及自动流路，并清空修正撤销记录。此操作无法撤销。', 'Remove all manual additions and exclusions, retain device states and automatic flows, and clear correction history. This action cannot be undone.'],
   ['仅修正高亮外观，不改变设备状态或触发自动找路。橡皮可排除错误的流路高亮。', 'Correct highlight appearance only; device states and automatic routing are unchanged. The eraser can exclude incorrect flow highlights.'],
   ['画笔样式已失效，已使用默认流路样式', 'The brush style is unavailable. Using the default flow style.'],
+  ['阀门未配置可用的设备高亮样式，已跳过', 'Valve skipped: no enabled device highlight style is configured.'],
   ['部分人工修正对象不存在，记录已保留', 'Some manually corrected objects were not found. Their records have been retained.'],
   ['阶段本地保存失败，请保存到后台', 'Local Phase saving failed. Please save to the server.'],
   ['功能配置', 'Feature settings'], ['Viewer 工具栏', 'Viewer toolbar'],
