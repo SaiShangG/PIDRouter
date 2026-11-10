@@ -25,7 +25,11 @@ export function injectProjectManagementStyles() {
     .project-icon-button svg, .project-primary-button svg, .project-danger-button svg, .project-secondary-button svg, .project-drawing-search svg { width: 15px; height: 15px; }
     .project-management-body { display: grid; grid-template-columns: 310px minmax(0, 1fr); min-height: 0; }
     .project-list-panel { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; padding: 18px; border-right: 1px solid #c9d3d5; background: #f8fafa; }
-    .project-list-panel > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; }
+    .project-list-controls { display: grid; gap: 10px; padding-bottom: 12px; }
+    .project-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .project-package-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .project-package-hint { color: #64777d; font-size: 11px; line-height: 1.5; }
+    .project-package-status { color: var(--app-success-text, #075d43); font-size: 11px; }
     .project-list { min-height: 0; overflow: auto; border: 1px solid #c6d1d3; background: #fff; }
     .project-list-item { display: grid; gap: 5px; width: 100%; min-height: 64px !important; padding: 7px 10px !important; border: 0 !important; border-bottom: 1px solid #e0e7e8 !important; border-radius: 0 !important; text-align: left; }
     .project-list-item strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -76,7 +80,7 @@ export function injectProjectManagementStyles() {
       .project-management-modal { padding: 8px; }
       .project-management-shell { height: 100%; }
       .project-management-body { grid-template-columns: 1fr; overflow: auto; }
-      .project-list-panel { min-height: 230px; border-right: 0; border-bottom: 1px solid #c9d3d5; }
+      .project-list-panel { min-height: 300px; border-right: 0; border-bottom: 1px solid #c9d3d5; }
       .project-list { max-height: 180px; }
       .project-editor-panel { min-height: 480px; }
       .project-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,5 +1,9 @@
-import { FolderOpen, FolderPlus, Pencil, Save, Search, Trash2, X } from 'lucide'
+import { Download, FolderOpen, FolderPlus, Pencil, Save, Search, Trash2, Upload, X } from 'lucide'
 
+import {
+  getProjectPackageErrorMessage,
+  type ProjectPackageImportResult
+} from '../api/processAssistantProjectPackageApi'
 import type { DrawingRecord, DrawingRepository } from '../drawing-library/types'
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
@@ -12,6 +16,9 @@ export interface ProjectManagementModalOptions {
   onSelect?: (project: ProjectRecord) => void | Promise<void>
   onDelete?: (projectId: number) => void | Promise<void>
   getLoadedProject?: () => ProjectRecord | undefined
+  onExport?: (projectId: number) => Promise<void>
+  onImport?: (file: File, requestId: string) => Promise<ProjectPackageImportResult>
+  onImported?: (result: ProjectPackageImportResult) => void | Promise<void>
 }
 
 const createIconButton = (
@@ -46,6 +53,13 @@ export class ProjectManagementModal {
   private loadedProject?: ProjectRecord
   private failedProjectId?: number
   private message = ''
+  private packageMessage = ''
+  private packageError = false
+  private packageOperation?: 'import' | 'export'
+  private pendingImport?: { file: File; requestId: string }
+  private importedProject?: ProjectPackageImportResult
+  private replacedProjectId?: number
+  private readonly packageInput = document.createElement('input')
   private readonly confirmationModal: ConfirmationModal
   private readonly focusController = createModalFocusController(this.element)
 
@@ -61,6 +75,15 @@ export class ProjectManagementModal {
     this.element.setAttribute('role', 'dialog')
     this.element.setAttribute('aria-modal', 'true')
     this.element.setAttribute('aria-labelledby', 'projectManagementTitle')
+    this.packageInput.type = 'file'
+    this.packageInput.accept = '.pidproject'
+    this.packageInput.hidden = true
+    this.packageInput.setAttribute('aria-label', '选择 Project 包')
+    this.packageInput.addEventListener('change', () => {
+      const file = this.packageInput.files?.[0]
+      this.packageInput.value = ''
+      if (file) void this.importProjectPackage(file, crypto.randomUUID())
+    })
     this.element.addEventListener('pointerdown', event => {
       if (event.target === this.element && !this.busy) this.close()
     })
@@ -80,7 +103,7 @@ export class ProjectManagementModal {
     if (this.element.hidden) return
     this.focusController.activate(
       this.element.querySelector<HTMLInputElement>(
-        'input[type="search"], input'
+        'input[type="search"], input:not([type="file"])'
       )
     )
   }
@@ -148,6 +171,7 @@ export class ProjectManagementModal {
     const panel = document.createElement('section')
     panel.className = 'project-list-panel'
     const toolbar = document.createElement('div')
+    toolbar.className = 'project-list-toolbar'
     const title = document.createElement('h3')
     title.textContent = '已创建的 Project'
     const create = createIconButton('新建 Project', FolderPlus, () =>
@@ -155,7 +179,67 @@ export class ProjectManagementModal {
     )
     create.disabled = this.busy || this.loadingProjectId !== undefined
     toolbar.append(title, create)
-    panel.append(toolbar)
+    const controls = document.createElement('div')
+    controls.className = 'project-list-controls'
+    const packageActions = document.createElement('div')
+    packageActions.className = 'project-package-actions'
+    const importButton = document.createElement('button')
+    importButton.type = 'button'
+    importButton.className = 'project-secondary-button project-import-button'
+    importButton.disabled = this.busy || this.detailsLoading ||
+      this.loadingProjectId !== undefined || !this.options.onImport
+    importButton.append(
+      createPhaseIcon(Upload),
+      document.createTextNode(this.packageOperation === 'import' ? '正在导入项目包…' : '导入项目')
+    )
+    importButton.addEventListener('click', () => this.packageInput.click())
+    const exportButton = document.createElement('button')
+    exportButton.type = 'button'
+    exportButton.className = 'project-secondary-button project-export-button'
+    exportButton.disabled = this.busy || this.detailsLoading ||
+      this.loadingProjectId !== undefined || !this.selectedProjectId || !this.options.onExport
+    exportButton.append(
+      createPhaseIcon(Download),
+      document.createTextNode(this.packageOperation === 'export' ? '正在导出项目包…' : '导出项目')
+    )
+    exportButton.addEventListener('click', () => void this.exportProjectPackage())
+    packageActions.append(importButton, exportButton)
+    const hint = document.createElement('p')
+    hint.className = 'project-package-hint'
+    hint.textContent = '相同 projectKey 直接覆盖替换，不同 projectKey 新增项目；同名不作为覆盖依据。'
+    controls.append(toolbar, packageActions, this.packageInput, hint)
+    if (this.packageMessage) {
+      const status = document.createElement('p')
+      status.className = this.packageError ? 'project-message' : 'project-package-status'
+      status.setAttribute('role', this.packageError ? 'alert' : 'status')
+      status.textContent = this.packageMessage
+      controls.append(status)
+    }
+    if (this.pendingImport && !this.busy) {
+      const retry = document.createElement('button')
+      retry.type = 'button'
+      retry.className = 'project-secondary-button project-import-retry'
+      retry.textContent = '重试导入'
+      retry.disabled = this.detailsLoading || this.loadingProjectId !== undefined
+      retry.addEventListener('click', () => {
+        const pending = this.pendingImport
+        if (pending) void this.importProjectPackage(pending.file, pending.requestId)
+      })
+      const retryHint = document.createElement('p')
+      retryHint.className = 'project-package-hint'
+      retryHint.textContent = '失败或网络中断不代表后台已取消；重试将复用同一文件和请求标识。'
+      controls.append(retry, retryHint)
+    }
+    if (this.importedProject && this.packageError && !this.pendingImport) {
+      const refresh = document.createElement('button')
+      refresh.type = 'button'
+      refresh.className = 'project-secondary-button project-package-refresh'
+      refresh.textContent = '刷新项目列表'
+      refresh.disabled = this.busy
+      refresh.addEventListener('click', () => void this.refreshImportedProject())
+      controls.append(refresh)
+    }
+    panel.append(controls)
     if (this.projects.length === 0) {
       const empty = document.createElement('p')
       empty.className = 'project-empty'
@@ -491,6 +575,7 @@ export class ProjectManagementModal {
       : this.loadedProject
     return (
       this.failedProjectId !== project.id &&
+      this.replacedProjectId !== project.id &&
       loaded?.id === project.id &&
       loaded.name === project.name &&
       loaded.description === project.description &&
@@ -520,6 +605,7 @@ export class ProjectManagementModal {
       await this.options.onSelect(project)
       this.loadedProject = project
       this.failedProjectId = undefined
+      if (this.replacedProjectId === project.id) this.replacedProjectId = undefined
     } catch (error) {
       this.failedProjectId = project.id
       if (this.selectedProjectId === project.id) {
@@ -543,6 +629,109 @@ export class ProjectManagementModal {
     this.isEditing = true
     this.message = ''
     this.render()
+  }
+
+  private async exportProjectPackage() {
+    const projectId = this.selectedProjectId
+    if (!projectId || !this.options.onExport || this.busy ||
+      this.detailsLoading || this.loadingProjectId !== undefined) return
+    this.busy = true
+    this.packageOperation = 'export'
+    this.packageError = false
+    this.importedProject = undefined
+    this.packageMessage = '正在导出项目包…'
+    this.render()
+    try {
+      await this.options.onExport(projectId)
+      this.packageMessage = '项目包已下载。'
+    } catch (error) {
+      this.packageError = true
+      this.packageMessage = `项目导出失败：${getProjectPackageErrorMessage(error)}`
+    } finally {
+      this.busy = false
+      this.packageOperation = undefined
+      this.render()
+    }
+  }
+
+  private async importProjectPackage(file: File, requestId: string) {
+    if (!this.options.onImport || this.busy || this.detailsLoading ||
+      this.loadingProjectId !== undefined) return
+    this.busy = true
+    this.packageOperation = 'import'
+    this.packageError = false
+    this.packageMessage = '正在导入项目包…'
+    this.pendingImport = { file, requestId }
+    this.importedProject = undefined
+    this.selectionToken++
+    this.render()
+    try {
+      const result = await this.options.onImport(file, requestId)
+      this.importedProject = result
+      this.pendingImport = undefined
+      if (result.action === 'replaced') this.replacedProjectId = result.projectId
+      if (this.loadedProject?.id === result.projectId) this.loadedProject = undefined
+      await this.options.onImported?.(result)
+      await this.readImportedProject(result)
+      this.packageMessage = this.importSuccessMessage(result)
+    } catch (error) {
+      this.packageError = true
+      this.packageMessage = this.importedProject
+        ? `项目已导入，但刷新失败：${getProjectPackageErrorMessage(error)}`
+        : `项目导入失败：${getProjectPackageErrorMessage(error)}`
+    } finally {
+      this.busy = false
+      this.packageOperation = undefined
+      this.render()
+    }
+  }
+
+  private importSuccessMessage(result: ProjectPackageImportResult) {
+    return result.action === 'replaced'
+      ? '项目导入完成，已覆盖替换 Project。'
+      : '项目导入完成，已新增 Project。'
+  }
+
+  private async readImportedProject(result: ProjectPackageImportResult) {
+    const [projects, drawings, project] = await Promise.all([
+      this.repository.list(),
+      this.drawingRepository.list(),
+      this.repository.get(result.projectId)
+    ])
+    if (project.id !== result.projectId) {
+      throw new Error('后台返回的项目与导入结果不一致，请刷新重试。')
+    }
+    if (!projects.some(item => item.id === project.id)) {
+      throw new Error('导入的项目尚未出现在后台项目列表中，请刷新重试。')
+    }
+    this.projects = projects.map(item => item.id === project.id ? project : item)
+    this.drawings = drawings
+    this.selectedProjectId = project.id
+    this.name = project.name
+    this.description = project.description
+    this.selectedDrawingIds = new Set(project.fileIds.map(String))
+    this.drawingQuery = ''
+    this.isEditing = false
+    this.message = ''
+  }
+
+  private async refreshImportedProject() {
+    const imported = this.importedProject
+    if (!imported || this.busy) return
+    this.busy = true
+    this.packageError = false
+    this.render()
+    try {
+      await this.options.onImported?.(imported)
+      await this.readImportedProject(imported)
+      this.packageMessage = this.importSuccessMessage(imported)
+    } catch (error) {
+      this.packageError = true
+      this.packageMessage = `项目已导入，但刷新失败：${getProjectPackageErrorMessage(error)}`
+    } finally {
+      this.busy = false
+      this.render()
+    }
   }
 
   private cancelEditing() {

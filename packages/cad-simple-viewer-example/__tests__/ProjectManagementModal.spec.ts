@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 
-import { ProjectManagementModal } from '../src/project/ProjectManagementModal'
+import type { ProjectPackageImportResult } from '../src/api/processAssistantProjectPackageApi'
+import { ProjectManagementModal, type ProjectManagementModalOptions } from '../src/project/ProjectManagementModal'
 import type { AppLocale } from '../src/locale'
 import type { DrawingRecord } from '../src/drawing-library/types'
 import type { ProjectRecord, ProjectRepository } from '../src/project/types'
@@ -40,7 +41,8 @@ const existingProject: ProjectRecord = {
 const createHarness = (
   projects: ProjectRecord[] = [],
   getLoadedProject?: () => ProjectRecord | undefined,
-  locale: AppLocale = 'zh'
+  locale: AppLocale = 'zh',
+  options: ProjectManagementModalOptions = {}
 ) => {
   const onSelect = jest.fn()
   const onDelete = jest.fn()
@@ -84,11 +86,22 @@ const createHarness = (
     {
       onSelect,
       onDelete,
-      getLoadedProject
+      getLoadedProject,
+      ...options
     },
     () => locale
   )
-  return { modal, repository, drawingRepository, onSelect, onDelete }
+  return {
+    modal, repository, drawingRepository, onSelect, onDelete,
+    setProjects: (next: ProjectRecord[]) => { projects = next }
+  }
+}
+
+const choosePackage = (file = new File(['package'], 'project.pidproject')) => {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+  input.dispatchEvent(new Event('change'))
+  return file
 }
 
 const flushPromises = async () => {
@@ -464,5 +477,196 @@ describe('ProjectManagementModal', () => {
     expect(
       document.querySelectorAll('.project-drawing-option input')
     ).toHaveLength(2)
+  })
+
+  it('exports the selected project rather than the loaded project and blocks duplicates', async () => {
+    const second = { ...existingProject, id: 2, name: 'Second project' }
+    let finish!: () => void
+    const onExport = jest.fn(() => new Promise<void>(resolve => { finish = resolve }))
+    const { modal } = createHarness([existingProject, second], () => existingProject, 'zh', { onExport })
+    await modal.open()
+    expect(document.querySelector<HTMLButtonElement>('.project-export-button')?.disabled).toBe(true)
+    document.querySelectorAll<HTMLButtonElement>('.project-list-item')[1].click()
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>('.project-export-button')!.click()
+    document.querySelector<HTMLButtonElement>('.project-export-button')!.click()
+    modal.close()
+    expect(modal.element.hidden).toBe(false)
+    expect(onExport).toHaveBeenCalledTimes(1)
+    expect(onExport).toHaveBeenCalledWith(2)
+    expect(document.body.textContent).toContain('正在导出项目包')
+    finish()
+    await flushPromises()
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('项目包已下载')
+    expect(document.querySelector<HTMLButtonElement>('.project-export-button')?.disabled).toBe(false)
+  })
+
+  it('reports an export failure without displaying download success', async () => {
+    const onExport = jest.fn().mockRejectedValue(new Error('export unavailable'))
+    const { modal } = createHarness([existingProject], undefined, 'zh', { onExport })
+    await modal.open()
+    document.querySelector<HTMLButtonElement>('.project-list-item')!.click()
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>('.project-export-button')!.click()
+    await flushPromises()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('export unavailable')
+    expect(document.body.textContent).not.toContain('项目包已下载')
+  })
+
+  it.each(['zh', 'en'] as const)('imports a new project with the same name without frontend name matching (%s)', async locale => {
+    const created = { ...existingProject, id: 2, fileIds: [2] }
+    const imported: ProjectPackageImportResult = {
+      projectId: 2, projectKey: 'new-project-key', name: created.name, action: 'created'
+    }
+    const onImport = jest.fn()
+    const onImported = jest.fn()
+    const harness = createHarness([existingProject], undefined, locale, { onImport, onImported })
+    onImport.mockImplementation(async () => {
+      harness.setProjects([existingProject, created])
+      return imported
+    })
+    await harness.modal.open()
+    const file = choosePackage()
+    await flushPromises()
+    expect(onImport).toHaveBeenCalledWith(file, expect.any(String))
+    expect(onImported).toHaveBeenCalledWith(imported)
+    expect(document.querySelectorAll('.project-list-item')).toHaveLength(2)
+    expect(document.querySelector('.project-list-item.is-selected')?.textContent).toContain('ID 2')
+    expect(document.querySelector('[role="status"]')?.textContent).toContain(
+      locale === 'zh' ? '已新增 Project' : 'new Project'
+    )
+    expect(harness.repository.create).not.toHaveBeenCalled()
+    expect(harness.repository.update).not.toHaveBeenCalled()
+    expect(harness.repository.delete).not.toHaveBeenCalled()
+    expect(harness.onSelect).not.toHaveBeenCalled()
+  })
+
+  it('allows import without existing projects or drawings', async () => {
+    const onImport = jest.fn().mockResolvedValue({
+      projectId: 1, projectKey: 'key', name: existingProject.name, action: 'created'
+    })
+    const harness = createHarness([], undefined, 'zh', { onImport })
+    harness.drawingRepository.list.mockResolvedValue([])
+    onImport.mockImplementation(async () => {
+      harness.setProjects([existingProject])
+      return { projectId: 1, projectKey: 'key', name: existingProject.name, action: 'created' }
+    })
+    await harness.modal.open()
+    expect(document.querySelector<HTMLButtonElement>('.project-import-button')?.disabled).toBe(false)
+    choosePackage()
+    await flushPromises()
+    expect(onImport).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('.project-list-item.is-selected')?.textContent).toContain('ID 1')
+  })
+
+  it('replaces immediately without confirmation and invalidates loaded status even with identical metadata', async () => {
+    const imported: ProjectPackageImportResult = {
+      projectId: 1, projectKey: 'existing-project-key',
+      name: existingProject.name, action: 'replaced'
+    }
+    const onImport = jest.fn().mockResolvedValue(imported)
+    const onImported = jest.fn()
+    const harness = createHarness([existingProject], () => existingProject, 'zh', { onImport, onImported })
+    await harness.modal.open()
+    document.querySelector<HTMLButtonElement>('.project-list-item')!.click()
+    await flushPromises()
+    expect(document.querySelector<HTMLButtonElement>('.project-load-button')?.disabled).toBe(true)
+    choosePackage()
+    await flushPromises()
+    expect(onImported).toHaveBeenCalledWith(imported)
+    expect(document.querySelector('.confirmation-modal:not([hidden])')).toBeNull()
+    expect(document.querySelectorAll('.project-list-item')).toHaveLength(1)
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('已覆盖替换')
+    expect(document.querySelector<HTMLButtonElement>('.project-load-button')?.disabled).toBe(false)
+    document.querySelector<HTMLButtonElement>('.project-load-button')!.click()
+    await flushPromises()
+    expect(harness.onSelect).toHaveBeenCalledWith(existingProject)
+    expect(harness.onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks duplicate imports and closing while a request is pending', async () => {
+    let finish!: (result: ProjectPackageImportResult) => void
+    const onImport = jest.fn(() => new Promise<ProjectPackageImportResult>(resolve => { finish = resolve }))
+    const { modal } = createHarness([existingProject], undefined, 'zh', { onImport })
+    await modal.open()
+    choosePackage()
+    choosePackage()
+    modal.close()
+    expect(modal.element.hidden).toBe(false)
+    expect(onImport).toHaveBeenCalledTimes(1)
+    expect(document.querySelector<HTMLButtonElement>('.project-import-button')?.disabled).toBe(true)
+    finish({ projectId: 1, projectKey: 'key', name: existingProject.name, action: 'replaced' })
+    await flushPromises()
+    expect(document.querySelector<HTMLButtonElement>('.project-import-button')?.disabled).toBe(false)
+  })
+
+  it('retries a failed import with exactly the same file and idempotency key', async () => {
+    const onImport = jest.fn().mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValueOnce({
+        projectId: 1, projectKey: 'key', name: existingProject.name, action: 'replaced'
+      })
+    const onImported = jest.fn()
+    const { modal } = createHarness([existingProject], undefined, 'en', { onImport, onImported })
+    await modal.open()
+    const file = choosePackage()
+    await flushPromises()
+    expect(onImported).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('Project import failed')
+    expect(document.body.textContent).toContain('connection lost')
+    document.querySelector<HTMLButtonElement>('.project-import-retry')!.click()
+    await flushPromises()
+    expect(onImport).toHaveBeenCalledTimes(2)
+    expect(onImport.mock.calls[1]).toEqual(onImport.mock.calls[0])
+    expect(onImport.mock.calls[1][0]).toBe(file)
+    expect(onImported).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('.project-import-retry')).toBeNull()
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('replaced')
+  })
+
+  it('refreshes after a committed import failure without submitting the import again', async () => {
+    const onImport = jest.fn().mockResolvedValue({
+      projectId: 1, projectKey: 'key', name: existingProject.name, action: 'replaced'
+    })
+    const harness = createHarness([existingProject], undefined, 'zh', { onImport })
+    await harness.modal.open()
+    harness.repository.list.mockRejectedValueOnce(new Error('list unavailable'))
+    choosePackage()
+    await flushPromises()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('项目已导入，但刷新失败')
+    expect(document.querySelector('.project-import-retry')).toBeNull()
+    document.querySelector<HTMLButtonElement>('.project-package-refresh')!.click()
+    await flushPromises()
+    expect(onImport).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[role="status"]')?.textContent).toContain('已覆盖替换')
+    expect(document.querySelector('.project-package-refresh')).toBeNull()
+  })
+
+  it('rejects stale project lists after import and offers refresh rather than another upload', async () => {
+    const onImport = jest.fn().mockResolvedValue({
+      projectId: 2, projectKey: 'new-key', name: 'New project', action: 'created'
+    })
+    const harness = createHarness([existingProject], undefined, 'zh', { onImport })
+    await harness.modal.open()
+    harness.repository.get.mockResolvedValue({ ...existingProject, id: 2, name: 'New project' })
+    choosePackage()
+    await flushPromises()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('尚未出现在后台项目列表')
+    expect(document.querySelector('.project-package-refresh')).not.toBeNull()
+    expect(document.querySelector('.project-import-retry')).toBeNull()
+  })
+
+  it('does not select a different project when the detail response has the wrong ID', async () => {
+    const onImport = jest.fn().mockResolvedValue({
+      projectId: 2, projectKey: 'new-key', name: 'New project', action: 'created'
+    })
+    const harness = createHarness([existingProject], undefined, 'zh', { onImport })
+    await harness.modal.open()
+    harness.repository.get.mockResolvedValue(existingProject)
+    choosePackage()
+    await flushPromises()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('与导入结果不一致')
+    expect(document.querySelector('.project-list-item.is-selected')).toBeNull()
+    expect(document.querySelector('.project-package-refresh')).not.toBeNull()
+    expect(harness.onSelect).not.toHaveBeenCalled()
   })
 })

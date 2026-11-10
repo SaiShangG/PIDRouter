@@ -57,6 +57,7 @@ import { ProcessAssistantOperationApi } from './api/processAssistantOperationApi
 import { ProcessAssistantPhaseApi } from './api/processAssistantPhaseApi'
 import { ProcessAssistantProcedureApi } from './api/processAssistantProcedureApi'
 import { ProcessAssistantProjectApi } from './api/processAssistantProjectApi'
+import { ProcessAssistantProjectPackageApi } from './api/processAssistantProjectPackageApi'
 import { injectAppShellResponsiveStyles } from './appShellResponsiveStyles'
 import { AccountControls } from './auth/AccountControls'
 import type { AuthService, AuthUser } from './auth/authService'
@@ -503,6 +504,9 @@ class CadViewerApp {
   private readonly processAssistantProjectApi = new ProcessAssistantProjectApi(
     this.processAssistantClient
   )
+  private readonly projectPackageApi = new ProcessAssistantProjectPackageApi(
+    this.processAssistantClient
+  )
   private readonly processAssistantProcedureApi =
     new ProcessAssistantProcedureApi(this.processAssistantClient)
   private readonly processAssistantOperationApi =
@@ -776,7 +780,29 @@ class CadViewerApp {
       {
         onSelect: project => this.switchProject(project),
         getLoadedProject: () => this.activeProject,
-        onDelete: projectId => this.handleDeletedProject(projectId)
+        onDelete: projectId => this.handleDeletedProject(projectId),
+        onExport: async projectId => {
+          const result = await this.projectPackageApi.exportPackage(projectId)
+          const url = URL.createObjectURL(result.blob)
+          const anchor = document.createElement('a')
+          anchor.href = url
+          anchor.download = result.fileName
+          document.body.append(anchor)
+          try {
+            anchor.click()
+          } finally {
+            anchor.remove()
+            queueMicrotask(() => URL.revokeObjectURL(url))
+          }
+        },
+        onImport: (file, requestId) => this.projectPackageApi.importPackage(file, requestId),
+        onImported: result => {
+          this.projectPresentationProfiles.delete(result.projectId)
+          if (this.activeProjectId === result.projectId) {
+            this.clearProjectWorkspace()
+            this.showEmptyWorkspaceDrawing()
+          }
+        }
       },
       () => this.appLocale
     )
