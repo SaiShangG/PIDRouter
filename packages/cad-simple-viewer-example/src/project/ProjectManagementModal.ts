@@ -10,6 +10,7 @@ import { createPhaseIcon } from '../phase/phaseIcons'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createModalFocusController } from '../ui/modalFocus'
 import { localizeDom } from '../uiTranslations'
+import { isProjectPidFile } from './projectPidFiles'
 import type { ProjectRecord, ProjectRepository } from './types'
 
 export interface ProjectManagementModalOptions {
@@ -123,6 +124,12 @@ export class ProjectManagementModal {
         this.repository.list(),
         this.drawingRepository.list()
       ])
+      this.drawings = this.drawings.filter(drawing =>
+        isProjectPidFile(drawing.originalFileName)
+      )
+      this.selectedDrawingIds = this.getPidDrawingIds(
+        [...this.selectedDrawingIds].map(Number)
+      )
       if (
         this.selectedProjectId &&
         !this.projects.some(project => project.id === this.selectedProjectId)
@@ -134,6 +141,11 @@ export class ProjectManagementModal {
       this.message = String(error)
     }
     this.render()
+  }
+
+  private getPidDrawingIds(fileIds: readonly number[]): Set<string> {
+    const availableIds = new Set(this.drawings.map(drawing => drawing.id))
+    return new Set(fileIds.map(String).filter(id => availableIds.has(id)))
   }
 
   private render() {
@@ -267,7 +279,7 @@ export class ProjectManagementModal {
       const details = document.createElement('span')
       details.className = 'project-list-item-details'
       const count = document.createElement('span')
-      count.textContent = `${project.fileIds.length} 张 PID`
+      count.textContent = `${this.getPidDrawingIds(project.fileIds).size} 张 PID`
       const id = document.createElement('span')
       id.textContent = `ID ${project.id}`
       details.append(count, id)
@@ -492,7 +504,7 @@ export class ProjectManagementModal {
     details.className = 'project-details'
     const fields = [
       ['描述', project.description || '无'],
-      ['包含 PID', `${project.fileIds.length} 张`],
+      ['包含 PID', `${this.getPidDrawingIds(project.fileIds).size} 张`],
       ['Project ID', String(project.id)]
     ]
     fields.forEach(([label, value]) => {
@@ -554,7 +566,7 @@ export class ProjectManagementModal {
       this.selectedProjectId = project.id
       this.name = project.name
       this.description = project.description
-      this.selectedDrawingIds = new Set(project.fileIds.map(String))
+      this.selectedDrawingIds = this.getPidDrawingIds(project.fileIds)
       this.drawingQuery = ''
       this.isEditing = false
     } catch (error) {
@@ -705,11 +717,13 @@ export class ProjectManagementModal {
       throw new Error('导入的项目尚未出现在后台项目列表中，请刷新重试。')
     }
     this.projects = projects.map(item => item.id === project.id ? project : item)
-    this.drawings = drawings
+    this.drawings = drawings.filter(drawing =>
+      isProjectPidFile(drawing.originalFileName)
+    )
     this.selectedProjectId = project.id
     this.name = project.name
     this.description = project.description
-    this.selectedDrawingIds = new Set(project.fileIds.map(String))
+    this.selectedDrawingIds = this.getPidDrawingIds(project.fileIds)
     this.drawingQuery = ''
     this.isEditing = false
     this.message = ''
@@ -741,7 +755,7 @@ export class ProjectManagementModal {
     if (!project) return
     this.name = project.name
     this.description = project.description
-    this.selectedDrawingIds = new Set(project.fileIds.map(String))
+    this.selectedDrawingIds = this.getPidDrawingIds(project.fileIds)
     this.drawingQuery = ''
     this.isEditing = false
     this.message = ''
@@ -755,10 +769,17 @@ export class ProjectManagementModal {
     this.message = ''
     this.render()
     try {
+      const project = this.projects.find(item => item.id === this.selectedProjectId)
+      const pidIds = new Set(this.drawings.map(drawing => Number(drawing.id)))
+      // Project fileIds can also contain configuration attachments.
+      const preservedFileIds = project?.fileIds.filter(id => !pidIds.has(id)) ?? []
       const input = {
         name: this.name,
         description: this.description,
-        fileIds: [...this.selectedDrawingIds]
+        fileIds: [
+          ...preservedFileIds,
+          ...this.getPidDrawingIds([...this.selectedDrawingIds].map(Number))
+        ]
           .map(Number)
           .filter(id => Number.isInteger(id) && id > 0)
       }
@@ -768,7 +789,7 @@ export class ProjectManagementModal {
       this.selectedProjectId = saved.id
       this.name = saved.name
       this.description = saved.description
-      this.selectedDrawingIds = new Set(saved.fileIds.map(String))
+      this.selectedDrawingIds = this.getPidDrawingIds(saved.fileIds)
       this.drawingQuery = ''
       this.isEditing = false
       await this.refresh()

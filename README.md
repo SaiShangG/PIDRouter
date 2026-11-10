@@ -192,6 +192,13 @@ Deployment network settings are described in [Network Configuration](#network-co
 6. Configure device states and flow-path highlights, then save the phase data.
 7. Export HTML, PDF, SVG, or report data as needed.
 
+Project PID lists, selection, and counts include only `.pdi` files (case
+insensitive). Excel configurations and other uploaded files are not PIDs and
+are excluded, including from the Phase **Project PID** selectors. Editing PID
+selections preserves existing non-PID attachment associations and does not
+delete those files from the backend. The general drawing library and local
+Phase drawing support are unchanged.
+
 When importing Phase Excel configurations, the import dialog waits for the
 backend task to finish before refreshing the process and phase lists
 automatically. No project or page refresh is needed. A failed task or a

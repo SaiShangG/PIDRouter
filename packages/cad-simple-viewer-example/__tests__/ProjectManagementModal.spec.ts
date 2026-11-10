@@ -1,9 +1,9 @@
 /** @jest-environment jsdom */
 
 import type { ProjectPackageImportResult } from '../src/api/processAssistantProjectPackageApi'
-import { ProjectManagementModal, type ProjectManagementModalOptions } from '../src/project/ProjectManagementModal'
-import type { AppLocale } from '../src/locale'
 import type { DrawingRecord } from '../src/drawing-library/types'
+import type { AppLocale } from '../src/locale'
+import { ProjectManagementModal, type ProjectManagementModalOptions } from '../src/project/ProjectManagementModal'
 import type { ProjectRecord, ProjectRepository } from '../src/project/types'
 
 const drawings: DrawingRecord[] = [
@@ -11,7 +11,7 @@ const drawings: DrawingRecord[] = [
     id: '1',
     drawingNumber: 'PID-1001',
     name: 'CIP Supply',
-    originalFileName: 'cip-supply.dwg',
+    originalFileName: 'cip-supply.pdi',
     fileSize: 1024,
     uploadedBy: 'Backend',
     uploadedAt: '2026-08-17T08:30:00Z',
@@ -22,7 +22,7 @@ const drawings: DrawingRecord[] = [
     id: '2',
     drawingNumber: 'PID-1002',
     name: 'CIP Return',
-    originalFileName: 'cip-return.dwg',
+    originalFileName: 'cip-return.PDI',
     fileSize: 2048,
     uploadedBy: 'Backend',
     uploadedAt: '2026-08-17T08:31:00Z',
@@ -30,6 +30,20 @@ const drawings: DrawingRecord[] = [
     progress: 100
   }
 ]
+
+const nonPidDrawings: DrawingRecord[] = [
+  'project.xlsx',
+  'project.xls',
+  'drawing.dwg',
+  'drawing.dxf',
+  'notes.pdf',
+  'drawing.pdi.xlsx'
+].map((originalFileName, index) => ({
+  ...drawings[0],
+  id: String(index + 3),
+  name: originalFileName,
+  originalFileName
+}))
 
 const existingProject: ProjectRecord = {
   id: 1,
@@ -142,6 +156,85 @@ describe('ProjectManagementModal', () => {
     expect(document.body.textContent).toContain('编辑')
     expect(repository.get).toHaveBeenCalledWith(1)
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('only offers PDI files when creating a Project', async () => {
+    const { modal, drawingRepository } = createHarness()
+    drawingRepository.list.mockResolvedValue([...drawings, ...nonPidDrawings])
+
+    await modal.open()
+
+    expect(
+      [...document.querySelectorAll('.project-drawing-option small')].map(
+        option => option.textContent
+      )
+    ).toEqual([
+      'PID-1001 · cip-supply.pdi',
+      'PID-1002 · cip-return.PDI'
+    ])
+  })
+
+  it.each([{ pdiIds: [] }, { pdiIds: [1] }, { pdiIds: [1, 2] }])(
+    'counts only available PDI files $pdiIds in every Project PID count', async ({ pdiIds }) => {
+    const project = {
+      ...existingProject,
+      fileIds: [...pdiIds, ...nonPidDrawings.map(drawing => Number(drawing.id)), 999]
+    }
+    const { modal, drawingRepository } = createHarness([project])
+    drawingRepository.list.mockResolvedValue([...drawings, ...nonPidDrawings])
+    await modal.open()
+
+    expect(document.querySelector('.project-list-item-details')?.textContent)
+      .toContain(`${pdiIds.length} 张 PID`)
+    document.querySelector<HTMLButtonElement>('.project-list-item')!.click()
+    await flushPromises()
+
+    expect(document.querySelectorAll('.project-details dd')[1].textContent)
+      .toBe(`${pdiIds.length} 张`)
+    expect(document.querySelector('.project-drawing-header span')?.textContent)
+      .toBe(`${pdiIds.length} 张`)
+    expect(document.querySelectorAll('.project-drawing-option')).toHaveLength(pdiIds.length)
+    expect(document.querySelector('.project-drawing-list')?.textContent)
+      .not.toContain('xlsx')
+
+    const search = document.querySelector<HTMLInputElement>(
+      '.project-drawing-search input'
+    )!
+    search.value = 'cip-return'
+    search.dispatchEvent(new Event('input'))
+    expect(document.querySelector('.project-drawing-header span')?.textContent)
+      .toBe(`${pdiIds.length} 张`)
+    }
+  )
+
+  it('saves PDI selections without removing existing non-PID attachments', async () => {
+    const project = { ...existingProject, fileIds: [1, 3, 5] }
+    const { modal, repository, drawingRepository } = createHarness([project])
+    drawingRepository.list.mockResolvedValue([...drawings, ...nonPidDrawings])
+    await modal.open()
+    document.querySelector<HTMLButtonElement>('.project-list-item')!.click()
+    await flushPromises()
+    const clickButton = (text: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('button')]
+        .find(button => button.textContent === text)!.click()
+
+    clickButton('编辑')
+    clickButton('取消')
+    expect(document.querySelector('.project-drawing-header span')?.textContent)
+      .toBe('1 张')
+    clickButton('编辑')
+    document.querySelectorAll<HTMLInputElement>('.project-drawing-option input')[1]
+      .click()
+    clickButton('保存更改')
+    await flushPromises()
+
+    expect(repository.update).toHaveBeenCalledWith(1, {
+      name: project.name,
+      description: project.description,
+      fileIds: [3, 5, 1, 2]
+    })
+    expect(document.querySelector('.project-drawing-header span')?.textContent)
+      .toBe('2 张')
   })
 
   it('closes immediately on load and prevents repeated loads after reopening', async () => {
@@ -514,13 +607,14 @@ describe('ProjectManagementModal', () => {
   })
 
   it.each(['zh', 'en'] as const)('imports a new project with the same name without frontend name matching (%s)', async locale => {
-    const created = { ...existingProject, id: 2, fileIds: [2] }
+    const created = { ...existingProject, id: 2, fileIds: [2, 3] }
     const imported: ProjectPackageImportResult = {
       projectId: 2, projectKey: 'new-project-key', name: created.name, action: 'created'
     }
     const onImport = jest.fn()
     const onImported = jest.fn()
     const harness = createHarness([existingProject], undefined, locale, { onImport, onImported })
+    harness.drawingRepository.list.mockResolvedValue([...drawings, ...nonPidDrawings])
     onImport.mockImplementation(async () => {
       harness.setProjects([existingProject, created])
       return imported
@@ -539,6 +633,13 @@ describe('ProjectManagementModal', () => {
     expect(harness.repository.update).not.toHaveBeenCalled()
     expect(harness.repository.delete).not.toHaveBeenCalled()
     expect(harness.onSelect).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('.project-drawing-option')).toHaveLength(1)
+    expect(document.querySelector('.project-drawing-option')?.textContent)
+      .toContain('cip-return.PDI')
+    expect(document.querySelectorAll('.project-details dd')[1].textContent)
+      .toContain('1')
+    expect(document.querySelector('.project-drawing-list')?.textContent)
+      .not.toContain('xlsx')
   })
 
   it('allows import without existing projects or drawings', async () => {

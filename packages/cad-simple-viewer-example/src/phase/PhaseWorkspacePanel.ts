@@ -15,6 +15,7 @@ import {
 } from 'lucide'
 
 import type { AppLocale } from '../locale'
+import { isProjectPidFile } from '../project/projectPidFiles'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createFormValidator } from '../ui/formValidation'
 import { localizeDom, translateUiText } from '../uiTranslations'
@@ -1358,7 +1359,9 @@ export class PhaseWorkspacePanel {
     const projectDrawings = Object.values(state.drawingAssets).flatMap(drawing => {
       const match = /^file:(\d+)$/.exec(drawing.id)
       const fileId = match ? Number(match[1]) : undefined
-      return fileId && projectFileIds.has(fileId) ? [{ fileId, drawing }] : []
+      return fileId && projectFileIds.has(fileId) && isProjectPidFile(drawing.sourceName)
+        ? [{ fileId, drawing }]
+        : []
     })
     const markedSources = this.getState().processes.flatMap(process =>
       process.sequences.flatMap(sequence =>
@@ -1565,7 +1568,9 @@ export class PhaseWorkspacePanel {
     const projectDrawings = Object.values(state.drawingAssets).flatMap(drawing => {
       const match = /^file:(\d+)$/.exec(drawing.id)
       const fileId = match ? Number(match[1]) : undefined
-      return fileId && projectFileIds.has(fileId) ? [{ fileId, drawing }] : []
+      return fileId && projectFileIds.has(fileId) && isProjectPidFile(drawing.sourceName)
+        ? [{ fileId, drawing }]
+        : []
     })
     if (sequence.phases.length > 0) {
       source.add(new Option('使用上一阶段的已标记图纸', 'previous'))

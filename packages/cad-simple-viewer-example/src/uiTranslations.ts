@@ -327,6 +327,7 @@ const pairs: TranslationPair[] = [
   ['上一 Phase 不存在', 'The previous Phase does not exist'], ['历史 Phase 不存在', 'The historical Phase does not exist'],
   ['请选择 DWG 文件', 'Select a DWG file'], ['所选图纸不属于当前 Project', 'The selected drawing does not belong to the current Project'],
   ['所选 Project PID 不存在', 'The selected Project PID does not exist'],
+  ['Project PID 仅支持 .pdi 文件', 'Project PIDs only support .pdi files'],
   ['实际后台仅支持上传文件，暂不支持 URL 或空白图纸', 'The server currently supports uploaded files only, not URLs or blank drawings'],
   ['Phase 已从后台删除', 'Phase deleted from the server'], ['Phase 已更新', 'Phase updated'],
   ['Phase 更新失败', 'Failed to update Phase'], ['Phase 顺序已更新', 'Phase order updated'],

@@ -933,10 +933,10 @@ describe('PhaseWorkspacePanel', () => {
         drawing: {
           id: 'file:5',
           kind: 'url',
-          sourceName: 'Project-PID.dwg',
-          url: '/project-pid.dwg'
+          sourceName: 'Project-PID.pdi',
+          url: '/project-pid.pdi'
         },
-        displayName: 'Project-PID.dwg'
+        displayName: 'Project-PID.pdi'
       }
     })
     panel.render()
@@ -977,11 +977,63 @@ describe('PhaseWorkspacePanel', () => {
       sourceKind: 'project',
       sourcePhaseId: undefined,
       fileId: 5,
-      drawingDisplayName: 'Project-PID.dwg',
+      drawingDisplayName: 'Project-PID.pdi',
       file: undefined,
       url: ''
     })
   })
+
+  it.each(['create', 'associate'])(
+    'only offers PDI files in the Project PID selector when opening %s',
+    mode => {
+      const { store, panel } = createHarness('zh', [5, 6, 7, 8, 9, 10])
+      const process = store.createProcess('CIP')
+      const sequence = process.sequences[0]
+      const target = store.createPhase({
+        processId: process.id,
+        sequenceId: sequence.id,
+        number: 1,
+        name: 'Target',
+        source: { kind: 'unassigned' }
+      })
+      const assets = [
+        [5, 'Project.pdi'],
+        [6, 'Other.PDI '],
+        [7, 'ProjectExcel.xlsx'],
+        [8, 'Drawing.dwg'],
+        [9, 'Drawing.dxf'],
+        [10, 'Drawing.pdi.xlsx'],
+        [99, 'Outside-Project.pdi']
+      ] as const
+      assets.forEach(([fileId, sourceName], index) => {
+        store.createPhase({
+          processId: process.id,
+          sequenceId: sequence.id,
+          number: index + 2,
+          name: sourceName,
+          source: {
+            kind: 'new',
+            drawing: { id: `file:${fileId}`, kind: 'url', sourceName },
+            displayName: sourceName
+          }
+        })
+      })
+      store.activate(process.id, sequence.id, target.id)
+      panel.render()
+      ;[...panel.element.querySelectorAll('button')]
+        .find(button => button.textContent === (
+          mode === 'create' ? '创建 Phase' : '关联图纸'
+        ))!.click()
+
+      const selector = document.querySelector<HTMLSelectElement>(
+        mode === 'create'
+          ? '.phase-create-form [aria-label="Project PID"]'
+          : '.phase-drawing-association-modal:not([hidden]) [aria-label="Project PID"]'
+      )!
+      expect([...selector.options].map(option => option.value))
+        .toEqual(['', '5', '6'])
+    }
+  )
 
   it('renders phases as a collapsible tree with structured overview', () => {
     const { store, panel } = createHarness()
@@ -1381,10 +1433,10 @@ describe('PhaseWorkspacePanel', () => {
         drawing: {
           id: 'file:5',
           kind: 'url',
-          sourceName: 'PID-later.dwg',
-          url: '/pid-later.dwg'
+          sourceName: 'PID-later.pdi',
+          url: '/pid-later.pdi'
         },
-        displayName: 'PID-later.dwg'
+        displayName: 'PID-later.pdi'
       }
     })
     store.activate(process.id, sequence.id, phase.id)
@@ -1444,7 +1496,7 @@ describe('PhaseWorkspacePanel', () => {
       phaseId: phase.id,
       sourceKind: 'project',
       fileId: 5,
-      drawingDisplayName: 'PID-later.dwg'
+      drawingDisplayName: 'PID-later.pdi'
     })
   })
 

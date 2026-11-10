@@ -190,6 +190,7 @@ import { upgradePreviewWideLines } from './presentation/upgradePreviewWideLines'
 import { ProcessAssistantProjectRepository } from './project/ProcessAssistantProjectRepository'
 import { ProjectManagementModal } from './project/ProjectManagementModal'
 import { injectProjectManagementStyles } from './project/projectManagementStyles'
+import { isProjectPidFile } from './project/projectPidFiles'
 import type { ProjectRecord } from './project/types'
 import { registerLazyPlugins } from './register'
 import { buildPhaseReportSelection } from './report/buildPhaseReportSelection'
@@ -3412,6 +3413,9 @@ class CadViewerApp {
       }
       const projectDrawing = state.drawingAssets[`file:${request.fileId}`]
       if (!projectDrawing) throw new Error('所选 Project PID 不存在')
+      if (!isProjectPidFile(projectDrawing.sourceName)) {
+        throw new Error('Project PID 仅支持 .pdi 文件')
+      }
       drawing = {
         fileId: request.fileId!,
         displayName:
@@ -3687,6 +3691,9 @@ class CadViewerApp {
       fileId = request.fileId!
       const drawing = state.drawingAssets[`file:${fileId}`]
       if (!drawing) throw new Error('所选 Project PID 不存在')
+      if (!isProjectPidFile(drawing.sourceName)) {
+        throw new Error('Project PID 仅支持 .pdi 文件')
+      }
       displayName = request.drawingDisplayName.trim() || drawing.sourceName
     } else if (request.sourceKind === 'marked') {
       const source = state.processes
