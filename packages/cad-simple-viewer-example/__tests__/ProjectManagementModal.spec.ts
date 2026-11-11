@@ -111,7 +111,7 @@ const createHarness = (
   }
 }
 
-const choosePackage = (file = new File(['package'], 'project.pidproject')) => {
+const choosePackage = (file = new File(['package'], 'project.zip')) => {
   const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
   Object.defineProperty(input, 'files', { configurable: true, value: [file] })
   input.dispatchEvent(new Event('change'))
@@ -620,6 +620,7 @@ describe('ProjectManagementModal', () => {
       return imported
     })
     await harness.modal.open()
+    expect(document.querySelector<HTMLInputElement>('input[type="file"]')?.accept).toBe('.zip')
     const file = choosePackage()
     await flushPromises()
     expect(onImport).toHaveBeenCalledWith(file, expect.any(String))
@@ -640,6 +641,17 @@ describe('ProjectManagementModal', () => {
       .toContain('1')
     expect(document.querySelector('.project-drawing-list')?.textContent)
       .not.toContain('xlsx')
+  })
+
+  it.each(['zh', 'en'] as const)('localizes ZIP import validation errors (%s)', async locale => {
+    const onImport = jest.fn().mockRejectedValue(new Error('请选择非空的 ZIP 项目包。'))
+    const { modal } = createHarness([existingProject], undefined, locale, { onImport })
+    await modal.open()
+    choosePackage(new File(['bytes'], 'project.txt'))
+    await flushPromises()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      locale === 'zh' ? '请选择非空的 ZIP 项目包。' : 'Select a nonempty ZIP project package.'
+    )
   })
 
   it('allows import without existing projects or drawings', async () => {

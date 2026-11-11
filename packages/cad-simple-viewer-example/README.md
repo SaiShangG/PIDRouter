@@ -90,17 +90,20 @@ Development and deployment network settings are configured only in `.env.example
 
 Project management provides **Import project** and **Export project**. All project
 data must already be saved to the backend. The frontend transfers an opaque
-`.pidproject` ZIP file; it does not assemble projects, migrate database IDs, or
-fall back to mock data when the API is unavailable. The new backend endpoints
-below are required before real project transfer can be used.
+`.zip` project package; it does not unpack or assemble projects, migrate database
+IDs, or fall back to mock data when the API is unavailable. Import and export
+accept only `.zip` filenames (case-insensitive). The new backend endpoints below
+are required before real project transfer can be used.
 
-- `GET /api/v1/Project/{id}/export-package` returns a nonempty ZIP with
+- `POST /api/v1/Project/export-package` accepts a JSON body
+  `{ "projectId": 123 }` with `Content-Type: application/json` and returns a nonempty ZIP with
   `Content-Type: application/zip` and
-  `Content-Disposition: attachment; filename="project.pidproject"` (UTF-8
+  `Content-Disposition: attachment; filename="project.zip"` (UTF-8
   `filename*` is supported). Direct cross-origin deployments must expose
   `Content-Disposition`.
-- `POST /api/v1/Project/import-package` accepts multipart field `file` and an
-  `Idempotency-Key` header. The browser supplies the multipart boundary.
+- `POST /api/v1/Project/import-package` accepts the original ZIP package in
+  multipart field `file` and an `Idempotency-Key` header. The browser supplies
+  the multipart boundary. The backend validates and processes the archive.
   Cross-origin deployments must allow the `Idempotency-Key` header.
   Return a persisted result as JSON:
 

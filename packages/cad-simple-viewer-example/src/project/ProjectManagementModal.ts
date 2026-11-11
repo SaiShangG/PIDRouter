@@ -77,7 +77,7 @@ export class ProjectManagementModal {
     this.element.setAttribute('aria-modal', 'true')
     this.element.setAttribute('aria-labelledby', 'projectManagementTitle')
     this.packageInput.type = 'file'
-    this.packageInput.accept = '.pidproject'
+    this.packageInput.accept = '.zip'
     this.packageInput.hidden = true
     this.packageInput.setAttribute('aria-label', '选择 Project 包')
     this.packageInput.addEventListener('change', () => {

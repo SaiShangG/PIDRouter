@@ -35,25 +35,45 @@ const jsonResponse = (value: unknown, status = 201) =>
 
 describe('project package API', () => {
   it.each(['application/zip', 'application/octet-stream', 'application/x-zip-compressed'])(
-    'downloads ZIP bytes and the UTF-8 filename with %s',
+    'posts the JSON projectId and downloads ZIP bytes and the UTF-8 filename with %s',
     async type => {
       const { api, fetchMock } = createHarness()
       const content = await zipContent()
       fetchMock.mockResolvedValue(new Response(content, {
         headers: {
           'Content-Type': type,
-          'Content-Disposition': 'attachment; filename*=UTF-8\'\'%E9%A1%B9%E7%9B%AE.pidproject'
+          'Content-Disposition': 'attachment; filename*=UTF-8\'\'%E9%A1%B9%E7%9B%AE.zip'
         }
       }))
       const controller = new AbortController()
       const downloaded = await api.exportPackage(12, controller.signal)
-      expect(downloaded.fileName).toBe('项目.pidproject')
+      expect(downloaded.fileName).toBe('项目.zip')
       expect(await downloaded.blob.arrayBuffer()).toEqual(content)
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://api.example.test/api/v1/Project/12/export-package',
-        expect.objectContaining({ method: 'GET', cache: 'no-store', signal: controller.signal })
+        'http://api.example.test/api/v1/Project/export-package',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ projectId: 12 }),
+          signal: controller.signal
+        })
       )
-      expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('Accept')).toBe('application/zip')
+      const headers = new Headers(fetchMock.mock.calls[0][1]?.headers)
+      expect(headers.get('Accept')).toBe('application/zip')
+      expect(headers.get('Content-Type')).toBe('application/json')
+    }
+  )
+
+  it.each(['project.zip', 'PROJECT.ZIP'])(
+    'accepts case-insensitive ZIP download filenames: %s',
+    async fileName => {
+      const { api, fetchMock } = createHarness()
+      fetchMock.mockResolvedValue(new Response(await zipContent(), {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${fileName}"`
+        }
+      }))
+      await expect(api.exportPackage(12)).resolves.toMatchObject({ fileName })
     }
   )
 
@@ -84,14 +104,16 @@ describe('project package API', () => {
       fetchMock.mockResolvedValue(new Response(content, {
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': 'attachment; filename="project.pidproject"'
+          'Content-Disposition': 'attachment; filename="project.zip"'
         }
       }))
       await expect(api.exportPackage(12)).rejects.toThrow('未返回有效的项目包文件')
     }
   )
 
-  it.each([undefined, 'project.zip', '..\\project.pidproject', '../project.pidproject'])(
+  it.each([
+    undefined, 'project.txt', 'project.pidproject', '..\\project.zip', '../project.zip'
+  ])(
     'rejects missing or invalid package filenames: %s',
     async fileName => {
       const { api, fetchMock } = createHarness()
@@ -109,7 +131,7 @@ describe('project package API', () => {
     async action => {
       const { api, fetchMock } = createHarness()
       fetchMock.mockResolvedValue(jsonResponse({ ...result, action }))
-      const file = new File([await zipContent()], '项目.pidproject')
+      const file = new File([await zipContent()], '项目.zip')
       const controller = new AbortController()
       await expect(api.importPackage(file, 'operation-123', controller.signal))
         .resolves.toEqual({ ...result, action })
@@ -131,9 +153,27 @@ describe('project package API', () => {
     }
   )
 
+  it.each(['project.zip', 'PROJECT.ZIP'])(
+    'uploads case-insensitive ZIP packages without unpacking: %s',
+    async fileName => {
+      const { api, fetchMock } = createHarness()
+      fetchMock.mockResolvedValue(jsonResponse(result))
+      const file = new File([await zipContent()], fileName)
+      await expect(api.importPackage(file, 'request')).resolves.toEqual(result)
+      const body = fetchMock.mock.calls[0][1]?.body
+      if (!(body instanceof FormData)) throw new Error('Expected multipart body')
+      const uploaded = body.get('file')
+      if (!(uploaded instanceof File)) throw new Error('Expected uploaded file')
+      expect(uploaded.name).toBe(fileName)
+      expect(await uploaded.arrayBuffer()).toEqual(await file.arrayBuffer())
+    }
+  )
+
   it.each([
     new File(['bytes'], 'drawing.pdi'),
-    new File([], 'empty.pidproject')
+    new File(['bytes'], 'project.zip.exe'),
+    new File([], 'empty.zip'),
+    new File(['bytes'], 'project.pidproject')
   ])('rejects invalid local packages without sending a request', async file => {
     const { api, fetchMock } = createHarness()
     await expect(api.importPackage(file, 'request')).rejects.toThrow('请选择非空')
@@ -142,7 +182,7 @@ describe('project package API', () => {
 
   it('requires an idempotency key before uploading', async () => {
     const { api, fetchMock } = createHarness()
-    await expect(api.importPackage(new File(['bytes'], 'test.pidproject'), ' '))
+    await expect(api.importPackage(new File(['bytes'], 'test.zip'), ' '))
       .rejects.toThrow('请求标识不能为空')
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -161,7 +201,7 @@ describe('project package API', () => {
   ])('rejects invalid import results instead of showing success: %j', async value => {
     const { api, fetchMock } = createHarness()
     fetchMock.mockResolvedValue(jsonResponse(value))
-    await expect(api.importPackage(new File(['bytes'], 'test.pidproject'), 'request'))
+    await expect(api.importPackage(new File(['bytes'], 'test.zip'), 'request'))
       .rejects.toThrow('无效的项目导入结果')
   })
 
@@ -170,7 +210,7 @@ describe('project package API', () => {
     fetchMock.mockResolvedValue(jsonResponse({
       code: 'PACKAGE_FILE_MISSING', message: '缺少图纸文件'
     }, 422))
-    const failure = api.importPackage(new File(['bytes'], 'test.pidproject'), 'request')
+    const failure = api.importPackage(new File(['bytes'], 'test.zip'), 'request')
     await expect(failure).rejects.toMatchObject({
       status: 422, responseBody: { code: 'PACKAGE_FILE_MISSING' }
     })

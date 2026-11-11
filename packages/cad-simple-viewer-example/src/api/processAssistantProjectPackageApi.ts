@@ -43,9 +43,9 @@ export class ProcessAssistantProjectPackageApi {
       throw new Error('后台项目 ID 无效。')
     }
     const result = await this.client.requestFile(
-      'GET',
-      `/api/v1/Project/${projectId}/export-package`,
-      { headers: { Accept: 'application/zip' }, signal }
+      'POST',
+      '/api/v1/Project/export-package',
+      { body: { projectId }, headers: { Accept: 'application/zip' }, signal }
     )
     const type = result.blob.type.split(';')[0].trim().toLowerCase()
     if (!['application/zip', 'application/octet-stream', 'application/x-zip-compressed'].includes(type)) {
@@ -58,7 +58,7 @@ export class ProcessAssistantProjectPackageApi {
       throw new Error('后台未返回有效的项目包文件。')
     }
     const fileName = result.fileName?.trim()
-    if (!fileName || !/^.+\.pidproject$/i.test(fileName) || /[\\/]/.test(fileName)) {
+    if (!fileName || !/^.+\.zip$/i.test(fileName) || /[\\/]/.test(fileName)) {
       throw new Error('后台未返回有效的项目包文件名，请检查 Content-Disposition 和跨域配置。')
     }
     return { blob: result.blob, fileName }
@@ -69,8 +69,8 @@ export class ProcessAssistantProjectPackageApi {
     requestId: string,
     signal?: AbortSignal
   ): Promise<ProjectPackageImportResult> {
-    if (!/^.+\.pidproject$/i.test(file.name) || file.size === 0) {
-      throw new Error('请选择非空的 .pidproject 项目包。')
+    if (!/^.+\.zip$/i.test(file.name) || file.size === 0) {
+      throw new Error('请选择非空的 ZIP 项目包。')
     }
     if (!requestId.trim()) throw new Error('项目包导入请求标识不能为空。')
     const body = new FormData()

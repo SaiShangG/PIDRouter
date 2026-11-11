@@ -97,7 +97,7 @@ const pairs: TranslationPair[] = [
   ['项目导入完成，已覆盖替换 Project。', 'Project imported and existing Project replaced.'],
   ['项目导入完成，已新增 Project。', 'Project imported as a new Project.'],
   ['后台项目 ID 无效。', 'Invalid backend project ID.'],
-  ['请选择非空的 .pidproject 项目包。', 'Select a nonempty .pidproject package.'],
+  ['请选择非空的 ZIP 项目包。', 'Select a nonempty ZIP project package.'],
   ['项目包导入请求标识不能为空。', 'The project import request ID is required.'],
   ['后台未返回有效的项目包文件。', 'The server did not return a valid project package.'],
   ['后台未返回有效的项目包文件名，请检查 Content-Disposition 和跨域配置。', 'The server did not return a valid package filename. Check Content-Disposition and CORS settings.'],
