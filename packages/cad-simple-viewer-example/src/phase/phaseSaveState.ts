@@ -1,6 +1,6 @@
 import { isEqual } from 'lodash-es'
 
-import { type AppLocale,translate } from '../locale'
+import { type AppLocale, translate } from '../locale'
 import type { PhaseSnapshot } from './types'
 
 export type PhaseChangeKind = 'details' | 'drawing' | 'highlights' | 'devices' | 'notes' | 'order' | 'styles'

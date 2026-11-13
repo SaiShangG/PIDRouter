@@ -3543,32 +3543,32 @@ class CadViewerApp {
     const repository = this.phaseRepository
     if (!repository) return
     await this.workspaceLoading.run(translate(this.appLocale, 'loadingPhase'), async () => {
-    try {
-      this.captureLoadedPhaseState()
-      const sequence = this.phaseStore
-        .snapshot()
-        .processes.find(process => process.id === processId)
-        ?.sequences.find(item => item.id === sequenceId)
-      if (!sequence) throw new Error('Sequence was not found')
-      const phases = [...sequence.phases]
-      const currentIndex = phases.findIndex(item => item.id === phaseId)
-      if (currentIndex < 0 || targetIndex < 0 || targetIndex >= phases.length) {
-        throw new Error('Phase target index is out of range')
+      try {
+        this.captureLoadedPhaseState()
+        const sequence = this.phaseStore
+          .snapshot()
+          .processes.find(process => process.id === processId)
+          ?.sequences.find(item => item.id === sequenceId)
+        if (!sequence) throw new Error('Sequence was not found')
+        const phases = [...sequence.phases]
+        const currentIndex = phases.findIndex(item => item.id === phaseId)
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= phases.length) {
+          throw new Error('Phase target index is out of range')
+        }
+        if (currentIndex === targetIndex) return
+        for (const item of phases) this.cancelBackendPhaseSave(item.id)
+        await Promise.all(phases.map(item => this.phaseSaveTasks.get(item.id)))
+        const [phase] = phases.splice(currentIndex, 1)
+        phases.splice(targetIndex, 0, phase)
+        await repository.reorderPhases(sequenceId, phases.map(item => item.id))
+        if (this.phaseRepository !== repository) return
+        phases.forEach((item, index) => this.phaseSaveState.acceptOrder(item.id, index + 1))
+        await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
+        this.showMessage('Phase 顺序已更新', 'success')
+      } catch (error) {
+        log.error('Failed to reorder backend Phase:', error)
+        this.showMessage('Phase 排序失败', 'error')
       }
-      if (currentIndex === targetIndex) return
-      for (const item of phases) this.cancelBackendPhaseSave(item.id)
-      await Promise.all(phases.map(item => this.phaseSaveTasks.get(item.id)))
-      const [phase] = phases.splice(currentIndex, 1)
-      phases.splice(targetIndex, 0, phase)
-      await repository.reorderPhases(sequenceId, phases.map(item => item.id))
-      if (this.phaseRepository !== repository) return
-      phases.forEach((item, index) => this.phaseSaveState.acceptOrder(item.id, index + 1))
-      await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
-      this.showMessage('Phase 顺序已更新', 'success')
-    } catch (error) {
-      log.error('Failed to reorder backend Phase:', error)
-      this.showMessage('Phase 排序失败', 'error')
-    }
     })
   }
 
