@@ -71,6 +71,15 @@ describe('PhaseSaveState', () => {
     expect(new PhaseSaveState().get(phase()).saved).toBe(false)
   })
 
+  it('acknowledges order without marking unsaved Phase content as saved', () => {
+    const tracker = new PhaseSaveState()
+    const original = phase()
+    tracker.accept(original, 1)
+    original.name = 'Unsaved edit'
+    tracker.acceptOrder(original.id, 2)
+    expect(tracker.get(original, { orderIndex: 2 })).toMatchObject({ saved: false, changes: ['details'] })
+  })
+
   it('tracks device and text changes independently of highlights', () => {
     const tracker = new PhaseSaveState()
     const original = phase()

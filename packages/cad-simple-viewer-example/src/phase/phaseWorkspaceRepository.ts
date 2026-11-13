@@ -162,9 +162,20 @@ const byOrder = <T extends { orderIndex?: number; index?: number; id?: number }>
 
 export class PhaseWorkspaceRepository {
   private readonly now: () => string
+  private readonly sequenceWrites = new Map<string, Promise<void>>()
 
   constructor(private readonly options: PhaseWorkspaceRepositoryOptions) {
     this.now = options.now ?? (() => new Date().toISOString())
+  }
+
+  private runSequenceWrite<T>(sequenceId: string, write: () => Promise<T>): Promise<T> {
+    const previous = this.sequenceWrites.get(sequenceId) ?? Promise.resolve()
+    const task = previous.then(write)
+    const pending = task.then(() => undefined, () => undefined)
+    this.sequenceWrites.set(sequenceId, pending)
+    return task.finally(() => {
+      if (this.sequenceWrites.get(sequenceId) === pending) this.sequenceWrites.delete(sequenceId)
+    })
   }
 
   async load(signal?: AbortSignal): Promise<PhaseWorkspaceState> {
@@ -319,20 +330,33 @@ export class PhaseWorkspaceRepository {
     )
   }
 
-  async createPhase(
+  createPhase(input: CreateBackendPhaseInput, signal?: AbortSignal): Promise<number> {
+    return this.runSequenceWrite(input.sequenceId, () => this.createOrderedPhase(input, signal))
+  }
+
+  private async createOrderedPhase(
     input: CreateBackendPhaseInput,
     signal?: AbortSignal
   ): Promise<number> {
     const data = input.data ?? this.createEmptyPhaseData()
+    const records = await this.options.phases.list(
+      this.requireBackendId(input.sequenceId, 'Sequence'), signal
+    )
+    this.validatePhaseOrders(records)
+    const orderIndex = input.orderIndex ?? Math.max(0, ...records.map(phase => phase.orderIndex!)) + 1
+    this.requirePhaseOrder(orderIndex)
+    if (records.some(phase => phase.orderIndex === orderIndex)) {
+      throw new Error(`Phase OrderIndex ${orderIndex} already exists`)
+    }
     const phase: PhaseDto = {
       name: this.requireName(input.name, 'Phase'),
       index: this.requirePositiveInteger(input.number, 'Phase number'),
-      orderIndex: input.orderIndex ?? input.number,
+      orderIndex,
       operationId: this.requireBackendId(input.sequenceId, 'Sequence'),
       jsonData: JSON.stringify({
         ...data,
         Index: input.number,
-        OrderId: input.orderIndex ?? input.number,
+        OrderId: orderIndex,
         Name: input.name
       })
     }
@@ -347,10 +371,18 @@ export class PhaseWorkspaceRepository {
     orderIndex: number,
     signal?: AbortSignal
   ): Promise<void> {
-    return this.writePhase(sequenceId, phase, orderIndex, signal)
+    return this.runSequenceWrite(sequenceId, () => this.writePhase(sequenceId, phase, orderIndex, signal))
   }
 
-  async updatePhaseContent(
+  updatePhaseContent(
+    sequenceId: string,
+    phase: PhaseSnapshot,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return this.runSequenceWrite(sequenceId, () => this.writePhaseContent(sequenceId, phase, signal))
+  }
+
+  private async writePhaseContent(
     sequenceId: string,
     phase: PhaseSnapshot,
     signal?: AbortSignal
@@ -359,17 +391,96 @@ export class PhaseWorkspaceRepository {
       this.requireBackendId(phase.id, 'Phase'),
       signal
     )
-    const orderIndex = current.orderIndex ?? current.index ?? current.id ?? 0
+    const orderIndex = this.requirePhaseOrder(current.orderIndex)
     await this.writePhase(sequenceId, phase, orderIndex, signal)
   }
 
-  private writePhase(
+  private requirePhaseOrder(orderIndex: number | undefined): number {
+    if (!Number.isSafeInteger(orderIndex) || orderIndex! < 0) {
+      throw new Error('Phase OrderIndex is missing or invalid; repair the Sequence order first')
+    }
+    return orderIndex!
+  }
+
+  reorderPhases(sequenceId: string, phaseIds: string[], signal?: AbortSignal): Promise<void> {
+    return this.runSequenceWrite(sequenceId, () => this.writePhaseOrder(sequenceId, phaseIds, signal))
+  }
+
+  private async writePhaseOrder(
+    sequenceId: string,
+    phaseIds: string[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    const operationId = this.requireBackendId(sequenceId, 'Sequence')
+    const records = await this.options.phases.list(operationId, signal)
+    this.validatePhaseOrders(records)
+    const ids = phaseIds.map(id => this.requireBackendId(id, 'Phase'))
+    if (new Set(ids).size !== ids.length || records.length !== ids.length ||
+      records.some(record => record.id === undefined || !ids.includes(record.id))) {
+      throw new Error('Phase order must contain every Phase in the Sequence exactly once')
+    }
+    const originals = new Map(records.map(record => [record.id!, record]))
+    const ordered = ids.map(id => originals.get(id)!)
+    const withOrder = (record: PhaseDto, orderIndex: number): PhaseDto => {
+      this.requirePhaseOrder(orderIndex)
+      const data: unknown = JSON.parse(record.jsonData || '{}')
+      if (!isRecord(data)) throw new Error('Phase JSON must be an object')
+      return { ...record, orderIndex, jsonData: JSON.stringify({ ...data, OrderId: orderIndex }) }
+    }
+    const temporaryStart = Math.max(ids.length, ...records.map(record => record.orderIndex!)) + 1
+    const temporary = ordered.map((record, index) => withOrder(record, temporaryStart + index))
+    const final = ordered.map((record, index) => withOrder(record, index + 1))
+    const write = async (updates: PhaseDto[]) => {
+      for (const record of updates) {
+        await this.options.phases.update(record.id!, record, signal)
+      }
+    }
+    try {
+      await write(temporary)
+      await write(final)
+    } catch (error) {
+      try {
+        const current = await this.options.phases.list(operationId)
+        if (current.length !== records.length || current.some(record => !originals.has(record.id!))) {
+          throw new Error('Sequence membership changed during reorder')
+        }
+        const recoveryStart = Math.max(temporaryStart + ids.length,
+          ...current.map(record => this.requirePhaseOrder(record.orderIndex))) + 1
+        for (const [index, record] of current.entries()) {
+          await this.options.phases.update(record.id!, withOrder(record, recoveryStart + index))
+        }
+        for (const record of records) {
+          await this.options.phases.update(record.id!, record)
+        }
+      } catch (recoveryError) {
+        throw new Error(`Phase reorder failed and rollback failed: ${String(error)}; ${String(recoveryError)}`)
+      }
+      throw error
+    }
+  }
+
+  private validatePhaseOrders(phases: PhaseDto[]): void {
+    const orders = new Set<number>()
+    for (const phase of phases) {
+      const orderIndex = this.requirePhaseOrder(phase.orderIndex)
+      if (orders.has(orderIndex)) throw new Error(`Phase OrderIndex ${orderIndex} already exists`)
+      orders.add(orderIndex)
+    }
+  }
+
+  private async writePhase(
     sequenceId: string,
     phase: PhaseSnapshot,
     orderIndex: number,
     signal?: AbortSignal
   ): Promise<void> {
     const id = this.requireBackendId(phase.id, 'Phase')
+    this.requirePhaseOrder(orderIndex)
+    const records = await this.options.phases.list(this.requireBackendId(sequenceId, 'Sequence'), signal)
+    this.validatePhaseOrders(records)
+    if (records.some(record => record.id !== id && record.orderIndex === orderIndex)) {
+      throw new Error(`Phase OrderIndex ${orderIndex} already exists`)
+    }
     const jsonData = JSON.stringify(this.toPersistedPhaseData(phase, orderIndex))
     console.log('[Phase] Payload prepared for backend / 已准备好提交后台的阶段数据：', {
       id,
@@ -430,10 +541,13 @@ export class PhaseWorkspaceRepository {
     drawingAssets: Record<string, DrawingAssetRef>,
     signal?: AbortSignal
   ): Promise<SequenceDefinition> {
+    await this.sequenceWrites.get(String(operation.id))
     const phaseDtos = await this.options.phases.list(operation.id, signal)
     const phases = phaseDtos
       .filter(hasId)
-      .sort(byOrder)
+      .sort((left, right) =>
+        (left.orderIndex ?? Number.MAX_SAFE_INTEGER) - (right.orderIndex ?? Number.MAX_SAFE_INTEGER) ||
+        left.id - right.id)
       .map((phase, index) => this.mapPhase(phase, index, drawingAssets))
     const timestamp = this.now()
     return {

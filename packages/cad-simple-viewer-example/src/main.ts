@@ -3032,26 +3032,12 @@ class CadViewerApp {
     ))
     for (const process of workspace.processes) {
       for (const sequence of process.sequences) {
-        const localSequence = localState.processes.find(item => item.id === process.id)
-          ?.sequences.find(item => item.id === sequence.id)
-        const hasUnsavedOrder = localSequence?.phases.some((phase, index) =>
-          this.phaseSaveState.has(phase.id) &&
-          this.phaseSaveState.get(phase, { orderIndex: index + 1 }).changes.includes('order'))
         sequence.phases = sequence.phases.map((phase, index) => {
           const local = localPhases.get(phase.id)
-          if (local && this.phaseSaveState.has(local.id) && (hasUnsavedOrder || !this.phaseSaveState.get(local).saved)) return local
+          if (local && this.phaseSaveState.has(local.id) && !this.phaseSaveState.get(local).saved) return local
           this.phaseSaveState.accept(phase, index + 1)
           return phase
         })
-        if (hasUnsavedOrder && localSequence) {
-          const incoming = new Map(sequence.phases.map(phase => [phase.id, phase]))
-          const ordered = localSequence.phases.flatMap(phase => {
-            const match = incoming.get(phase.id)
-            incoming.delete(phase.id)
-            return match ? [match] : []
-          })
-          sequence.phases = [...ordered, ...incoming.values()]
-        }
       }
     }
     this.phaseStore = new PhaseWorkspaceStore({
@@ -3556,8 +3542,9 @@ class CadViewerApp {
   ): Promise<void> {
     const repository = this.phaseRepository
     if (!repository) return
+    await this.workspaceLoading.run(translate(this.appLocale, 'loadingPhase'), async () => {
     try {
-      this.cancelBackendPhaseSave(phaseId)
+      this.captureLoadedPhaseState()
       const sequence = this.phaseStore
         .snapshot()
         .processes.find(process => process.id === processId)
@@ -3568,22 +3555,21 @@ class CadViewerApp {
       if (currentIndex < 0 || targetIndex < 0 || targetIndex >= phases.length) {
         throw new Error('Phase target index is out of range')
       }
+      if (currentIndex === targetIndex) return
+      for (const item of phases) this.cancelBackendPhaseSave(item.id)
+      await Promise.all(phases.map(item => this.phaseSaveTasks.get(item.id)))
       const [phase] = phases.splice(currentIndex, 1)
       phases.splice(targetIndex, 0, phase)
-      this.phaseStore.reorderPhase(processId, sequenceId, phaseId, targetIndex)
-      this.phaseStore.persist()
-      this.phasePanel?.render()
-      await Promise.all(
-        phases.map(item =>
-          this.saveBackendPhase(processId, sequenceId, item.id)
-        )
-      )
+      await repository.reorderPhases(sequenceId, phases.map(item => item.id))
+      if (this.phaseRepository !== repository) return
+      phases.forEach((item, index) => this.phaseSaveState.acceptOrder(item.id, index + 1))
       await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
       this.showMessage('Phase 顺序已更新', 'success')
     } catch (error) {
       log.error('Failed to reorder backend Phase:', error)
       this.showMessage('Phase 排序失败', 'error')
     }
+    })
   }
 
   private async createDrawingAsset(
@@ -4735,7 +4721,7 @@ class CadViewerApp {
     this.phaseSaveState.begin(phaseId)
     this.syncPhaseContextBar()
     const task = previous.catch(() => undefined).then(async () => {
-      await repository.updatePhase(sequenceId, phase, phaseIndex + 1)
+      await repository.updatePhaseContent(sequenceId, phase)
       if (this.phaseRepository === repository) this.phaseSaveState.accept(phase, phaseIndex + 1)
     }).catch(error => {
       if (this.phaseRepository === repository) this.phaseSaveState.finish(phaseId, true)

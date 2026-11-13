@@ -2,7 +2,153 @@ import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile, PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
-  it.each([30, 0, undefined])('preserves backend Order %s when replacing Phase content', async orderIndex => {
+  const orderingRepository = (failAt?: number) => {
+    const records = [
+      { id: 20, operationId: 10, index: 2000, name: 'First', orderIndex: 1, jsonData: '{"OrderId":1,"custom":true}' },
+      { id: 21, operationId: 10, index: 2001, name: 'Second', orderIndex: 2, jsonData: '{"OrderId":2}' },
+      { id: 22, operationId: 10, index: 2002, name: 'Third', orderIndex: 3, jsonData: '{"OrderId":3}' }
+    ]
+    const phases = {
+      list: jest.fn().mockImplementation(async () => records.map(record => ({ ...record }))),
+      get: jest.fn().mockImplementation(async (id: number) => ({ ...records.find(record => record.id === id) })),
+      create: jest.fn().mockImplementation(async record => {
+        const id = Math.max(0, ...records.map(other => other.id)) + 1
+        records.push({ ...record, id })
+        return id
+      }),
+      update: jest.fn().mockImplementation(async (id: number, record) => {
+        if (phases.update.mock.calls.length === failAt) throw new Error('Network failed')
+        if (records.some(other => other.id !== id && other.orderIndex === record.orderIndex)) {
+          throw new Error('Duplicate OrderIndex')
+        }
+        records[records.findIndex(other => other.id === id)] = record
+      }),
+      delete: jest.fn()
+    }
+    const crud = { list: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() }
+    const repository = new PhaseWorkspaceRepository({
+      baseUrl: '', projectId: 1,
+      files: { list: jest.fn().mockResolvedValue([]), upload: jest.fn() },
+      procedures: { ...crud, list: jest.fn().mockResolvedValue([{ id: 1, name: 'Process' }]) },
+      operations: { ...crud, list: jest.fn().mockResolvedValue([{ id: 10, name: 'Sequence' }]) },
+      phases
+    })
+    return { repository, phases, records }
+  }
+
+  it('reorders the whole Sequence without temporary duplicates or changing Phase content', async () => {
+    const { repository, records, phases } = orderingRepository()
+    const before = records.map(record => ({ ...record }))
+    await repository.reorderPhases('10', ['22', '20', '21'])
+    expect(phases.update).toHaveBeenCalledTimes(6)
+    expect(records.map(record => record.orderIndex)).toEqual([2, 3, 1])
+    records.forEach((record, index) => {
+      expect(record).toMatchObject({ ...before[index], orderIndex: record.orderIndex, jsonData: record.jsonData })
+      expect(JSON.parse(record.jsonData)).toEqual({ ...JSON.parse(before[index].jsonData), OrderId: record.orderIndex })
+    })
+  })
+
+  it.each([2, 5])('restores original orders when reorder write %s fails', async failAt => {
+    const { repository, records } = orderingRepository(failAt)
+    const before = records.map(record => ({ ...record }))
+    await expect(repository.reorderPhases('10', ['22', '20', '21'])).rejects.toThrow('Network failed')
+    expect(records).toEqual(before)
+  })
+
+  it('reports rollback failure instead of reporting success', async () => {
+    const { repository, phases } = orderingRepository()
+    phases.update.mockRejectedValue(new Error('Offline'))
+    await expect(repository.reorderPhases('10', ['22', '20', '21']))
+      .rejects.toThrow('rollback failed')
+  })
+
+  it('loads by OrderIndex even when Phase numbers and JSON OrderId disagree', async () => {
+    const { repository, records } = orderingRepository()
+    records[0].orderIndex = 3
+    records[1].orderIndex = 1
+    records[2].orderIndex = 2
+    records.forEach(record => {
+      record.jsonData = JSON.stringify({
+        Index: record.index, OrderId: record.index, Name: record.name,
+        Comment: null, autoFlowPaths: [], flowPaths: [], deviceStates: null, textNotes: []
+      })
+    })
+    const workspace = await repository.load()
+    expect(workspace.processes[0].sequences[0].phases.map(phase => phase.id))
+      .toEqual(['21', '22', '20'])
+  })
+
+  it('serializes content saves after reorder and preserves the newly saved order', async () => {
+    const { repository, records } = orderingRepository()
+    const phase = {
+      id: '21', number: 2001, name: 'Edited', drawing: { kind: 'unassigned' as const },
+      flowState: { flowPaths: [] }, createdAt: '', updatedAt: ''
+    }
+    await Promise.all([
+      repository.reorderPhases('10', ['22', '20', '21']),
+      repository.updatePhaseContent('10', phase)
+    ])
+    expect(records[1]).toMatchObject({ id: 21, index: 2001, name: 'Edited', orderIndex: 3 })
+    expect(JSON.parse(records[1].jsonData).OrderId).toBe(3)
+  })
+
+  it('appends simultaneous new Phases with distinct orders unrelated to their numbers', async () => {
+    const { repository, records } = orderingRepository()
+    await Promise.all([
+      repository.createPhase({ sequenceId: '10', number: 6000, name: 'New' }),
+      repository.createPhase({ sequenceId: '10', number: 1000, name: 'Another' })
+    ])
+    expect(records.slice(3).map(record => [record.index, record.orderIndex])).toEqual([[6000, 4], [1000, 5]])
+  })
+
+  it('starts a new Sequence at OrderIndex 1', async () => {
+    const { repository, records } = orderingRepository()
+    records.splice(0)
+    const id = await repository.createPhase({ sequenceId: '10', number: 6000, name: 'New' })
+    expect(records[0]).toMatchObject({ id, index: 6000, orderIndex: 1 })
+    expect(JSON.parse(records[0].jsonData).OrderId).toBe(1)
+  })
+
+  it('rejects duplicate new or explicit order writes before submitting', async () => {
+    const { repository, phases } = orderingRepository()
+    await expect(repository.createPhase({ sequenceId: '10', number: 6000, name: 'New', orderIndex: 2 }))
+      .rejects.toThrow('already exists')
+    await expect(repository.updatePhase('10', {
+      id: '21', number: 2001, name: 'Edited', drawing: { kind: 'unassigned' },
+      flowState: { flowPaths: [] }, createdAt: '', updatedAt: ''
+    }, 1)).rejects.toThrow('already exists')
+    expect(phases.create).not.toHaveBeenCalled()
+    expect(phases.update).not.toHaveBeenCalled()
+  })
+
+  it.each([undefined, -1, 1.5, Number.NaN])('rejects invalid stored OrderIndex %s before writing', async orderIndex => {
+    const { repository, phases, records } = orderingRepository()
+    phases.list.mockResolvedValue([{ ...records[0], orderIndex }])
+    await expect(repository.createPhase({ sequenceId: '10', number: 6000, name: 'New' }))
+      .rejects.toThrow('missing or invalid')
+    expect(phases.create).not.toHaveBeenCalled()
+    expect(phases.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects duplicate stored orders before reordering or creating', async () => {
+    const { repository, phases, records } = orderingRepository()
+    records[1].orderIndex = 1
+    await expect(repository.reorderPhases('10', ['22', '20', '21'])).rejects.toThrow('already exists')
+    await expect(repository.createPhase({ sequenceId: '10', number: 6000, name: 'New' }))
+      .rejects.toThrow('already exists')
+    expect(phases.create).not.toHaveBeenCalled()
+    expect(phases.update).not.toHaveBeenCalled()
+  })
+
+  it.each([['20', '20', '22'], ['20', '21'], ['20', '21', '99']])(
+    'rejects invalid reorder membership before writing (%s)', async (...ids) => {
+      const { repository, phases } = orderingRepository()
+      await expect(repository.reorderPhases('10', ids)).rejects.toThrow('exactly once')
+      expect(phases.update).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([30, 0])('preserves backend Order %s when replacing Phase content', async orderIndex => {
     const records = [
       { id: 20, index: 7000, orderIndex: 10, name: 'Source' },
       { id: 21, index: 7005, orderIndex: 20, name: 'Other' },
@@ -62,7 +208,7 @@ describe('PhaseWorkspaceRepository', () => {
 
   it('round-trips Tank ownership through backend Phase JSON', async () => {
     const phases = {
-      list: jest.fn(), get: jest.fn(), create: jest.fn(),
+      list: jest.fn().mockResolvedValue([]), get: jest.fn(), create: jest.fn(),
       update: jest.fn().mockResolvedValue(undefined), delete: jest.fn()
     }
     const repository = new PhaseWorkspaceRepository({
@@ -96,7 +242,7 @@ describe('PhaseWorkspaceRepository', () => {
 
   it('persists the drawing with PUT after creating a Phase', async () => {
     const phases = {
-      list: jest.fn(),
+      list: jest.fn().mockResolvedValue([{ id: 19, index: 6000, orderIndex: 7 }]),
       get: jest.fn(),
       create: jest.fn().mockResolvedValue(20),
       update: jest.fn().mockResolvedValue(undefined),
@@ -130,7 +276,7 @@ describe('PhaseWorkspaceRepository', () => {
 
     await expect(repository.createPhase({
       sequenceId: '10',
-      number: 1,
+      number: 6010,
       name: 'Transfer',
       data: repository.createPhaseData(undefined, {
         fileId: 5,
@@ -145,8 +291,8 @@ describe('PhaseWorkspaceRepository', () => {
       undefined
     )
     expect(JSON.parse(createdPhase.jsonData)).toEqual({
-      Index: 1,
-      OrderId: 1,
+      Index: 6010,
+      OrderId: 8,
       Name: 'Transfer',
       Comment: null,
       drawing: { fileId: 5, displayName: 'Supply PID' },
@@ -465,7 +611,7 @@ describe('PhaseWorkspaceRepository', () => {
 
   it('writes v2 Phase data and protects unsafe persisted overlays', async () => {
     const phases = {
-      list: jest.fn(),
+      list: jest.fn().mockResolvedValue([]),
       get: jest.fn(),
       create: jest.fn(),
       update: jest.fn().mockResolvedValue(undefined),

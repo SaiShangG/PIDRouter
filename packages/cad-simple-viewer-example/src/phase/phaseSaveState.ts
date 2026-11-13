@@ -48,6 +48,10 @@ export class PhaseSaveState {
     this.stylesFailed = false
   }
 
+  acceptOrder(phaseId: string, orderIndex: number): void {
+    this.savedOrder.set(phaseId, orderIndex)
+  }
+
   beginStyles(): void {
     this.stylesSaving++
     this.stylesFailed = false
