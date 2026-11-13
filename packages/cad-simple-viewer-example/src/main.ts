@@ -3108,6 +3108,7 @@ class CadViewerApp {
   }
 
   private async copyWorkspacePhase(request: CopyPhaseRequest) {
+    let replacementSaved = false
     try {
       this.captureLoadedPhaseState()
       if (request.mode === 'replace') {
@@ -3132,14 +3133,11 @@ class CadViewerApp {
             request.targetSequenceId,
             replacement
           )
-          if (wasLoaded) this.invalidateLoadedPhaseBinding()
+          replacementSaved = true
+          if (wasLoaded) this.invalidateLoadedPhaseBinding(true)
           this.phaseStore.replacePhase(request.processId, request.targetSequenceId, replacement)
           this.phaseSaveState.accept(replacement, targetIndex + 1)
-          await this.reloadBackendWorkspace(
-            request.processId,
-            request.targetSequenceId,
-            request.targetPhaseId
-          )
+          this.phaseStore.persist()
         } else {
           this.phaseStore.copyPhaseOver(
             request.processId,
@@ -3148,7 +3146,7 @@ class CadViewerApp {
             request.targetSequenceId,
             request.targetPhaseId
           )
-          if (wasLoaded) this.invalidateLoadedPhaseBinding()
+          if (wasLoaded) this.invalidateLoadedPhaseBinding(true)
           this.phaseStore.persist()
         }
         await this.activateWorkspacePhase(
@@ -3199,6 +3197,12 @@ class CadViewerApp {
       this.showMessage(`Phase ${phase.number} copied`, 'success')
     } catch (error) {
       log.error('Failed to copy phase:', error)
+      if (replacementSaved) {
+        this.phasePanel?.render()
+        this.syncPhaseContextBar()
+        this.showMessage(translate(this.appLocale, 'phaseSavedRefreshFailed'), 'error')
+        return
+      }
       this.showMessage(String(error), 'error')
       throw error
     }
@@ -3560,16 +3564,57 @@ class CadViewerApp {
         await Promise.all(phases.map(item => this.phaseSaveTasks.get(item.id)))
         const [phase] = phases.splice(currentIndex, 1)
         phases.splice(targetIndex, 0, phase)
-        await repository.reorderPhases(sequenceId, phases.map(item => item.id))
+        await repository.reorderPhases(sequenceId, phases.map(item => item.id), undefined,
+          sequence.phases.map(item => item.id))
         if (this.phaseRepository !== repository) return
+        this.phaseStore.reorderPhase(processId, sequenceId, phaseId, targetIndex)
         phases.forEach((item, index) => this.phaseSaveState.acceptOrder(item.id, index + 1))
-        await this.reloadBackendWorkspace(processId, sequenceId, phaseId)
-        this.showMessage('Phase 顺序已更新', 'success')
+        this.phaseStore.persist()
+        this.phasePanel?.render()
+        this.syncPhaseContextBar()
+        this.showMessage(translate(this.appLocale, 'phaseOrderUpdated'), 'success')
       } catch (error) {
         log.error('Failed to reorder backend Phase:', error)
-        this.showMessage('Phase 排序失败', 'error')
+        if (this.phaseRepository !== repository) return
+        try {
+          await this.reloadBackendSequence(processId, sequenceId)
+          this.showMessage(translate(this.appLocale, 'phaseOrderFailed'), 'error')
+        } catch (refreshError) {
+          log.error('Failed to refresh Sequence after reorder failure:', refreshError)
+          this.showMessage(translate(this.appLocale, 'phaseOrderRefreshFailed'), 'error')
+        }
       }
     })
+  }
+
+  private async reloadBackendSequence(processId: string, sequenceId: string): Promise<void> {
+    const repository = this.phaseRepository
+    if (!repository) return
+    const drawingAssets = this.phaseStore.snapshot().drawingAssets
+    const incoming = await repository.loadSequencePhases(sequenceId, drawingAssets)
+    if (this.phaseRepository !== repository) return
+    const state = this.phaseStore.snapshot()
+    const sequence = state.processes.find(process => process.id === processId)
+      ?.sequences.find(item => item.id === sequenceId)
+    if (!sequence) return
+    const localPhases = new Map(sequence.phases.map(phase => [phase.id, phase]))
+    sequence.phases = incoming.map((phase, index) => {
+      const local = localPhases.get(phase.id)
+      const keepLocal = local && this.phaseSaveState.has(local.id) && !this.phaseSaveState.get(local).saved
+      if (keepLocal) this.phaseSaveState.acceptOrder(phase.id, index + 1)
+      else this.phaseSaveState.accept(phase, index + 1)
+      return keepLocal ? local : phase
+    })
+    if (!sequence.phases.some(phase => phase.id === sequence.activePhaseId)) {
+      sequence.activePhaseId = sequence.phases[0]?.id
+    }
+    for (const [id, asset] of Object.entries(drawingAssets)) {
+      if (!state.drawingAssets[id]) state.drawingAssets[id] = asset
+    }
+    this.phaseStore = new PhaseWorkspaceStore(state)
+    this.phaseStore.persist()
+    this.phasePanel?.render()
+    this.syncPhaseContextBar()
   }
 
   private async createDrawingAsset(
@@ -5170,7 +5215,7 @@ class CadViewerApp {
     }
   }
 
-  private invalidateLoadedPhaseBinding() {
+  private invalidateLoadedPhaseBinding(keepDrawing = false) {
     this.brushHighlightFeature?.suspend()
     this.manualHighlightRender.cancel()
     this.manualCorrections.clearHistory()
@@ -5179,7 +5224,7 @@ class CadViewerApp {
     this.tankOptions = []
     this.phasePanel?.resetTankSelection()
     this.loadedPhase = undefined
-    this.loadedDrawingAssetId = undefined
+    if (!keepDrawing) this.loadedDrawingAssetId = undefined
     this.pendingPhase = undefined
     this.phaseActivationToken++
     this.syncManualCorrectionControls()

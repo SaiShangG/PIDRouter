@@ -2,7 +2,7 @@ import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { createDefaultPresentationProfile, PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 
 describe('PhaseWorkspaceRepository', () => {
-  const orderingRepository = (failAt?: number) => {
+  const orderingRepository = (failAt?: number, failAfterWrite = false) => {
     const records = [
       { id: 20, operationId: 10, index: 2000, name: 'First', orderIndex: 1, jsonData: '{"OrderId":1,"custom":true}' },
       { id: 21, operationId: 10, index: 2001, name: 'Second', orderIndex: 2, jsonData: '{"OrderId":2}' },
@@ -17,11 +17,12 @@ describe('PhaseWorkspaceRepository', () => {
         return id
       }),
       update: jest.fn().mockImplementation(async (id: number, record) => {
-        if (phases.update.mock.calls.length === failAt) throw new Error('Network failed')
+        if (!failAfterWrite && phases.update.mock.calls.length === failAt) throw new Error('Network failed')
         if (records.some(other => other.id !== id && other.orderIndex === record.orderIndex)) {
           throw new Error('Duplicate OrderIndex')
         }
         records[records.findIndex(other => other.id === id)] = record
+        if (failAfterWrite && phases.update.mock.calls.length === failAt) throw new Error('Response lost')
       }),
       delete: jest.fn()
     }
@@ -36,11 +37,12 @@ describe('PhaseWorkspaceRepository', () => {
     return { repository, phases, records }
   }
 
-  it('reorders the whole Sequence without temporary duplicates or changing Phase content', async () => {
+  it('reorders only changed Phases without temporary duplicates or changing content', async () => {
     const { repository, records, phases } = orderingRepository()
     const before = records.map(record => ({ ...record }))
     await repository.reorderPhases('10', ['22', '20', '21'])
-    expect(phases.update).toHaveBeenCalledTimes(6)
+    expect(phases.list).toHaveBeenCalledTimes(1)
+    expect(phases.update).toHaveBeenCalledTimes(4)
     expect(records.map(record => record.orderIndex)).toEqual([2, 3, 1])
     records.forEach((record, index) => {
       expect(record).toMatchObject({ ...before[index], orderIndex: record.orderIndex, jsonData: record.jsonData })
@@ -48,18 +50,89 @@ describe('PhaseWorkspaceRepository', () => {
     })
   })
 
-  it.each([2, 5])('restores original orders when reorder write %s fails', async failAt => {
+  it.each([1, 2, 3, 4])('restores original orders when reorder write %s fails', async failAt => {
     const { repository, records } = orderingRepository(failAt)
     const before = records.map(record => ({ ...record }))
     await expect(repository.reorderPhases('10', ['22', '20', '21'])).rejects.toThrow('Network failed')
     expect(records).toEqual(before)
   })
 
+  it.each([1, 2, 3, 4])('recovers when PUT %s commits but its response is lost', async failAt => {
+    const { repository, records } = orderingRepository(failAt, true)
+    const before = records.map(record => ({ ...record }))
+    await expect(repository.reorderPhases('10', ['22', '20', '21'])).rejects.toThrow('Response lost')
+    expect(records).toEqual(before)
+  })
+
+  it.each([[4, 2, 4], [2, 4, 4], [70, 0, 72]])(
+    'moves Phase %s to %s in a 71-Phase Sequence with %s PUTs', async (from, to, writes) => {
+      const { repository, records, phases } = orderingRepository()
+      records.splice(0, records.length, ...Array.from({ length: 71 }, (_, index) => ({
+        id: index + 20, operationId: 10, index: 2000 + index,
+        name: `Phase ${index}`, orderIndex: index + 1, jsonData: JSON.stringify({ OrderId: index + 1 })
+      })))
+      const ids = records.map(record => String(record.id))
+      const [moved] = ids.splice(from, 1)
+      ids.splice(to, 0, moved)
+      await repository.reorderPhases('10', ids)
+      expect(phases.list).toHaveBeenCalledTimes(1)
+      expect(phases.update).toHaveBeenCalledTimes(writes)
+      expect([...records].sort((left, right) => left.orderIndex - right.orderIndex).map(record => String(record.id)))
+        .toEqual(ids)
+      expect(phases.update.mock.calls.every(([id]) => id >= Math.min(from, to) + 20 && id <= Math.max(from, to) + 20)).toBe(true)
+    }
+  )
+
+  it('refreshes only the requested Sequence in one list request', async () => {
+    const { repository, phases, records } = orderingRepository()
+    records.forEach(record => {
+      record.jsonData = JSON.stringify({
+        Index: record.index, OrderId: record.orderIndex, Name: record.name,
+        Comment: null, autoFlowPaths: [], flowPaths: [], deviceStates: null, textNotes: []
+      })
+    })
+    const loaded = await repository.loadSequencePhases('10', {})
+    expect(loaded.map(phase => phase.id)).toEqual(['20', '21', '22'])
+    expect(phases.list).toHaveBeenCalledTimes(1)
+    expect(phases.list).toHaveBeenCalledWith(10, undefined)
+    expect(phases.get).not.toHaveBeenCalled()
+    expect(phases.update).not.toHaveBeenCalled()
+  })
+
   it('reports rollback failure instead of reporting success', async () => {
     const { repository, phases } = orderingRepository()
+    const update = phases.update.getMockImplementation()!
+    await update(22, { id: 22, operationId: 10, index: 2002, name: 'Third', orderIndex: 4, jsonData: '{"OrderId":4}' })
+    phases.list.mockResolvedValueOnce([
+      { id: 20, orderIndex: 1 }, { id: 21, orderIndex: 2 }, { id: 22, orderIndex: 3 }
+    ])
     phases.update.mockRejectedValue(new Error('Offline'))
     await expect(repository.reorderPhases('10', ['22', '20', '21']))
       .rejects.toThrow('rollback failed')
+  })
+
+  it.each([['20', '22', '21'], ['21', '20', '22']])('swaps neighbors using only three PUTs (%s)', async (...ids) => {
+    const { repository, records, phases } = orderingRepository()
+    records.forEach(record => { record.orderIndex *= 10 })
+    await repository.reorderPhases('10', ids)
+    expect(phases.update).toHaveBeenCalledTimes(3)
+    expect([...records].sort((left, right) => left.orderIndex - right.orderIndex).map(record => String(record.id))).toEqual(ids)
+    expect(records.map(record => record.orderIndex).sort((left, right) => left - right)).toEqual([10, 20, 30])
+    const unchanged = ids.find((id, index) => id === ['20', '21', '22'][index])
+    expect(phases.update.mock.calls.some(([id]) => String(id) === unchanged)).toBe(false)
+  })
+
+  it('does not write when the requested order is unchanged', async () => {
+    const { repository, phases } = orderingRepository()
+    await repository.reorderPhases('10', ['20', '21', '22'])
+    expect(phases.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale frontend order before writing', async () => {
+    const { repository, phases } = orderingRepository()
+    await expect(repository.reorderPhases('10', ['22', '20', '21'], undefined, ['21', '20', '22']))
+      .rejects.toThrow('refresh before retrying')
+    expect(phases.update).not.toHaveBeenCalled()
   })
 
   it('loads by OrderIndex even when Phase numbers and JSON OrderId disagree', async () => {
@@ -187,6 +260,8 @@ describe('PhaseWorkspaceRepository', () => {
     const target = sequence.phases.find(phase => phase.id === '22')!
     const draft = new PhaseWorkspaceStore(before)
     const replacement = draft.copyPhaseOver('1', '10', '20', '10', target.id)
+    phases.get.mockClear()
+    phases.list.mockClear()
     await repository.updatePhaseContent('10', replacement)
 
     expect(phases.get).toHaveBeenCalledWith(22, undefined)
@@ -194,6 +269,11 @@ describe('PhaseWorkspaceRepository', () => {
     const payload = phases.update.mock.calls[0][1]
     expect(payload).toMatchObject({ id: 22, index: 7011, orderIndex: orderIndex ?? 7011, name: 'Target' })
     expect(JSON.parse(payload.jsonData).OrderId).toBe(orderIndex ?? 7011)
+    const activated = await repository.loadPhase(target.id, before.drawingAssets, sequence.phases.indexOf(target))
+    expect(activated).toMatchObject({ id: target.id, name: target.name, number: target.number })
+    expect(phases.get).toHaveBeenCalledTimes(2)
+    expect(phases.list).toHaveBeenCalledTimes(1)
+    expect(phases.list).toHaveBeenCalledWith(10, undefined)
     const after = await repository.load()
     expect(after.processes[0].sequences[0].phases.map(phase => phase.id))
       .toEqual(sequence.phases.map(phase => phase.id))

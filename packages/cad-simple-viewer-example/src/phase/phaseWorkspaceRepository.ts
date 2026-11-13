@@ -402,14 +402,15 @@ export class PhaseWorkspaceRepository {
     return orderIndex!
   }
 
-  reorderPhases(sequenceId: string, phaseIds: string[], signal?: AbortSignal): Promise<void> {
-    return this.runSequenceWrite(sequenceId, () => this.writePhaseOrder(sequenceId, phaseIds, signal))
+  reorderPhases(sequenceId: string, phaseIds: string[], signal?: AbortSignal, expectedPhaseIds?: string[]): Promise<void> {
+    return this.runSequenceWrite(sequenceId, () => this.writePhaseOrder(sequenceId, phaseIds, signal, expectedPhaseIds))
   }
 
   private async writePhaseOrder(
     sequenceId: string,
     phaseIds: string[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    expectedPhaseIds?: string[]
   ): Promise<void> {
     const operationId = this.requireBackendId(sequenceId, 'Sequence')
     const records = await this.options.phases.list(operationId, signal)
@@ -419,6 +420,11 @@ export class PhaseWorkspaceRepository {
       records.some(record => record.id === undefined || !ids.includes(record.id))) {
       throw new Error('Phase order must contain every Phase in the Sequence exactly once')
     }
+    const sorted = [...records].sort((left, right) => left.orderIndex! - right.orderIndex!)
+    if (expectedPhaseIds && (expectedPhaseIds.length !== sorted.length ||
+      sorted.some((record, index) => String(record.id) !== expectedPhaseIds[index]))) {
+      throw new Error('Sequence order changed; refresh before retrying')
+    }
     const originals = new Map(records.map(record => [record.id!, record]))
     const ordered = ids.map(id => originals.get(id)!)
     const withOrder = (record: PhaseDto, orderIndex: number): PhaseDto => {
@@ -427,31 +433,44 @@ export class PhaseWorkspaceRepository {
       if (!isRecord(data)) throw new Error('Phase JSON must be an object')
       return { ...record, orderIndex, jsonData: JSON.stringify({ ...data, OrderId: orderIndex }) }
     }
-    const temporaryStart = Math.max(ids.length, ...records.map(record => record.orderIndex!)) + 1
-    const temporary = ordered.map((record, index) => withOrder(record, temporaryStart + index))
-    const final = ordered.map((record, index) => withOrder(record, index + 1))
-    const write = async (updates: PhaseDto[]) => {
-      for (const record of updates) {
-        await this.options.phases.update(record.id!, record, signal)
+    const final = ordered.map((record, index) => withOrder(record, sorted[index].orderIndex!))
+      .filter(record => record.orderIndex !== originals.get(record.id!)!.orderIndex)
+    if (!final.length) return
+    const applyOrders = async (current: PhaseDto[], updates: PhaseDto[], writeSignal?: AbortSignal) => {
+      const occupied = new Map(current.map(record => [record.orderIndex!, record.id!]))
+      const positions = new Map(current.map(record => [record.id!, record.orderIndex!]))
+      const pending = new Map(updates.map(record => [record.id!, record]))
+      const temporaryOrder = this.requirePhaseOrder(Math.max(...current.map(record => record.orderIndex!),
+        ...updates.map(record => record.orderIndex!)) + 1)
+      const write = async (record: PhaseDto) => {
+        await this.options.phases.update(record.id!, record, writeSignal)
+        occupied.delete(positions.get(record.id!)!)
+        occupied.set(record.orderIndex!, record.id!)
+        positions.set(record.id!, record.orderIndex!)
+      }
+      while (pending.size) {
+        const available = [...pending.values()].find(record => !occupied.has(record.orderIndex!))
+        if (available) {
+          await write(available)
+          pending.delete(available.id!)
+        } else {
+          const record = pending.values().next().value!
+          await write(withOrder(record, temporaryOrder))
+        }
       }
     }
     try {
-      await write(temporary)
-      await write(final)
+      await applyOrders(records, final, signal)
     } catch (error) {
       try {
         const current = await this.options.phases.list(operationId)
         if (current.length !== records.length || current.some(record => !originals.has(record.id!))) {
           throw new Error('Sequence membership changed during reorder')
         }
-        const recoveryStart = Math.max(temporaryStart + ids.length,
-          ...current.map(record => this.requirePhaseOrder(record.orderIndex))) + 1
-        for (const [index, record] of current.entries()) {
-          await this.options.phases.update(record.id!, withOrder(record, recoveryStart + index))
-        }
-        for (const record of records) {
-          await this.options.phases.update(record.id!, record)
-        }
+        this.validatePhaseOrders(current)
+        const restore = current.filter(record => record.orderIndex !== originals.get(record.id!)!.orderIndex)
+          .map(record => withOrder(record, originals.get(record.id!)!.orderIndex!))
+        if (restore.length) await applyOrders(current, restore)
       } catch (recoveryError) {
         throw new Error(`Phase reorder failed and rollback failed: ${String(error)}; ${String(recoveryError)}`)
       }
@@ -541,14 +560,7 @@ export class PhaseWorkspaceRepository {
     drawingAssets: Record<string, DrawingAssetRef>,
     signal?: AbortSignal
   ): Promise<SequenceDefinition> {
-    await this.sequenceWrites.get(String(operation.id))
-    const phaseDtos = await this.options.phases.list(operation.id, signal)
-    const phases = phaseDtos
-      .filter(hasId)
-      .sort((left, right) =>
-        (left.orderIndex ?? Number.MAX_SAFE_INTEGER) - (right.orderIndex ?? Number.MAX_SAFE_INTEGER) ||
-        left.id - right.id)
-      .map((phase, index) => this.mapPhase(phase, index, drawingAssets))
+    const phases = await this.loadSequencePhases(String(operation.id), drawingAssets, signal)
     const timestamp = this.now()
     return {
       id: String(operation.id),
@@ -559,6 +571,20 @@ export class PhaseWorkspaceRepository {
       createdAt: timestamp,
       updatedAt: timestamp
     }
+  }
+
+  async loadSequencePhases(
+    sequenceId: string,
+    drawingAssets: Record<string, DrawingAssetRef>,
+    signal?: AbortSignal
+  ): Promise<PhaseSnapshot[]> {
+    await this.sequenceWrites.get(sequenceId)
+    const phaseDtos = await this.options.phases.list(this.requireBackendId(sequenceId, 'Sequence'), signal)
+    return phaseDtos.filter(hasId)
+      .sort((left, right) =>
+        (left.orderIndex ?? Number.MAX_SAFE_INTEGER) - (right.orderIndex ?? Number.MAX_SAFE_INTEGER) ||
+        left.id - right.id)
+      .map((phase, index) => this.mapPhase(phase, index, drawingAssets))
   }
 
   private mapPhase(
