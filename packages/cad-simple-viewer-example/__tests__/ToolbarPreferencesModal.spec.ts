@@ -118,7 +118,7 @@ describe('ToolbarPreferencesModal', () => {
     const [viewer, phase, development] = sections
     expect(viewer.open).toBe(true)
     expect(phase.open).toBe(false)
-    expect(phase.querySelectorAll('input')).toHaveLength(1)
+    expect(phase.querySelectorAll('input')).toHaveLength(3)
     expect(phase.querySelector('input[name="phaseMoveEnabled"]')).not.toBeNull()
     expect(development.open).toBe(false)
     expect(viewer.querySelector('input[name="valveDebugEnabled"]')).toBeNull()
@@ -174,6 +174,44 @@ describe('ToolbarPreferencesModal', () => {
     modal.open(defaultToolbarPreferences(), [])
     modal.element.querySelector<HTMLButtonElement>('.toolbar-preferences-save')!.click()
     expect(modal.element.hidden).toBe(false)
+    expect(modal.element.querySelector<HTMLElement>('[role="alert"]')!.hidden).toBe(false)
+  })
+
+  it.each(['zh', 'en'] as const)('shows both Phase copy modes and applies them immediately in %s', locale => {
+    const change = jest.fn()
+    const save = jest.fn()
+    const modal = new ToolbarPreferencesModal(() => locale, item => item.id, save, change)
+    modal.open(defaultToolbarPreferences(), [])
+    const fieldset = modal.element.querySelector<HTMLFieldSetElement>('.toolbar-preferences-copy-mode')!
+    expect(fieldset.closest('details')?.querySelector('h3')?.textContent)
+      .toBe(locale === 'zh' ? 'Phase 功能配置' : 'Phase feature settings')
+    const layout = fieldset.querySelector('.toolbar-preferences-copy-layout')!
+    const title = layout.querySelector('.toolbar-preferences-copy-title')!
+    const options = layout.querySelector('.toolbar-preferences-copy-options')!
+    expect(title.textContent).toBe(locale === 'zh' ? 'Phase 复制方式' : 'Phase copy mode')
+    expect(fieldset.getAttribute('aria-labelledby')).toBe(title.id)
+    expect(title.nextElementSibling).toBe(options)
+    expect(options.querySelectorAll('input[type="radio"]')).toHaveLength(2)
+    expect(fieldset.textContent).toContain(locale === 'zh' ? '复制到已有 Phase' : 'Copy to an existing Phase')
+    expect(fieldset.textContent).toContain(locale === 'zh' ? '复制为新 Phase' : 'Copy as a new Phase')
+    expect(fieldset.querySelector<HTMLInputElement>('[value="replace"]')!.checked).toBe(true)
+    fieldset.querySelector<HTMLInputElement>('[value="create"]')!.click()
+    expect(change).toHaveBeenCalledWith('create')
+    expect(save).not.toHaveBeenCalled()
+    expect(modal.element.hidden).toBe(false)
+  })
+
+  it('disables copy mode changes while copying and restores the selection after storage failure', () => {
+    const change = jest.fn(() => { throw new Error('Storage full') })
+    let busy = true
+    const modal = new ToolbarPreferencesModal(() => 'en', item => item.id, jest.fn(), change, () => busy)
+    modal.open(defaultToolbarPreferences(), [])
+    expect(modal.element.querySelector<HTMLFieldSetElement>('.toolbar-preferences-copy-mode')!.disabled).toBe(true)
+    modal.close()
+    busy = false
+    modal.open(defaultToolbarPreferences(), [])
+    modal.element.querySelector<HTMLInputElement>('input[name="phaseCopyMode"][value="create"]')!.click()
+    expect(modal.element.querySelector<HTMLInputElement>('input[name="phaseCopyMode"][value="replace"]')!.checked).toBe(true)
     expect(modal.element.querySelector<HTMLElement>('[role="alert"]')!.hidden).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import type {
   DeviceState,
   DeviceStateStyleDefinition,
   DeviceStyleDefinition,
+  ManualHighlightAddition,
   ManualHighlightCorrections,
   MergedDeviceState,
   PhasePidOverlayDeviceState,
@@ -39,6 +40,34 @@ export const resolveDeviceStateDefinition = (
     if (state) return { state, deviceType: device.name }
   }
   return undefined
+}
+
+export const resolveManualHighlightDeviceState = (
+  device: DeviceStyleDefinition | undefined,
+  highlightStyleRefId: string
+): ManualHighlightAddition['deviceState'] => {
+  const state = device?.states.find(candidate =>
+    candidate.enabled && candidate.id === highlightStyleRefId)
+  return device && state
+    ? { stateKey: state.key, deviceType: device.name }
+    : undefined
+}
+
+export const enrichManualHighlightDeviceStates = (
+  corrections: ManualHighlightCorrections | undefined,
+  resolveDevice: (handleKey: string) => DeviceStyleDefinition | undefined
+): ManualHighlightCorrections | undefined => {
+  if (!corrections) return undefined
+  let changed = false
+  const additions = corrections.additions.map(addition => {
+    if (addition.deviceState) return addition
+    const deviceState = resolveManualHighlightDeviceState(
+      resolveDevice(addition.handleKey), addition.highlightStyleRefId)
+    if (!deviceState) return addition
+    changed = true
+    return { ...addition, deviceState }
+  })
+  return changed ? { ...corrections, additions } : corrections
 }
 
 export const mergeHighlightedValveStates = (

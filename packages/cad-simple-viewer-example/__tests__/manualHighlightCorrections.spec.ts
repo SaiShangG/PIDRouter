@@ -1,13 +1,16 @@
+import { buildFlowGraphIndex, resolveConfiguredDeviceMatch } from '../src/flow/flowGraph'
 import {
   ManualHighlightCorrectionState,
   ManualHighlightCorrectionsValidationError,
   normalizeManualHighlightCorrections
 } from '../src/phase/manualHighlightCorrections'
+import { enrichManualHighlightDeviceStates } from '../src/phase/phaseDeviceStateRuntime'
 import { parsePhasePidOverlay } from '../src/phase/phasePidOverlay'
 import { PhaseSaveState } from '../src/phase/phaseSaveState'
 import { PhaseWorkspaceRepository } from '../src/phase/phaseWorkspaceRepository'
 import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 import type {
+  DeviceStyleDefinition,
   ManualHighlightCorrections,
   PhaseSnapshot
 } from '../src/phase/types'
@@ -71,6 +74,74 @@ const overlay = (manualCorrections: unknown) => ({
 })
 
 describe('manual highlight correction data', () => {
+  it('restores the supplied 11 manual valves without treating 7 utility highlights as devices', async () => {
+    const valveHandles = [
+      '6595671', '6595355', '6601569', '6620025', '6597448', '6613991',
+      '6932627', '6932415', '6618487', '6618368', '6616925'
+    ]
+    const utilityHandles = [
+      '6593787', '6616957', '6616958', '6593778', '6616959', '6593784', '6607745'
+    ]
+    const device: DeviceStyleDefinition = {
+      id: 'valve', name: 'Valve', order: 0,
+      states: [{
+        id: 'builtin:valve:OPEN', key: 'OPEN', displayName: 'Open', enabled: true,
+        color: 0x00ff00, lineWidthPx: 3, opacity: 1,
+        flowBehavior: 'conducting', autoHighlightFlow: true, order: 0
+      }]
+    }
+    const graph = buildFlowGraphIndex({
+      Areas: [{
+        ControlModules: valveHandles.map(handle => ({ CadHandle: Number(handle), Name: 'Valve' })),
+        ContainCadEntityHandles: [...valveHandles, ...utilityHandles].map(Number)
+      }],
+      Map: {
+        Graph: {
+          Vertices: [...valveHandles, ...utilityHandles].map(Number),
+          Edges: [{ Source: Number(valveHandles[0]), Target: Number(utilityHandles[0]) }]
+        }
+      }
+    })
+    const phase = firstPhase(createContext().store)
+    phase.manualCorrections = {
+      additions: [
+        ...valveHandles.map(handle => ({ handle, highlightStyleRefId: 'builtin:valve:OPEN' })),
+        ...utilityHandles.map(handle => ({ handle, highlightStyleRefId: 'builtin:utility:1' }))
+      ].map(({ handle, highlightStyleRefId }) => ({
+        handleKey: BigInt(handle).toString(16).toUpperCase(), highlightStyleRefId
+      })),
+      exclusions: []
+    }
+    const { repository, phases } = createRepository()
+    const original = repository.createPhaseData(phase)
+    expect(original.mergedDeviceStates).toEqual([])
+    expect(graph.primaryHandleByCadHandle.get(BigInt(utilityHandles[0]).toString(16).toUpperCase()))
+      .toBe(BigInt(valveHandles[0]).toString(16).toUpperCase())
+    phase.manualCorrections = enrichManualHighlightDeviceStates(
+      phase.manualCorrections,
+      handleKey => resolveConfiguredDeviceMatch(graph, handleKey, [device])?.device
+    )
+    const payload = repository.createPhaseData(phase)
+    expect(payload.mergedDeviceStates).toEqual(valveHandles.map(handleKey => ({
+      handleKey, stateKey: 'OPEN', deviceType: 'Valve',
+      highlightStyleRefId: 'builtin:valve:OPEN', source: 'manual'
+    })))
+    expect(payload.deviceStates).toBeNull()
+    expect(phase.flowState.deviceStates).toBeUndefined()
+    expect(payload.flowPaths).toEqual(original.flowPaths)
+    expect(payload.flowPaths).toHaveLength(18)
+    expect(payload.manualCorrections?.additions.slice(11).every(addition => !addition.deviceState))
+      .toBe(true)
+    phases.list.mockResolvedValue([{ id: Number(phase.id), orderIndex: 1 }])
+    await repository.updatePhase('10', phase, 1)
+    const written = phases.update.mock.calls[0][1]
+    expect(JSON.parse(written.jsonData)).toEqual(payload)
+    phases.get.mockResolvedValue(written)
+    const restored = await repository.loadPhase(phase.id, {}, 0)
+    expect(restored.manualCorrections).toEqual(phase.manualCorrections)
+    expect(repository.createPhaseData(restored).mergedDeviceStates).toEqual(payload.mergedDeviceStates)
+  })
+
   it('excludes erased automatic valves through history and restores repainted manual valves', () => {
     const phase = firstPhase(createContext().store)
     phase.flowState.deviceStates = {

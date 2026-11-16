@@ -358,6 +358,14 @@ Phase JSON separates three sources and a derived final snapshot:
   survive round trips; restoration does not infer owners or run routing.
 - `manualCorrections`: each `additions` record contains one `handleKey` and a
   required `highlightStyleRefId`; a batch stroke creates multiple records.
+  Confirmed device highlights also retain `deviceState` metadata (`stateKey`
+  and `deviceType`); a selected device preset supplies its configured state key.
+  On Phase restoration, missing metadata is recovered only when the handle
+  directly matches a configured drawing device and the referenced preset is an
+  enabled state of that device. Existing metadata, unresolved handles, Utility
+  highlights and ordinary entities borrowing device styles are not rewritten.
+  Recovered metadata follows the normal local persistence and backend autosave
+  path without modifying the original equipment `deviceStates` or routing.
   `exclusions` store erased automatic-flow and device highlights. These records
   apply in every editing mode. Automatic editing skips valves and interactive
   devices; manual editing permits ordinary entity highlighting on them.
@@ -365,6 +373,10 @@ Phase JSON separates three sources and a derived final snapshot:
   and corrections using the same layering resolver as the viewer. Each entry has
   only `handleKey` and `highlightStyleRefId`. Device-state indicators remain in
   `deviceStates`, not in this array.
+- `mergedDeviceStates`: derived valve summary combining automatic conducting
+  valves with explicit manual valve metadata. Manual additions take precedence;
+  exclusions remove the corresponding entries. Merely using a valve style does
+  not establish device identity.
 
 Style references point to either a Utility ID or a device-state preset ID in the
 project style configuration. Configuration edits apply to existing highlights;

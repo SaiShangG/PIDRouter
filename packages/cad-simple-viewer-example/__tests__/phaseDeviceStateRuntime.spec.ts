@@ -1,12 +1,122 @@
 import {
   DeviceStateWarningNotifications,
+  enrichManualHighlightDeviceStates,
   mergeHighlightedValveStates,
   resolveDeviceStateDefinition,
+  resolveManualHighlightDeviceState,
   resolveValveBrushStyleRefId
 } from '../src/phase/phaseDeviceStateRuntime'
 import { createDefaultPresentationProfile } from '../src/phase/phaseWorkspaceStore'
-import type { DeviceState, DeviceStateStyleDefinition } from '../src/phase/types'
+import type {
+  DeviceState,
+  DeviceStateStyleDefinition,
+  DeviceStyleDefinition,
+  ManualHighlightCorrections
+} from '../src/phase/types'
 import { resolveEntityPresentation } from '../src/presentation/presentationStyleResolver'
+
+describe('manual highlight device metadata', () => {
+  const fixture = () => {
+    const device: DeviceStyleDefinition = {
+      id: 'valve', name: 'Valve', order: 0,
+      states: [
+        {
+          id: 'open', key: 'RUNNING', displayName: 'Open', enabled: true,
+          color: 0x00ff00, lineWidthPx: 3, opacity: 1,
+          flowBehavior: 'conducting', autoHighlightFlow: true, order: 0
+        },
+        {
+          id: 'closed', key: 'CLOSED', displayName: 'Closed', enabled: true,
+          color: 0xff0000, lineWidthPx: 3, opacity: 1,
+          flowBehavior: 'blocking', autoHighlightFlow: false, order: 1
+        }
+      ]
+    }
+    return { device }
+  }
+
+  it.each([
+    ['open', 'RUNNING'],
+    ['closed', 'CLOSED']
+  ])('uses the selected %s preset state instead of hard-coding OPEN', (styleId, stateKey) => {
+    const { device } = fixture()
+    const before = JSON.stringify(device)
+    expect(resolveManualHighlightDeviceState(device, styleId))
+      .toEqual({ stateKey, deviceType: 'Valve' })
+    expect(JSON.stringify(device)).toBe(before)
+  })
+
+  it('does not infer device identity from a style or accept disabled and foreign presets', () => {
+    const { device } = fixture()
+    expect(resolveManualHighlightDeviceState(undefined, 'open')).toBeUndefined()
+    expect(resolveManualHighlightDeviceState(device, 'utility-water')).toBeUndefined()
+    expect(resolveManualHighlightDeviceState(device, 'pump-open')).toBeUndefined()
+    device.states[0].enabled = false
+    expect(resolveManualHighlightDeviceState(device, 'open')).toBeUndefined()
+  })
+
+  it('enriches only verified devices and preserves explicit metadata, exclusions and sources', () => {
+    const { device } = fixture()
+    const explicitState = { stateKey: 'OPEN', deviceType: 'Valve' }
+    const corrections: ManualHighlightCorrections = {
+      additions: [
+        { handleKey: 'A', highlightStyleRefId: 'open' },
+        { handleKey: 'B', highlightStyleRefId: 'open' },
+        { handleKey: 'C', highlightStyleRefId: 'utility-water' },
+        { handleKey: 'D', highlightStyleRefId: 'closed', deviceState: explicitState },
+        { handleKey: 'E', highlightStyleRefId: 'missing' },
+        { handleKey: 'F', highlightStyleRefId: 'closed' }
+      ],
+      exclusions: ['F']
+    }
+    const before = JSON.stringify(corrections)
+    const resolveDevice = (handleKey: string) => handleKey === 'B' ? undefined : device
+    const enriched = enrichManualHighlightDeviceStates(corrections, resolveDevice)
+    expect(enriched).toEqual({
+      additions: [
+        {
+          handleKey: 'A', highlightStyleRefId: 'open',
+          deviceState: { stateKey: 'RUNNING', deviceType: 'Valve' }
+        },
+        corrections.additions[1],
+        corrections.additions[2],
+        corrections.additions[3],
+        corrections.additions[4],
+        {
+          handleKey: 'F', highlightStyleRefId: 'closed',
+          deviceState: { stateKey: 'CLOSED', deviceType: 'Valve' }
+        }
+      ],
+      exclusions: ['F']
+    })
+    expect(JSON.stringify(corrections)).toBe(before)
+    expect(enrichManualHighlightDeviceStates(enriched, resolveDevice)).toBe(enriched)
+    expect(mergeHighlightedValveStates([], enriched, createDefaultPresentationProfile()))
+      .toEqual([
+        {
+          handleKey: 'A', highlightStyleRefId: 'open',
+          stateKey: 'RUNNING', deviceType: 'Valve', source: 'manual'
+        },
+        {
+          handleKey: 'D', highlightStyleRefId: 'closed',
+          stateKey: 'OPEN', deviceType: 'Valve', source: 'manual'
+        }
+      ])
+  })
+
+  it('keeps absent, empty and unresolvable corrections unchanged', () => {
+    const resolveDevice = jest.fn()
+    expect(enrichManualHighlightDeviceStates(undefined, resolveDevice)).toBeUndefined()
+    const empty = { additions: [], exclusions: [] }
+    expect(enrichManualHighlightDeviceStates(empty, resolveDevice)).toBe(empty)
+    expect(resolveDevice).not.toHaveBeenCalled()
+    const corrections = {
+      additions: [{ handleKey: 'A', highlightStyleRefId: 'open' }],
+      exclusions: []
+    }
+    expect(enrichManualHighlightDeviceStates(corrections, resolveDevice)).toBe(corrections)
+  })
+})
 
 describe('device state warning notifications', () => {
   const fixture = () => {

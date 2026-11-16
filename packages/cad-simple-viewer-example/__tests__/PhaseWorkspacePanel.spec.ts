@@ -7,12 +7,14 @@ import {
 } from '../src/phase/PhaseWorkspacePanel'
 import { PhaseWorkspaceStore } from '../src/phase/phaseWorkspaceStore'
 import { injectPhaseWorkspaceStyles } from '../src/phase/phaseWorkspaceStyles'
+import type { PhaseCopyMode } from '../src/toolbarPreferences'
 
 const createHarness = (
   locale: 'en' | 'zh' = 'zh',
   projectFileIds: readonly number[] = [5],
   withTanks = false,
-  isPhaseMoveEnabled: () => boolean = () => false
+  isPhaseMoveEnabled: () => boolean = () => false,
+  getPhaseCopyMode: () => PhaseCopyMode = () => 'replace'
 ) => {
   let id = 0
   const store = new PhaseWorkspaceStore(
@@ -79,7 +81,8 @@ const createHarness = (
     () => locale,
     () => projectFileIds,
     withTanks ? tanks : undefined,
-    isPhaseMoveEnabled
+    isPhaseMoveEnabled,
+    getPhaseCopyMode
   )
   document.body.append(panel.element)
   return { store, panel, actions, tanks }
@@ -107,6 +110,48 @@ describe('PhaseWorkspacePanel', () => {
   afterEach(() => {
     document.body.replaceChildren()
     document.getElementById('phase-workspace-styles')?.remove()
+  })
+
+  it.each(['zh', 'en'] as const)('creates a new Phase from the visible copy button after switching modes in %s', async locale => {
+    let mode: PhaseCopyMode = 'replace'
+    const { store, panel, actions } = createHarness(locale, [], false, () => false, () => mode)
+    const process = store.createProcess('CIP')
+    const sequence = process.sequences[0]
+    const source = store.createPhase({
+      processId: process.id, sequenceId: sequence.id, number: 1,
+      name: 'Source', source: { kind: 'unassigned' }
+    })
+    store.activate(process.id, sequence.id, source.id)
+    panel.render()
+    const startCopy = () => panel.element.querySelector<HTMLButtonElement>(
+      `[aria-label="${locale === 'zh' ? '复制 Phase' : 'Copy Phase'}"]`
+    )!.click()
+    startCopy()
+    expect(panel.element.querySelector('.is-copy-source')).not.toBeNull()
+    mode = 'create'
+    panel.render()
+    expect(panel.element.querySelector('.is-copy-source')).toBeNull()
+    jest.mocked(actions.copyPhase).mockImplementation(async request => {
+      if (request.mode !== 'create') throw new Error('Expected create mode')
+      store.copyPhase(request.processId, request.sourceSequenceId, request.sourcePhaseId,
+        request.targetSequenceId, request.number, request.name)
+    })
+    startCopy()
+    expect(panel.element.querySelector('.is-copy-source')).toBeNull()
+    const form = panel.element.querySelector<HTMLFormElement>('.phase-copy-modal-form')!
+    expect(form).not.toBeNull()
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await Promise.resolve()
+    expect(actions.copyPhase).toHaveBeenCalledWith({
+      mode: 'create', processId: process.id, sourceSequenceId: sequence.id,
+      sourcePhaseId: source.id, targetSequenceId: sequence.id, number: 2,
+      name: locale === 'zh' ? 'Source 副本' : 'Source Copy'
+    })
+    const phases = store.snapshot().processes[0].sequences[0].phases
+    expect(phases).toHaveLength(2)
+    expect(phases[0].id).toBe(source.id)
+    expect(phases[1].id).not.toBe(source.id)
+    expect(panel.element.querySelector('.phase-copy-modal-form')).toBeNull()
   })
 
   it.each(['escape', 'copy'] as const)('cancels quick copy using %s', async method => {

@@ -122,7 +122,9 @@ import {
 import { injectPhaseConfigImportModalStyles } from './phase/phaseConfigImportModalStyles'
 import {
   DeviceStateWarningNotifications,
+  enrichManualHighlightDeviceStates,
   resolveDeviceStateDefinition,
+  resolveManualHighlightDeviceState,
   resolveValveBrushStyleRefId
 } from './phase/phaseDeviceStateRuntime'
 import {
@@ -1532,10 +1534,18 @@ class CadViewerApp {
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
         }
         const phaseMoveChanged = preferences.phaseMoveEnabled !== this.toolbarPreferences.phaseMoveEnabled
+        const phaseCopyChanged = preferences.phaseCopyMode !== this.toolbarPreferences.phaseCopyMode
         this.toolbarPreferences = preferences
-        if (phaseMoveChanged) this.phasePanel?.render()
+        if (phaseMoveChanged || phaseCopyChanged) this.phasePanel?.render()
         this.applyUserToolbarPreferences()
-      }
+      },
+      mode => {
+        const preferences = { ...this.toolbarPreferences, phaseCopyMode: mode }
+        saveToolbarPreferences(this.toolbarPreferenceUserId, preferences, localStorage)
+        this.toolbarPreferences = preferences
+        this.phasePanel?.render()
+      },
+      () => this.phasePanel?.isCopyingPhase ?? false
     )
     this.toolbarPreferencesModal.open(
       this.toolbarPreferences,
@@ -1981,7 +1991,8 @@ class CadViewerApp {
         assignPhaseTank: (processId, sequenceId, phaseId, tankId) =>
           this.assignWorkspacePhaseTank(processId, sequenceId, phaseId, tankId)
       },
-      () => this.toolbarPreferences.phaseMoveEnabled
+      () => this.toolbarPreferences.phaseMoveEnabled,
+      () => this.toolbarPreferences.phaseCopyMode
     )
     const mount = document.getElementById('phaseWorkspaceMount')
     if (!mount) throw new Error('Phase workspace mount was not found')
@@ -2292,12 +2303,13 @@ class CadViewerApp {
         log.warn('[ManualHighlight] Object has no persistent handle:', objectId)
         return []
       }
-      const manualDevice = operation === 'paint' && this.highlightMode === 'manual'
+      const manualDevice = operation === 'paint'
         ? handleKeysFromObjectId(objectId)
           .map(key => this.getConfiguredDeviceMatch(key, profile)?.device)
           .find(device => device !== undefined)
         : undefined
       let entityStyleRefId = styleRefId
+      let manualDeviceState: Pick<DeviceState, 'stateKey' | 'deviceType'> | undefined
       if (operation === 'paint') {
         const valveKey = handleKeysFromObjectId(objectId).find(key => flowGraphIndex.valveKeys.has(key))
         if (valveKey) {
@@ -2310,6 +2322,10 @@ class CadViewerApp {
           if (!entityStyleRefId) missingValveStyle = true
         }
         if (!entityStyleRefId) return []
+        if (manualDevice) {
+          manualDeviceState = resolveManualHighlightDeviceState(manualDevice, entityStyleRefId) ??
+            { stateKey: 'OPEN', deviceType: manualDevice.name }
+        }
       }
       const savedDeviceState = this.valveDeviceStates.get(objectId)
       const deviceStyle = operation === 'erase' && this.highlightMode === 'manual' && savedDeviceState
@@ -2320,9 +2336,7 @@ class CadViewerApp {
       return [{
         handleKey,
         highlightStyleRefId: entityStyleRefId,
-        deviceState: manualDevice
-          ? { stateKey: 'OPEN', deviceType: manualDevice.name }
-          : undefined,
+        deviceState: manualDeviceState,
         hasDeviceState: savedDeviceState !== undefined,
         hasDeviceHighlight: deviceStyle?.source === 'device' &&
           deviceStyle.visible && deviceStyle.opacity > 0,
@@ -4900,7 +4914,11 @@ class CadViewerApp {
       log.warn('[PhasePidOverlay] Unresolved automatic handles retained:', [...missingAutomaticHandles])
       this.showMessage(translateUiText(this.appLocale, '部分自动流路对象不存在，记录已保留'), 'warning')
     }
-    this.manualCorrections.restore(phase.manualCorrections)
+    const manualCorrections = enrichManualHighlightDeviceStates(
+      phase.manualCorrections,
+      handleKey => this.getConfiguredDeviceMatch(handleKey, state.presentationProfile)?.device
+    )
+    this.manualCorrections.restore(manualCorrections)
     const missingManualHandles = [
       ...this.manualCorrections.additionHandleKeys,
       ...this.manualCorrections.snapshot().exclusions
@@ -4929,6 +4947,7 @@ class CadViewerApp {
       ? phase.drawing.displayName
       : '未关联图纸'
       } · ${phase.name}`
+    if (manualCorrections !== phase.manualCorrections) this.captureLoadedPhaseState()
     this.phasePanel?.render()
     this.syncPhaseContextBar()
     return true

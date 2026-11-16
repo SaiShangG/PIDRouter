@@ -3,7 +3,7 @@ import { RotateCcw, Save, Settings, X } from 'lucide'
 
 import type { AppLocale } from '../locale'
 import { createPhaseIcon } from '../phase/phaseIcons'
-import { defaultToolbarPreferences, type ToolbarPreferences } from '../toolbarPreferences'
+import { defaultToolbarPreferences, type PhaseCopyMode, type ToolbarPreferences } from '../toolbarPreferences'
 import { translateUiText } from '../uiTranslations'
 import { createModalFocusController } from './modalFocus'
 
@@ -12,11 +12,14 @@ export class ToolbarPreferencesModal {
   private readonly focus = createModalFocusController(this.element)
   private draft = defaultToolbarPreferences()
   private items: AcExToolbarItem[] = []
+  private savedCopyMode: PhaseCopyMode = 'replace'
 
   constructor(
     private readonly getLocale: () => AppLocale,
     private readonly itemLabel: (item: AcExToolbarItem) => string,
-    private readonly onSave: (preferences: ToolbarPreferences) => void
+    private readonly onSave: (preferences: ToolbarPreferences) => void,
+    private readonly onCopyModeChange?: (mode: PhaseCopyMode) => void,
+    private readonly isCopyBusy: () => boolean = () => false
   ) {
     this.element.className = 'toolbar-preferences-modal'
     this.element.hidden = true
@@ -58,6 +61,14 @@ export class ToolbarPreferencesModal {
         .toolbar-preferences-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
         .toolbar-preferences-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
         .toolbar-preferences-row input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 16px; accent-color: var(--app-accent, #087b58); cursor: pointer; }
+        .toolbar-preferences-copy-mode { min-width: 0; margin: 0; padding: 8px 0; border: 0; }
+        .toolbar-preferences-copy-layout { display: flex; align-items: center; gap: 12px; min-height: 36px; }
+        .toolbar-preferences-copy-title { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+        .toolbar-preferences-copy-options { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; margin-left: auto; }
+        .toolbar-preferences-copy-options .toolbar-preferences-row { gap: 6px; min-width: 0; cursor: pointer; }
+        .toolbar-preferences-copy-options .toolbar-preferences-row span { flex: 0 1 auto; }
+        .toolbar-preferences-copy-mode input[type=radio] { width: 16px; height: 16px; flex: 0 0 16px; accent-color: var(--app-accent, #087b58); }
+        .toolbar-preferences-copy-mode:disabled { opacity: .5; }
         .toolbar-preferences-shell .toolbar-preferences-children { margin: 0 0 8px 28px; padding: 0; border: 0; }
         .toolbar-preferences-children:disabled { opacity: .5; }
         .toolbar-preferences-shell select, .toolbar-preferences-shell input[type=number] { box-sizing: border-box; max-width: 50%; min-height: 32px; border: 1px solid var(--app-border, #ccd7da); border-radius: 4px; color: inherit; background: var(--app-surface-elevated, #fff); padding: 4px 8px; }
@@ -79,6 +90,7 @@ export class ToolbarPreferencesModal {
   open(preferences: ToolbarPreferences, items: AcExToolbarItem[]): void {
     if (!this.element.hidden) return
     this.draft = { ...preferences, hiddenIds: [...preferences.hiddenIds] }
+    this.savedCopyMode = preferences.phaseCopyMode
     this.items = items
     this.render()
     this.element.hidden = false
@@ -166,8 +178,57 @@ export class ToolbarPreferencesModal {
     error.className = 'toolbar-preferences-error'
     error.setAttribute('role', 'alert')
     error.hidden = true
+    const copyMode = document.createElement('fieldset')
+    copyMode.className = 'toolbar-preferences-copy-mode'
+    copyMode.disabled = this.isCopyBusy()
+    copyMode.setAttribute('aria-labelledby', 'toolbarPreferencesCopyModeTitle')
+    const copyLayout = document.createElement('div')
+    copyLayout.className = 'toolbar-preferences-copy-layout'
+    const copyTitle = document.createElement('span')
+    copyTitle.id = 'toolbarPreferencesCopyModeTitle'
+    copyTitle.className = 'toolbar-preferences-copy-title'
+    copyTitle.textContent = this.text('Phase 复制方式')
+    const copyOptions = document.createElement('div')
+    copyOptions.className = 'toolbar-preferences-copy-options'
+    copyLayout.append(copyTitle, copyOptions)
+    copyMode.append(copyLayout)
+    for (const [value, label] of [['replace', '复制到已有 Phase'], ['create', '复制为新 Phase']] as const) {
+      const radio = document.createElement('input')
+      radio.type = 'radio'
+      radio.name = 'phaseCopyMode'
+      radio.value = value
+      radio.checked = this.draft.phaseCopyMode === value
+      radio.addEventListener('change', () => {
+        if (!radio.checked) return
+        const previous = this.draft.phaseCopyMode
+        try {
+          if (this.isCopyBusy()) throw new Error('Copy is busy')
+          this.onCopyModeChange?.(value)
+          this.draft.phaseCopyMode = value
+          if (this.onCopyModeChange) this.savedCopyMode = value
+          error.hidden = true
+        } catch {
+          for (const input of copyMode.querySelectorAll<HTMLInputElement>('input')) input.checked = input.value === previous
+          error.textContent = this.text(this.isCopyBusy() ? '复制进行中，请稍后更改复制方式。' : '功能配置保存失败，请重试。')
+          error.hidden = false
+        }
+      })
+      copyOptions.append(this.row(label, radio))
+    }
+    phase.append(copyMode)
     const footer = document.createElement('footer')
     const reset = this.button('恢复默认', RotateCcw, () => {
+      try {
+        if (this.onCopyModeChange && this.savedCopyMode !== 'replace') {
+          if (this.isCopyBusy()) throw new Error('Copy is busy')
+          this.onCopyModeChange('replace')
+          this.savedCopyMode = 'replace'
+        }
+      } catch {
+        error.textContent = this.text('功能配置保存失败，请重试。')
+        error.hidden = false
+        return
+      }
       this.draft = defaultToolbarPreferences()
       this.render()
       this.element.querySelector<HTMLButtonElement>('.toolbar-preferences-reset')?.focus()
@@ -183,6 +244,7 @@ export class ToolbarPreferencesModal {
       if (!offset.reportValidity()) return
       this.draft.edgeOffset = offset.valueAsNumber
       try {
+        if (this.isCopyBusy() && this.draft.phaseCopyMode !== this.savedCopyMode) throw new Error('Copy is busy')
         this.onSave({ ...this.draft, hiddenIds: [...this.draft.hiddenIds] })
         this.close()
       } catch {

@@ -4,6 +4,8 @@ import type { ValveBrushScope } from './brush/BrushHighlightFeature'
 
 const VALVE_BRUSH_SCOPE_VERSION = 1
 
+export type PhaseCopyMode = 'replace' | 'create'
+
 export interface ToolbarPreferences {
   hiddenIds: string[]
   visible: boolean
@@ -13,6 +15,7 @@ export interface ToolbarPreferences {
   valveDebugEnabled: boolean
   brushDebugEnabled: boolean
   phaseMoveEnabled: boolean
+  phaseCopyMode: PhaseCopyMode
   valveBrushScope: ValveBrushScope
 }
 
@@ -22,6 +25,7 @@ export const defaultToolbarPreferences = (): ToolbarPreferences => ({
   valveDebugEnabled: false,
   brushDebugEnabled: false,
   phaseMoveEnabled: false,
+  phaseCopyMode: 'replace',
   valveBrushScope: 'valves'
 })
 
@@ -42,6 +46,8 @@ export function loadToolbarPreferences(userId: string, storage: Pick<Storage, 'g
         ? value.brushDebugEnabled : defaults.brushDebugEnabled,
       phaseMoveEnabled: typeof value.phaseMoveEnabled === 'boolean'
         ? value.phaseMoveEnabled : defaults.phaseMoveEnabled,
+      phaseCopyMode: value.phaseCopyMode === 'create' || value.phaseCopyMode === 'replace'
+        ? value.phaseCopyMode : defaults.phaseCopyMode,
       valveBrushScope: value.valveBrushScopeVersion === VALVE_BRUSH_SCOPE_VERSION &&
         (value.valveBrushScope === 'valves' || value.valveBrushScope === 'non-valves' || value.valveBrushScope === 'all')
         ? value.valveBrushScope : defaults.valveBrushScope,

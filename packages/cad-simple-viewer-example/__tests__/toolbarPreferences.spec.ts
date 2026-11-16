@@ -13,6 +13,20 @@ describe('toolbar preferences', () => {
     expect(defaultToolbarPreferences().valveDebugEnabled).toBe(false)
     expect(defaultToolbarPreferences().brushDebugEnabled).toBe(false)
     expect(defaultToolbarPreferences().phaseMoveEnabled).toBe(false)
+    expect(defaultToolbarPreferences().phaseCopyMode).toBe('replace')
+  })
+
+  it.each(['replace', 'create'] as const)('persists Phase copy mode %s per user', phaseCopyMode => {
+    const preferences = { ...defaultToolbarPreferences(), phaseCopyMode }
+    saveToolbarPreferences('alice', preferences, storage)
+    expect(loadToolbarPreferences('alice', storage).phaseCopyMode).toBe(phaseCopyMode)
+    expect(loadToolbarPreferences('bob', storage).phaseCopyMode).toBe('replace')
+  })
+
+  it.each([undefined, null, 'invalid', true, 1])('defaults invalid Phase copy mode %s to replace', phaseCopyMode => {
+    expect(loadToolbarPreferences('alice', {
+      getItem: () => JSON.stringify({ phaseCopyMode })
+    }).phaseCopyMode).toBe('replace')
   })
 
   it('enables only the requested toolbar groups by default', () => {

@@ -16,6 +16,7 @@ import {
 
 import type { AppLocale } from '../locale'
 import { isProjectPidFile } from '../project/projectPidFiles'
+import type { PhaseCopyMode } from '../toolbarPreferences'
 import { ConfirmationModal } from '../ui/ConfirmationModal'
 import { createFormValidator } from '../ui/formValidation'
 import { localizeDom, translateUiText } from '../uiTranslations'
@@ -130,7 +131,8 @@ export class PhaseWorkspacePanel {
     private readonly getLocale: () => AppLocale = () => 'zh',
     private readonly getProjectFileIds: () => readonly number[] = () => [],
     private readonly tanks?: TankWorkspaceBindings,
-    private readonly isPhaseMoveEnabled: () => boolean = () => false
+    private readonly isPhaseMoveEnabled: () => boolean = () => false,
+    private readonly getPhaseCopyMode: () => PhaseCopyMode = () => 'replace'
   ) {
     this.element.className = 'phase-workspace'
     this.phaseDeleteConfirmation = new ConfirmationModal(getLocale)
@@ -169,7 +171,8 @@ export class PhaseWorkspacePanel {
     this.renderedProcessId = activeProcess?.id
     if (processChanged) scrollTop = 0
     if (this.phaseCopySource && !this.phaseCopyBusy &&
-      (activeProcess?.id !== this.phaseCopySource.processId ||
+      (this.getPhaseCopyMode() !== 'replace' ||
+        activeProcess?.id !== this.phaseCopySource.processId ||
         activeProcess?.activeSequenceId !== this.phaseCopySource.sequenceId ||
         !activeProcess?.sequences.find(sequence => sequence.id === this.phaseCopySource?.sequenceId)
           ?.phases.some(phase => phase.id === this.phaseCopySource?.phaseId))) {
@@ -333,6 +336,10 @@ export class PhaseWorkspacePanel {
   private cancelPhaseCopy() {
     this.phaseCopySource = undefined
     this.phaseCopyError = ''
+  }
+
+  get isCopyingPhase(): boolean {
+    return this.phaseCopyBusy
   }
 
   private focusPhase(phaseId: string) {
@@ -773,8 +780,14 @@ export class PhaseWorkspacePanel {
       })
       const controls = document.createElement('div')
       controls.className = 'phase-tree-order-controls'
-      const copy = this.createIconButton('复制 Phase', Copy, () => {
+      const copy = this.createIconButton('复制 Phase', Copy, trigger => {
         if (this.phaseCopyBusy) return
+        if (this.getPhaseCopyMode() === 'create') {
+          this.cancelPhaseCopy()
+          this.render()
+          this.openPhaseCopyModal(process, sequence, phase, trigger)
+          return
+        }
         if (this.phaseCopySource?.phaseId === phase.id) this.cancelPhaseCopy()
         else {
           this.phaseCopySource = { processId: process.id, sequenceId: sequence.id, phaseId: phase.id }
