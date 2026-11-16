@@ -217,6 +217,58 @@ describe('BrushHighlightFeature', () => {
     feature.dispose()
   })
 
+  it('allows only the mode-specific paint tool while keeping the eraser available in both modes', () => {
+    const { canvas, view } = createView()
+    let mode: 'auto' | 'manual' = 'manual'
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      isStandardBrushEnabled: () => mode === 'auto',
+      isValveBrushEnabled: () => mode === 'manual',
+      onEntitiesChanged
+    })
+    expect(feature.activate('paint')).toBe(false)
+    expect(feature.isEnabled).toBe(false)
+    expect(view.mode).toBe(0)
+    expect(feature.activate('paint', 'valve-toggle')).toBe(true)
+    stroke(canvas, 0)
+    expect(feature.activate('erase')).toBe(true)
+    stroke(canvas, 10)
+    feature.deactivate()
+    mode = 'auto'
+    expect(feature.activate('paint', 'valve-toggle')).toBe(false)
+    expect(feature.activate('paint')).toBe(true)
+    stroke(canvas, 20)
+    expect(feature.activate('erase')).toBe(true)
+    stroke(canvas, 20)
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['erase', ['B']], ['paint', ['C']], ['erase', ['C']]
+    ])
+    feature.dispose()
+  })
+
+  it('blocks further standard painting when permission changes without blocking the eraser', () => {
+    const { canvas, view } = createView()
+    let enabled = true
+    const onEntitiesChanged = jest.fn()
+    const feature = new BrushHighlightFeature({
+      getView: () => view,
+      isStandardBrushEnabled: () => enabled,
+      onEntitiesChanged
+    })
+    expect(feature.activate('paint')).toBe(true)
+    stroke(canvas, 0)
+    enabled = false
+    stroke(canvas, 10)
+    expect(onEntitiesChanged.mock.calls).toEqual([['paint', ['A']]])
+    expect(feature.activate('erase')).toBe(true)
+    stroke(canvas, 10)
+    expect(onEntitiesChanged.mock.calls).toEqual([
+      ['paint', ['A']], ['erase', ['B']]
+    ])
+    feature.dispose()
+  })
+
   it('separates mixed toggle hits and ignores duplicate picks within one stroke', () => {
     const { canvas, view } = createView()
     view.pick = jest.fn(() => ['A', 'B', 'C', 'A'].map(id => ({

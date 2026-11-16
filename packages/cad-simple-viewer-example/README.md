@@ -210,8 +210,11 @@ drawing a stroke.
   suppress or undo previously saved manual device corrections.
 - **Off (`manual`)** retains existing automatic routes and device highlights but
   stops state-changing device interactions and automatic route recalculation,
-  including recalculation after flow-rule edits. The brush can highlight every
-  visible picked entity, including valves, devices, text and overlapping entities.
+  including recalculation after flow-rule edits. Both paint buttons remain in
+  the toolbar: the ordinary brush is disabled in manual mode and enabled in
+  automatic mode; the valve brush is enabled only in manual mode. For manual
+  pipe, text or other non-valve highlighting, select **Non-valve entities** or
+  **All entities** in the valve brush's scope setting.
   The eraser can exclude retained automatic and device highlights. Neither tool
   changes equipment state or CAD geometry.
 - Manual additions override normal highlights, and exclusions hide them.
@@ -258,9 +261,10 @@ All three scopes require manual highlighting mode. The valve brush is disabled
 in automatic mode. Within the selected scope, valves toggle highlights once per
 stroke and non-valve entities are painted normally. Neither device states nor
 automatic routes change. Saving a different scope exits the current valve brush;
-existing highlights are retained. The ordinary brush and eraser are unchanged.
+existing highlights are retained. The ordinary brush remains visible but is
+disabled in manual mode; the eraser remains available in either mode.
 
-When either brush paints a valve, its manual highlight references the matched
+When the valve brush paints a valve, its manual highlight references the matched
 device's enabled state preset, never a Utility preset. The current device state
 preset takes precedence; otherwise the brush uses an open preset, a conducting
 preset, or the first enabled preset by order. Missing device styles skip the
@@ -274,9 +278,10 @@ does not change device states; subsequent device-style edits apply by reference.
 
 三种范围均仅在手动高亮模式下启用，自动模式下禁用此画笔。范围内的阀门每笔切换
 一次高亮，非阀门实体按普通涂画处理；不改变设备状态或触发自动找路。保存新范围
-会退出当前阀门画笔，已有高亮保留。普通画笔和橡皮擦不受影响。
+会退出当前阀门画笔，已有高亮保留。两个画笔按钮都保留：普通画笔在手动模式下
+禁用、自动模式下启用，阀门画笔仅在手动模式下启用；橡皮擦在两种模式下均可用。
 
-普通画笔或阀门画笔涂到阀门时，人工高亮引用匹配设备的启用状态样式，不使用
+阀门画笔涂到阀门时，人工高亮引用匹配设备的启用状态样式，不使用
 Utility 样式。优先采用当前设备状态的样式，否则依次选择打开样式、导通样式、
 按配置顺序排列的首个启用样式；缺少设备样式时跳过该阀门并提示。非阀门实体仍
 使用画笔选定样式。涂画不改变设备状态，后续设备样式修改通过引用应用到高亮。

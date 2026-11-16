@@ -1449,6 +1449,7 @@ class CadViewerApp {
       },
       {
         id: 'brush-highlight', label: 'toolbar.brush', requiresDocument: true,
+        disabled: () => this.highlightMode !== 'auto',
         icon: () => {
           const icon = document.createElement('span')
           icon.append(createPhaseIcon(Brush))
@@ -2123,6 +2124,7 @@ class CadViewerApp {
         view.canvas.style.cursor = this.createBrushCursor(operation)
       },
       onActiveChanged: () => this.getSimpleUiPlugin()?.refreshToolbar(),
+      isStandardBrushEnabled: () => this.highlightMode === 'auto',
       isValveBrushEnabled: () => this.highlightMode === 'manual',
       getValveBrushScope: () => this.toolbarPreferences.valveBrushScope,
       onStrokeStarted: operation => {
@@ -2155,6 +2157,7 @@ class CadViewerApp {
   }
 
   private openBrushStyleDialog(paintMode: BrushPaintMode = 'standard') {
+    if (paintMode === 'standard' && this.highlightMode !== 'auto') return
     if (paintMode === 'valve-toggle' && this.highlightMode !== 'manual') return
     if (this.brushHighlightFeature?.isEnabled) {
       if (this.brushHighlightFeature.currentOperation === 'paint' &&

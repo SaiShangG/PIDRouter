@@ -17,6 +17,7 @@ export interface BrushHighlightFeatureOptions {
   onActiveChanged?(): void
   onStrokeStarted?(operation: BrushOperation): void
   onStrokeEnded?(): void
+  isStandardBrushEnabled?(): boolean
   isValveBrushEnabled?(): boolean
   getValveBrushScope?(): ValveBrushScope
   shouldToggleEntity?(objectId: AcDbObjectId): boolean
@@ -71,6 +72,8 @@ export class BrushHighlightFeature {
   }
 
   private start(operation: BrushOperation, paintMode: BrushPaintMode) {
+    if (operation === 'paint' && paintMode === 'standard' &&
+      this.options.isStandardBrushEnabled?.() === false) return false
     if (paintMode === 'valve-toggle' && this.options.isValveBrushEnabled?.() === false) return false
     const view = this.options.getView()
     if (!view) return false
@@ -305,6 +308,8 @@ export class BrushHighlightFeature {
   }
 
   private applyAt(canvasPoint: { x: number; y: number }) {
+    if (this.operation === 'paint' && this.paintMode === 'standard' &&
+      this.options.isStandardBrushEnabled?.() === false) return
     if (this.paintMode === 'valve-toggle' && this.options.isValveBrushEnabled?.() === false) return
     const view = this.attachedView
     if (!view) return
