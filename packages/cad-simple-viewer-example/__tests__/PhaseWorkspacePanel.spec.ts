@@ -1065,10 +1065,10 @@ describe('PhaseWorkspacePanel', () => {
       })
       store.activate(process.id, sequence.id, target.id)
       panel.render()
-      ;[...panel.element.querySelectorAll('button')]
-        .find(button => button.textContent === (
-          mode === 'create' ? '创建 Phase' : '关联图纸'
-        ))!.click()
+        ;[...panel.element.querySelectorAll('button')]
+          .find(button => button.textContent === (
+            mode === 'create' ? '创建 Phase' : '关联图纸'
+          ))!.click()
 
       const selector = document.querySelector<HTMLSelectElement>(
         mode === 'create'
